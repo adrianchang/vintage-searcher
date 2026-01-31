@@ -9,3 +9,6 @@ dist/
 # Database
 *.db
 *.db-journal
+
+# Logs
+logs/
