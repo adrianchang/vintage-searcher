@@ -1,0 +1,48 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Listings that passed the first filter (for iteration on filter rules)
+model FilteredListing {
+  id          String   @id @default(cuid())
+  url         String   @unique
+  platform    String   // ebay, shopgoodwill, etc.
+  title       String
+  price       Float
+  imageUrls   String   // JSON array of image URLs
+  description String
+  rawData     String   // Full raw listing data as JSON
+  createdAt   DateTime @default(now())
+
+  // Evaluation result (null if not yet evaluated)
+  evaluation  Evaluation?
+}
+
+// Full LLM evaluation results
+model Evaluation {
+  id             String   @id @default(cuid())
+  listingId      String   @unique
+  listing        FilteredListing @relation(fields: [listingId], references: [id])
+
+  isAuthentic    Boolean
+  estimatedEra   String
+  estimatedValue Float
+  currentPrice   Float
+  margin         Float
+  confidence     Float
+  reasoning      String
+  redFlags       String   // JSON array
+  references     String   // JSON array
+
+  isOpportunity  Boolean  // margin > threshold && confidence > threshold
+  createdAt      DateTime @default(now())
+}
