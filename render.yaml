@@ -8,3 +8,5 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: EBAY_ENDPOINT
+        value: https://vintage-searcher.onrender.com/ebay/webhook

@@ -19,6 +19,7 @@
     "@google/generative-ai": "^0.24.1",
     "@prisma/client": "^6.19.2",
     "axios": "^1.13.4",
+    "crypto-js": "^4.2.0",
     "dotenv": "^17.2.3",
     "ebay-api": "^9.4.0",
     "express": "^5.2.1",
@@ -27,6 +28,7 @@
     "typescript": "^5.9.3"
   },
   "devDependencies": {
+    "@types/crypto-js": "^4.2.2",
     "@types/express": "^5.0.6",
     "@types/node": "^25.1.0"
   }

@@ -1,8 +1,11 @@
 import "dotenv/config";
 import express from "express";
+import crypto from "crypto";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const EBAY_VERIFICATION_TOKEN = process.env.EBAY_VERIFICATION_TOKEN || "";
+const EBAY_ENDPOINT = process.env.EBAY_ENDPOINT || "";
 
 app.use(express.json());
 
@@ -14,15 +17,23 @@ app.get("/", (req, res) => {
 // eBay marketplace account deletion notification (required for compliance)
 // https://developer.ebay.com/marketplace-account-deletion
 app.get("/ebay/webhook", (req, res) => {
-  // eBay sends a challenge_code for verification
   const challengeCode = req.query.challenge_code as string;
 
   if (challengeCode) {
-    // For verification, eBay expects the challenge code echoed back
-    // In production, you should hash it with your verification token
-    console.log("eBay verification challenge received:", challengeCode);
+    // eBay verification: hash = SHA256(challenge_code + verification_token + endpoint)
+    const hash = crypto
+      .createHash("sha256")
+      .update(challengeCode)
+      .update(EBAY_VERIFICATION_TOKEN)
+      .update(EBAY_ENDPOINT)
+      .digest("hex");
+
+    console.log("eBay verification challenge received");
+    console.log("Challenge code:", challengeCode);
+    console.log("Response hash:", hash);
+
     res.set("Content-Type", "application/json");
-    res.json({ challengeResponse: challengeCode });
+    res.json({ challengeResponse: hash });
   } else {
     res.json({ status: "webhook endpoint ready" });
   }
@@ -40,7 +51,6 @@ app.get("/ebay/auth/callback", (req, res) => {
 
   if (code) {
     console.log("eBay OAuth code received:", code);
-    // TODO: Exchange code for access token
     res.send(`
       <html>
         <body>
@@ -57,6 +67,5 @@ app.get("/ebay/auth/callback", (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
-  console.log(`eBay webhook endpoint: http://localhost:${PORT}/ebay/webhook`);
-  console.log(`eBay OAuth callback: http://localhost:${PORT}/ebay/auth/callback`);
+  console.log(`eBay webhook endpoint: ${EBAY_ENDPOINT || "http://localhost:" + PORT + "/ebay/webhook"}`);
 });
