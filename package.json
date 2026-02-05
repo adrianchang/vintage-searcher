@@ -5,6 +5,8 @@
   "main": "index.js",
   "scripts": {
     "scan": "tsx src/index.ts",
+    "server": "tsx src/server.ts",
+    "test:discord": "tsx scripts/test-discord.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio"
@@ -19,11 +21,13 @@
     "axios": "^1.13.4",
     "dotenv": "^17.2.3",
     "ebay-api": "^9.4.0",
+    "express": "^5.2.1",
     "prisma": "^6.19.2",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
     "@types/node": "^25.1.0"
   }
 }
