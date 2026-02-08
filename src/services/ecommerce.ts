@@ -1,18 +1,31 @@
+import eBayApi from "ebay-api";
 import type { Listing } from "../types";
 
 // Add more platforms here as we scale
 export type Platform = "ebay";
 
 // Set to true to use mock data for testing
-const USE_MOCK_DATA = true;
+const USE_MOCK_DATA = process.env.USE_MOCK_DATA === "true";
+
+// eBay API client
+const eBay = new eBayApi({
+  appId: process.env.EBAY_APP_ID || "",
+  certId: process.env.EBAY_CERT_ID || "",
+  sandbox: false,
+  marketplaceId: eBayApi.MarketplaceId.EBAY_US,
+});
+
+// Search queries targeting casual sellers who may not know item value
+const VINTAGE_SEARCH_QUERIES = [
+  "old clothing estate sale",
+  "grandma closet clothes",
+  "antique clothes lot",
+  "old jacket coat",
+  "old dress clothing",
+  "vintage clothing lot",
+];
 
 export async function fetchListings(platform: Platform, limit: number): Promise<Listing[]> {
-  // Future: add more platforms with a switch statement
-  // switch (platform) {
-  //   case "ebay": return fetchEbay(limit);
-  //   case "shopgoodwill": return fetchShopGoodwill(limit);
-  // }
-
   return fetchEbay(limit);
 }
 
@@ -24,27 +37,70 @@ async function fetchEbay(limit: number): Promise<Listing[]> {
 
   console.log(`Fetching ${limit} listings from eBay...`);
 
-  // TODO: Implement eBay API integration
-  // See: https://developer.ebay.com/api-docs/buy/browse/resources/item_summary/methods/search
-  // SDK: ebay-api npm package
-  //
-  // Example search query params:
-  // - q: "vintage clothing 1950s 1960s 1970s"
-  // - category_ids: clothing categories
-  // - filter: price:[0..500], conditionIds:{1000|1500|2000|2500|3000}
-  // - limit: number of results
-  //
-  // Map response to Listing:
-  // - itemWebUrl → url
-  // - title → title
-  // - price.value → price
-  // - image.imageUrl + additionalImages → imageUrls
-  // - shortDescription → description
+  const listings: Listing[] = [];
+  const perQueryLimit = Math.ceil(limit / VINTAGE_SEARCH_QUERIES.length);
 
-  return [];
+  for (const query of VINTAGE_SEARCH_QUERIES) {
+    if (listings.length >= limit) break;
+
+    try {
+      const response = await eBay.buy.browse.search({
+        q: query,
+        limit: String(perQueryLimit),
+        filter: [
+          "price:[0..500]",           // Under $500 (seller likely doesn't know value)
+          "conditionIds:{1000|1500|2000|2500|3000}", // New to Good condition
+        ].join(","),
+        sort: "-itemCreationDate",    // Newest first
+      });
+
+      if (response.itemSummaries) {
+        for (const item of response.itemSummaries) {
+          if (listings.length >= limit) break;
+
+          // Collect all image URLs
+          const imageUrls: string[] = [];
+          if (item.image?.imageUrl) {
+            imageUrls.push(item.image.imageUrl);
+          }
+          if (item.additionalImages) {
+            for (const img of item.additionalImages) {
+              if (img.imageUrl) imageUrls.push(img.imageUrl);
+            }
+          }
+
+          const listing: Listing = {
+            url: item.itemWebUrl || "",
+            platform: "ebay",
+            title: item.title || "",
+            price: parseFloat(item.price?.value || "0"),
+            imageUrls,
+            description: item.shortDescription || item.title || "",
+            rawData: {
+              itemId: item.itemId,
+              condition: item.condition,
+              conditionId: item.conditionId,
+              seller: item.seller,
+              itemCreationDate: item.itemCreationDate,
+              categories: item.categories,
+            },
+          };
+
+          listings.push(listing);
+        }
+      }
+
+      console.log(`  Query "${query.slice(0, 30)}...": ${response.itemSummaries?.length || 0} results`);
+    } catch (error) {
+      console.error(`  Error searching "${query}":`, error);
+    }
+  }
+
+  console.log(`Fetched ${listings.length} total listings from eBay`);
+  return listings;
 }
 
-// Mock data representing realistic eBay vintage clothing listings
+// Mock data for testing without API keys
 const MOCK_LISTINGS: Listing[] = [
   {
     url: "https://www.ebay.com/itm/123456789001",

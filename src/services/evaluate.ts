@@ -2,7 +2,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import type { Listing, Evaluation } from "../types";
 
 // Set to true to use mock evaluations for testing
-const USE_MOCK_DATA = true;
+const USE_MOCK_DATA = process.env.USE_MOCK_DATA === "true";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
@@ -37,7 +37,7 @@ export async function evaluateListing(listing: Listing): Promise<Evaluation> {
     return getMockEvaluation(listing);
   }
 
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
+  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
   // Fetch images and convert to base64
   const imageParts = await Promise.all(
