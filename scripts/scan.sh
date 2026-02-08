@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Vintage Searcher Cron Script
-# Scheduled: 0 8 * * * (daily at 8am)
+# Scheduled: 0 9 * * * (daily at 9am)
 
 # Set PATH for cron (homebrew on Apple Silicon)
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
