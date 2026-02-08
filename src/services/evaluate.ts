@@ -32,6 +32,13 @@ Respond with JSON only:
   "references": string[]         // Comparable sales, known labels, pricing sources
 }`;
 
+const MAX_RETRIES = 3;
+const INITIAL_RETRY_DELAY_MS = 15000; // 15 seconds
+
+async function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export async function evaluateListing(listing: Listing): Promise<Evaluation> {
   if (USE_MOCK_DATA) {
     return getMockEvaluation(listing);
@@ -57,16 +64,38 @@ export async function evaluateListing(listing: Listing): Promise<Evaluation> {
     .replace("{price}", listing.price.toString())
     .replace("{description}", listing.description);
 
-  const result = await model.generateContent([prompt, ...imageParts]);
-  const text = result.response.text();
+  // Retry loop with exponential backoff for rate limits
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      const result = await model.generateContent([prompt, ...imageParts]);
+      const text = result.response.text();
 
-  // Parse JSON from response
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) {
-    throw new Error("Failed to parse LLM response as JSON");
+      // Parse JSON from response
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error("Failed to parse LLM response as JSON");
+      }
+
+      return JSON.parse(jsonMatch[0]) as Evaluation;
+    } catch (error: unknown) {
+      lastError = error as Error;
+
+      // Check if it's a rate limit error (429)
+      if (error instanceof Error && error.message.includes("429")) {
+        const delay = INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt);
+        console.log(`Rate limited. Retrying in ${delay / 1000}s... (attempt ${attempt + 1}/${MAX_RETRIES})`);
+        await sleep(delay);
+        continue;
+      }
+
+      // For other errors, throw immediately
+      throw error;
+    }
   }
 
-  return JSON.parse(jsonMatch[0]) as Evaluation;
+  // If we exhausted retries, throw the last error
+  throw lastError || new Error("Max retries exceeded");
 }
 
 // Mock evaluations based on listing URL (matches mock listings in ecommerce.ts)

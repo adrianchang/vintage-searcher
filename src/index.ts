@@ -10,7 +10,7 @@ const prisma = new PrismaClient();
 
 const config: ScanConfig = {
   platform: "ebay",
-  maxListings: 50,
+  maxListings: 20, // Limited to match Gemini free tier (20 requests/day)
   minMargin: 50,
   minConfidence: 0.7,
 };
@@ -45,6 +45,10 @@ async function main() {
 
   // 4. Pass 2: Evaluate with LLM (vision)
   const opportunities = [];
+  let evaluatedCount = 0;
+  let skippedCount = 0;
+  let errorCount = 0;
+
   for (const listing of filtered) {
     const dbListing = await prisma.filteredListing.findUnique({
       where: { url: listing.url },
@@ -55,34 +59,47 @@ async function main() {
     const existing = await prisma.evaluation.findUnique({
       where: { listingId: dbListing.id },
     });
-    if (existing) continue;
+    if (existing) {
+      skippedCount++;
+      continue;
+    }
 
-    const evaluation = await evaluateListing(listing);
+    try {
+      const evaluation = await evaluateListing(listing);
+      evaluatedCount++;
 
-    const isOpportunity =
-      evaluation.margin >= config.minMargin &&
-      evaluation.confidence >= config.minConfidence;
+      const isOpportunity =
+        evaluation.margin >= config.minMargin &&
+        evaluation.confidence >= config.minConfidence;
 
-    await prisma.evaluation.create({
-      data: {
-        listingId: dbListing.id,
-        isAuthentic: evaluation.isAuthentic,
-        estimatedEra: evaluation.estimatedEra,
-        estimatedValue: evaluation.estimatedValue,
-        currentPrice: evaluation.currentPrice,
-        margin: evaluation.margin,
-        confidence: evaluation.confidence,
-        reasoning: evaluation.reasoning,
-        redFlags: JSON.stringify(evaluation.redFlags),
-        references: JSON.stringify(evaluation.references),
-        isOpportunity,
-      },
-    });
+      await prisma.evaluation.create({
+        data: {
+          listing: { connect: { id: dbListing.id } },
+          isAuthentic: evaluation.isAuthentic,
+          estimatedEra: evaluation.estimatedEra,
+          estimatedValue: evaluation.estimatedValue,
+          currentPrice: evaluation.currentPrice,
+          margin: evaluation.margin,
+          confidence: evaluation.confidence,
+          reasoning: evaluation.reasoning,
+          redFlags: JSON.stringify(evaluation.redFlags),
+          references: JSON.stringify(evaluation.references),
+          isOpportunity,
+        },
+      });
 
-    if (isOpportunity) {
-      opportunities.push({ listing, evaluation });
+      if (isOpportunity) {
+        opportunities.push({ listing, evaluation });
+      }
+    } catch (error) {
+      errorCount++;
+      console.error(`Failed to evaluate listing: ${listing.title.slice(0, 50)}...`);
+      console.error(error instanceof Error ? error.message : error);
+      // Continue with next listing instead of crashing
     }
   }
+
+  console.log(`Evaluation complete: ${evaluatedCount} evaluated, ${skippedCount} skipped, ${errorCount} errors`);
 
   // 5. Send alerts for opportunities (separate from evaluation)
   if (opportunities.length > 0) {
