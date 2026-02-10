@@ -6,6 +6,7 @@
   "scripts": {
     "scan": "tsx src/index.ts",
     "server": "tsx src/server.ts",
+    "test": "vitest run",
     "test:discord": "tsx scripts/test-discord.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
@@ -30,6 +31,7 @@
   "devDependencies": {
     "@types/crypto-js": "^4.2.2",
     "@types/express": "^5.0.6",
-    "@types/node": "^25.1.0"
+    "@types/node": "^25.1.0",
+    "vitest": "^3.2.4"
   }
 }

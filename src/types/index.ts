@@ -13,9 +13,9 @@ export interface Listing {
 export interface Evaluation {
   isAuthentic: boolean;
   estimatedEra: string;
-  estimatedValue: number;
+  estimatedValue: number | null;  // Null if can't estimate (non-vintage items)
   currentPrice: number;
-  margin: number;
+  margin: number | null;          // Null if estimatedValue is null
   confidence: number;
   reasoning: string;
   redFlags: string[];

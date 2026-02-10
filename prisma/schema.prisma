@@ -35,9 +35,9 @@ model Evaluation {
 
   isAuthentic    Boolean
   estimatedEra   String
-  estimatedValue Float
+  estimatedValue Float?   // Nullable - Gemini may return null for non-vintage
   currentPrice   Float
-  margin         Float
+  margin         Float?   // Nullable - can't calculate if estimatedValue is null
   confidence     Float
   reasoning      String
   redFlags       String   // JSON array

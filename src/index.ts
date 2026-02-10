@@ -69,6 +69,7 @@ async function main() {
       evaluatedCount++;
 
       const isOpportunity =
+        evaluation.margin != null &&
         evaluation.margin >= config.minMargin &&
         evaluation.confidence >= config.minConfidence;
 
