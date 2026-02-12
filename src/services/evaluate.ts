@@ -40,61 +40,94 @@ async function sleep(ms: number): Promise<void> {
 }
 
 export async function evaluateListing(listing: Listing): Promise<Evaluation> {
+  const shortTitle = listing.title.slice(0, 50);
+  const timestamp = () => new Date().toISOString();
+
   if (USE_MOCK_DATA) {
     return getMockEvaluation(listing);
   }
 
+  console.log(`[${timestamp()}] Evaluating: ${shortTitle}...`);
+
   const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
   // Fetch images and convert to base64
-  const imageParts = await Promise.all(
-    listing.imageUrls.slice(0, 4).map(async (url) => {
+  console.log(`[${timestamp()}]   Fetching ${Math.min(listing.imageUrls.length, 4)} images...`);
+  const imageParts: Array<{ inlineData: { data: string; mimeType: string } }> = [];
+
+  for (const url of listing.imageUrls.slice(0, 4)) {
+    try {
       const response = await fetch(url);
+      if (!response.ok) {
+        console.log(`[${timestamp()}]   ⚠ Image fetch failed (${response.status}): ${url.slice(0, 60)}...`);
+        continue;
+      }
       const buffer = await response.arrayBuffer();
       const base64 = Buffer.from(buffer).toString("base64");
       const mimeType = response.headers.get("content-type") || "image/jpeg";
-      return {
-        inlineData: { data: base64, mimeType },
-      };
-    })
-  );
+      imageParts.push({ inlineData: { data: base64, mimeType } });
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : "Unknown error";
+      console.log(`[${timestamp()}]   ⚠ Image fetch error: ${errMsg}`);
+    }
+  }
+
+  if (imageParts.length === 0) {
+    throw new Error("Failed to fetch any images for listing");
+  }
+
+  console.log(`[${timestamp()}]   Fetched ${imageParts.length} images successfully`);
 
   const prompt = EVALUATION_PROMPT
     .replace("{title}", listing.title)
     .replace("{price}", listing.price.toString())
     .replace("{description}", listing.description);
 
-  // Retry loop with exponential backoff for rate limits
+  // Retry loop with exponential backoff for rate limits and network errors
   let lastError: Error | null = null;
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
+      console.log(`[${timestamp()}]   Calling Gemini API${attempt > 0 ? ` (attempt ${attempt + 1})` : ""}...`);
+      const startTime = Date.now();
       const result = await model.generateContent([prompt, ...imageParts]);
+      const elapsed = Date.now() - startTime;
       const text = result.response.text();
 
       // Parse JSON from response
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
+        console.log(`[${timestamp()}]   ✗ Failed to parse JSON from response (${elapsed}ms)`);
         throw new Error("Failed to parse LLM response as JSON");
       }
 
-      return JSON.parse(jsonMatch[0]) as Evaluation;
+      const evaluation = JSON.parse(jsonMatch[0]) as Evaluation;
+      console.log(`[${timestamp()}]   ✓ Evaluated in ${elapsed}ms - Era: ${evaluation.estimatedEra}, Margin: $${evaluation.margin ?? "N/A"}, Confidence: ${(evaluation.confidence * 100).toFixed(0)}%`);
+
+      return evaluation;
     } catch (error: unknown) {
       lastError = error as Error;
+      const errorMsg = error instanceof Error ? error.message : String(error);
 
-      // Check if it's a rate limit error (429)
-      if (error instanceof Error && error.message.includes("429")) {
+      // Retry on rate limit (429) or network errors (fetch failed)
+      const isRetryable = errorMsg.includes("429") || errorMsg.includes("fetch failed") || errorMsg.includes("ECONNRESET") || errorMsg.includes("ETIMEDOUT");
+
+      if (isRetryable && attempt < MAX_RETRIES - 1) {
         const delay = INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt);
-        console.log(`Rate limited. Retrying in ${delay / 1000}s... (attempt ${attempt + 1}/${MAX_RETRIES})`);
+        const reason = errorMsg.includes("429") ? "Rate limited" : "Network error";
+        console.log(`[${timestamp()}]   ⚠ ${reason}: ${errorMsg.slice(0, 100)}`);
+        console.log(`[${timestamp()}]   Retrying in ${delay / 1000}s... (attempt ${attempt + 1}/${MAX_RETRIES})`);
         await sleep(delay);
         continue;
       }
 
-      // For other errors, throw immediately
+      // Log full error details before throwing
+      console.log(`[${timestamp()}]   ✗ Error: ${errorMsg}`);
       throw error;
     }
   }
 
   // If we exhausted retries, throw the last error
+  console.log(`[${timestamp()}]   ✗ Max retries exceeded`);
   throw lastError || new Error("Max retries exceeded");
 }
 
