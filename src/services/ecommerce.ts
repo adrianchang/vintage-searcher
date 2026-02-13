@@ -17,12 +17,14 @@ const eBay = new eBayApi({
 
 // Search queries targeting casual sellers who may not know item value
 const VINTAGE_SEARCH_QUERIES = [
-  "old clothing estate sale",
-  "grandma closet clothes",
-  "antique clothes lot",
-  "old jacket coat",
-  "old dress clothing",
-  "vintage clothing lot",
+  "old mens jacket",
+  "vintage mens shirt",
+  "old leather jacket",
+  "vintage workwear",
+  "old denim jacket",
+  "vintage mens coat",
+  "estate sale mens",
+  "grandpa clothes",
 ];
 
 export async function fetchListings(platform: Platform, limit: number): Promise<Listing[]> {
