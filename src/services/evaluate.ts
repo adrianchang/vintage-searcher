@@ -32,8 +32,9 @@ Respond with JSON only:
   "references": string[]         // Comparable sales, known labels, pricing sources
 }`;
 
-const MAX_RETRIES = 3;
-const INITIAL_RETRY_DELAY_MS = 15000; // 15 seconds
+const MAX_RETRIES = 10; // Max retry attempts before giving up
+const INITIAL_RETRY_DELAY_MS = 10000; // 10 seconds (reduced for faster retries)
+const API_TIMEOUT_MS = 60000; // 60 second timeout for Gemini API calls
 
 async function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -89,7 +90,10 @@ export async function evaluateListing(listing: Listing): Promise<Evaluation> {
     try {
       console.log(`[${timestamp()}]   Calling Gemini API${attempt > 0 ? ` (attempt ${attempt + 1})` : ""}...`);
       const startTime = Date.now();
-      const result = await model.generateContent([prompt, ...imageParts]);
+      const result = await model.generateContent(
+        [prompt, ...imageParts],
+        { timeout: API_TIMEOUT_MS }
+      );
       const elapsed = Date.now() - startTime;
       const text = result.response.text();
 
@@ -108,8 +112,13 @@ export async function evaluateListing(listing: Listing): Promise<Evaluation> {
       lastError = error as Error;
       const errorMsg = error instanceof Error ? error.message : String(error);
 
-      // Retry on rate limit (429) or network errors (fetch failed)
-      const isRetryable = errorMsg.includes("429") || errorMsg.includes("fetch failed") || errorMsg.includes("ECONNRESET") || errorMsg.includes("ETIMEDOUT");
+      // Retry on rate limit (429), network errors, or timeouts
+      const isRetryable = errorMsg.includes("429") ||
+        errorMsg.includes("fetch failed") ||
+        errorMsg.includes("ECONNRESET") ||
+        errorMsg.includes("ETIMEDOUT") ||
+        errorMsg.includes("abort") ||
+        errorMsg.includes("Abort");
 
       if (isRetryable && attempt < MAX_RETRIES - 1) {
         const delay = INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt);
