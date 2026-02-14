@@ -32,29 +32,34 @@ Respond with JSON only:
   "references": string[]         // Comparable sales, known labels, pricing sources
 }`;
 
-const MAX_RETRIES = 10; // Max retry attempts before giving up
+const MAX_RETRIES = 3; // Max retry attempts before giving up
 const INITIAL_RETRY_DELAY_MS = 10000; // 10 seconds (reduced for faster retries)
 const API_TIMEOUT_MS = 60000; // 60 second timeout for Gemini API calls
+const MIN_REQUEST_INTERVAL_MS = 15000; // 15 seconds between requests (4 per minute)
+
+let lastRequestTime = 0;
 
 async function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export async function evaluateListing(listing: Listing): Promise<Evaluation> {
-  const shortTitle = listing.title.slice(0, 50);
-  const timestamp = () => new Date().toISOString();
-
-  if (USE_MOCK_DATA) {
-    return getMockEvaluation(listing);
+async function throttle(): Promise<void> {
+  const now = Date.now();
+  const elapsed = now - lastRequestTime;
+  if (lastRequestTime > 0 && elapsed < MIN_REQUEST_INTERVAL_MS) {
+    await sleep(MIN_REQUEST_INTERVAL_MS - elapsed);
   }
+  lastRequestTime = Date.now();
+}
 
-  console.log(`[${timestamp()}] Evaluating: ${shortTitle}...`);
+type ImagePart = { inlineData: { data: string; mimeType: string } };
 
-  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-
-  // Fetch images and convert to base64
+async function fetchListingImages(
+  listing: Listing,
+  timestamp: () => string,
+): Promise<ImagePart[]> {
   console.log(`[${timestamp()}]   Fetching ${Math.min(listing.imageUrls.length, 4)} images...`);
-  const imageParts: Array<{ inlineData: { data: string; mimeType: string } }> = [];
+  const imageParts: ImagePart[] = [];
 
   for (const url of listing.imageUrls.slice(0, 4)) {
     try {
@@ -78,17 +83,28 @@ export async function evaluateListing(listing: Listing): Promise<Evaluation> {
   }
 
   console.log(`[${timestamp()}]   Fetched ${imageParts.length} images successfully`);
+  return imageParts;
+}
 
-  const prompt = EVALUATION_PROMPT
+function buildPrompt(listing: Listing): string {
+  return EVALUATION_PROMPT
     .replace("{title}", listing.title)
     .replace("{price}", listing.price.toString())
     .replace("{description}", listing.description);
+}
 
-  // Retry loop with exponential backoff for rate limits and network errors
+async function callGeminiWithRetry(
+  prompt: string,
+  imageParts: ImagePart[],
+  timestamp: () => string,
+): Promise<Evaluation> {
+  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
   let lastError: Error | null = null;
+
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
       console.log(`[${timestamp()}]   Calling Gemini API${attempt > 0 ? ` (attempt ${attempt + 1})` : ""}...`);
+      await throttle();
       const startTime = Date.now();
       const result = await model.generateContent(
         [prompt, ...imageParts],
@@ -130,7 +146,7 @@ export async function evaluateListing(listing: Listing): Promise<Evaluation> {
       }
 
       // Log full error details before throwing
-      console.log(`[${timestamp()}]   ✗ Error: ${errorMsg}`);
+      console.error(`[${timestamp()}]   ✗ Error:`, error);
       throw error;
     }
   }
@@ -138,6 +154,16 @@ export async function evaluateListing(listing: Listing): Promise<Evaluation> {
   // If we exhausted retries, throw the last error
   console.log(`[${timestamp()}]   ✗ Max retries exceeded`);
   throw lastError || new Error("Max retries exceeded");
+}
+
+export async function evaluateListing(listing: Listing): Promise<Evaluation> {
+  if (USE_MOCK_DATA) return getMockEvaluation(listing);
+  const timestamp = () => new Date().toISOString();
+  console.log(`[${timestamp()}] Evaluating: ${listing.title.slice(0, 50)}...`);
+
+  const imageParts = await fetchListingImages(listing, timestamp);
+  const prompt = buildPrompt(listing);
+  return callGeminiWithRetry(prompt, imageParts, timestamp);
 }
 
 // Mock evaluations based on listing URL (matches mock listings in ecommerce.ts)
