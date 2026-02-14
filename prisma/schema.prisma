@@ -34,7 +34,7 @@ model Evaluation {
   listing        FilteredListing @relation(fields: [listingId], references: [id])
 
   isAuthentic    Boolean
-  estimatedEra   String
+  estimatedEra   String?  // Nullable - Gemini may return null for non-vintage
   estimatedValue Float?   // Nullable - Gemini may return null for non-vintage
   currentPrice   Float
   margin         Float?   // Nullable - can't calculate if estimatedValue is null

@@ -12,7 +12,7 @@ export interface Listing {
 // LLM evaluation output
 export interface Evaluation {
   isAuthentic: boolean;
-  estimatedEra: string;
+  estimatedEra: string | null;    // Null if can't determine era (non-vintage items)
   estimatedValue: number | null;  // Null if can't estimate (non-vintage items)
   currentPrice: number;
   margin: number | null;          // Null if estimatedValue is null
