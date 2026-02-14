@@ -15,16 +15,18 @@ const eBay = new eBayApi({
   marketplaceId: eBayApi.MarketplaceId.EBAY_US,
 });
 
-// Search queries targeting casual sellers who may not know item value
+// Search queries. Each one is it's own query
 const VINTAGE_SEARCH_QUERIES = [
-  "old mens jacket",
-  "vintage mens shirt",
-  "old leather jacket",
-  "vintage workwear",
-  "old denim jacket",
-  "vintage mens coat",
-  "estate sale mens",
-  "grandpa clothes",
+  "vintage jacket",
+  "vintage pant"
+  // "old mens jacket",
+  // "vintage mens shirt",
+  // "old leather jacket",
+  // "vintage workwear",
+  // "old denim jacket",
+  // "vintage mens coat",
+  // "estate sale mens",
+  // "grandpa clothes",
 ];
 
 export async function fetchListings(platform: Platform, limit: number): Promise<Listing[]> {
