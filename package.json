@@ -4,7 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "build": "prisma generate && prisma migrate deploy",
     "scan": "tsx src/index.ts",
+    "start:scan": "tsx src/index.ts",
     "server": "tsx src/server.ts",
     "test": "vitest run",
     "test:discord": "tsx scripts/test-discord.ts",

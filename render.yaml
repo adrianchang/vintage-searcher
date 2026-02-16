@@ -1,12 +1,56 @@
+databases:
+  - name: vintage-searcher-db
+    plan: free
+    databaseName: vintage_searcher
+
 services:
   - type: web
     name: vintage-searcher
     runtime: node
     plan: free
-    buildCommand: npm install
+    buildCommand: npm install && npm run build
     startCommand: npm run server
     envVars:
       - key: NODE_ENV
         value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: vintage-searcher-db
+          property: connectionString
       - key: EBAY_ENDPOINT
         value: https://vintage-searcher.onrender.com/ebay/webhook
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: EBAY_APP_ID
+        sync: false
+      - key: EBAY_CERT_ID
+        sync: false
+      - key: EBAY_DEV_ID
+        sync: false
+      - key: DISCORD_WEBHOOK_URL
+        sync: false
+
+  - type: cron
+    name: vintage-searcher-scan
+    runtime: node
+    plan: free
+    schedule: "0 17 * * *"
+    buildCommand: npm install && npm run build
+    startCommand: npm run start:scan
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: vintage-searcher-db
+          property: connectionString
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: EBAY_APP_ID
+        sync: false
+      - key: EBAY_CERT_ID
+        sync: false
+      - key: EBAY_DEV_ID
+        sync: false
+      - key: DISCORD_WEBHOOK_URL
+        sync: false
