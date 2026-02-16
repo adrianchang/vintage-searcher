@@ -80,22 +80,20 @@ app.get("/ebay/auth/callback", (req, res) => {
   }
 });
 
-// Trigger a scan
-app.post("/scan", async (req, res) => {
+// Trigger a scan (runs in background, responds immediately)
+app.post("/scan", (req, res) => {
   console.log("Scan triggered via API");
-  try {
-    await runScan(scanConfig, {
-      prisma,
-      fetchListings,
-      filterListings,
-      evaluateListing,
-      sendAlert,
-    });
-    res.json({ status: "ok", message: "Scan complete" });
-  } catch (error) {
+  res.json({ status: "ok", message: "Scan started" });
+
+  runScan(scanConfig, {
+    prisma,
+    fetchListings,
+    filterListings,
+    evaluateListing,
+    sendAlert,
+  }).catch((error) => {
     console.error("Scan failed:", error);
-    res.status(500).json({ status: "error", message: "Scan failed" });
-  }
+  });
 });
 
 app.listen(PORT, () => {
