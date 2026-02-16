@@ -1,11 +1,26 @@
 import "dotenv/config";
 import express from "express";
 import crypto from "crypto";
+import { PrismaClient } from "./generated/prisma/client";
+import { fetchListings } from "./services/ecommerce";
+import { filterListings } from "./services/filter";
+import { evaluateListing } from "./services/evaluate";
+import { sendAlert } from "./services/notify";
+import { runScan } from "./scan";
+import type { ScanConfig } from "./types";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const EBAY_VERIFICATION_TOKEN = process.env.EBAY_VERIFICATION_TOKEN || "";
 const EBAY_ENDPOINT = process.env.EBAY_ENDPOINT || "";
+
+const prisma = new PrismaClient();
+const scanConfig: ScanConfig = {
+  platform: "ebay",
+  maxListings: 20,
+  minMargin: 50,
+  minConfidence: 0.7,
+};
 
 app.use(express.json());
 
@@ -62,6 +77,24 @@ app.get("/ebay/auth/callback", (req, res) => {
     `);
   } else {
     res.status(400).send("No authorization code received");
+  }
+});
+
+// Trigger a scan
+app.post("/scan", async (req, res) => {
+  console.log("Scan triggered via API");
+  try {
+    await runScan(scanConfig, {
+      prisma,
+      fetchListings,
+      filterListings,
+      evaluateListing,
+      sendAlert,
+    });
+    res.json({ status: "ok", message: "Scan complete" });
+  } catch (error) {
+    console.error("Scan failed:", error);
+    res.status(500).json({ status: "error", message: "Scan failed" });
   }
 });
 
