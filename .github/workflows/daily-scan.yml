@@ -1,0 +1,15 @@
+name: Daily Scan
+
+on:
+  schedule:
+    - cron: "0 17 * * *" # 9am PST (5pm UTC)
+  workflow_dispatch: # allows manual trigger from GitHub UI
+
+jobs:
+  trigger-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger scan endpoint
+        run: |
+          curl -X POST -f --max-time 300 \
+            https://vintage-searcher.onrender.com/scan
