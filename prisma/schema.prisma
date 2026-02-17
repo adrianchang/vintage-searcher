@@ -11,6 +11,25 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model User {
+  id        String        @id @default(cuid())
+  name      String        @unique
+  createdAt DateTime      @default(now())
+  queries   SearchQuery[]
+}
+
+model SearchQuery {
+  id        String   @id @default(cuid())
+  query     String
+  count     Int
+  enabled   Boolean  @default(true)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@unique([userId, query])
+}
+
 // Listings that passed the first filter (for iteration on filter rules)
 model FilteredListing {
   id          String   @id @default(cuid())

@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vintage Searcher</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 640px; margin: 0 auto; padding: 20px; background: #f5f5f5; color: #333; }
+    h1 { margin-bottom: 16px; font-size: 1.4em; }
+
+    .quota-bar { background: #e0e0e0; border-radius: 8px; height: 32px; position: relative; margin-bottom: 20px; overflow: hidden; }
+    .quota-fill { height: 100%; border-radius: 8px; transition: width 0.3s, background 0.3s; }
+    .quota-label { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 0.9em; }
+
+    .query-list { list-style: none; margin-bottom: 16px; }
+    .query-item { display: flex; align-items: center; gap: 8px; background: #fff; padding: 10px 12px; border-radius: 6px; margin-bottom: 6px; }
+    .query-item .query-text { flex: 1; font-weight: 500; }
+    .query-item input[type="number"] { width: 60px; padding: 4px 6px; border: 1px solid #ccc; border-radius: 4px; text-align: center; }
+    .query-item button { padding: 4px 10px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85em; }
+    .btn-toggle { background: #e0e0e0; }
+    .btn-toggle.enabled { background: #4caf50; color: #fff; }
+    .btn-delete { background: #f44336; color: #fff; }
+
+    .add-form { display: flex; gap: 8px; margin-bottom: 16px; }
+    .add-form input[type="text"] { flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+    .add-form input[type="number"] { width: 60px; padding: 8px; border: 1px solid #ccc; border-radius: 4px; text-align: center; }
+    .add-form button { padding: 8px 16px; background: #2196f3; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; }
+    .add-form button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .actions { display: flex; gap: 8px; margin-bottom: 8px; }
+    .save-btn { flex: 1; padding: 12px; background: #2196f3; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 1em; font-weight: 600; }
+    .save-btn:hover { background: #1976d2; }
+    .save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .scan-btn { flex: 1; padding: 12px; background: #333; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 1em; font-weight: 600; }
+    .scan-btn:hover { background: #555; }
+    .scan-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .error { color: #f44336; font-size: 0.85em; margin-bottom: 8px; }
+    .status { color: #4caf50; font-size: 0.85em; margin-top: 8px; text-align: center; }
+    .unsaved { color: #ff9800; font-size: 0.85em; margin-bottom: 8px; text-align: center; }
+  </style>
+</head>
+<body>
+  <h1>Vintage Searcher</h1>
+
+  <div class="quota-bar">
+    <div class="quota-fill" id="quotaFill"></div>
+    <div class="quota-label" id="quotaLabel">Used: 0 / 20</div>
+  </div>
+
+  <ul class="query-list" id="queryList"></ul>
+
+  <div class="error" id="error"></div>
+  <div class="unsaved" id="unsaved"></div>
+
+  <div class="add-form">
+    <input type="text" id="newQuery" placeholder="Search query...">
+    <input type="number" id="newCount" value="5" min="1" max="20">
+    <button id="addBtn" onclick="addQuery()">Add</button>
+  </div>
+
+  <div class="actions">
+    <button class="save-btn" id="saveBtn" onclick="saveAll()" disabled>Save Changes</button>
+    <button class="scan-btn" id="scanBtn" onclick="runScan()">Run Scan</button>
+  </div>
+  <div class="status" id="status"></div>
+
+  <script>
+    const QUOTA_LIMIT = 20;
+    let userId = null;
+    // Server state (last saved)
+    let savedQueries = [];
+    // Local working copy (edited in UI, not yet saved)
+    let localQueries = [];
+
+    async function init() {
+      const users = await fetch('/users').then(r => r.json());
+      if (users.length === 0) return;
+      userId = users[0].id;
+      await loadQueries();
+    }
+
+    async function loadQueries() {
+      if (!userId) return;
+      savedQueries = await fetch(`/users/${userId}/queries`).then(r => r.json());
+      localQueries = savedQueries.map(q => ({ ...q }));
+      render();
+    }
+
+    function getUsed() {
+      return localQueries.filter(q => q.enabled).reduce((s, q) => s + q.count, 0);
+    }
+
+    function hasChanges() {
+      if (localQueries.length !== savedQueries.length) return true;
+      for (let i = 0; i < localQueries.length; i++) {
+        const l = localQueries[i], s = savedQueries[i];
+        if (l.query !== s.query || l.count !== s.count || l.enabled !== s.enabled) return true;
+      }
+      return false;
+    }
+
+    function render() {
+      const used = getUsed();
+      const pct = Math.min(100, (used / QUOTA_LIMIT) * 100);
+
+      const fill = document.getElementById('quotaFill');
+      fill.style.width = pct + '%';
+      if (pct <= 50) fill.style.background = '#4caf50';
+      else if (pct <= 80) fill.style.background = '#ff9800';
+      else fill.style.background = '#f44336';
+
+      document.getElementById('quotaLabel').textContent = `Used: ${used} / ${QUOTA_LIMIT}`;
+
+      const list = document.getElementById('queryList');
+      list.innerHTML = localQueries.map((q, i) => `
+        <li class="query-item">
+          <span class="query-text">${esc(q.query)}</span>
+          <input type="number" value="${q.count}" min="1" max="20"
+            onchange="localUpdateCount(${i}, this.value)">
+          <button class="btn-toggle ${q.enabled ? 'enabled' : ''}"
+            onclick="localToggle(${i})">
+            ${q.enabled ? 'On' : 'Off'}
+          </button>
+          <button class="btn-delete" onclick="localDelete(${i})">X</button>
+        </li>
+      `).join('');
+
+      const dirty = hasChanges();
+      document.getElementById('saveBtn').disabled = !dirty;
+      document.getElementById('unsaved').textContent = dirty ? 'You have unsaved changes' : '';
+
+      const remaining = QUOTA_LIMIT - used;
+      document.getElementById('addBtn').disabled = remaining <= 0;
+      document.getElementById('error').textContent = '';
+    }
+
+    function esc(s) {
+      const d = document.createElement('div');
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    // --- Local edits (no network calls) ---
+
+    function localUpdateCount(index, val) {
+      const count = parseInt(val);
+      if (isNaN(count) || count < 1) { render(); return; }
+
+      const q = localQueries[index];
+      const otherUsed = getUsed() - (q.enabled ? q.count : 0);
+      if (q.enabled && otherUsed + count > QUOTA_LIMIT) {
+        document.getElementById('error').textContent = `Would exceed quota (max ${QUOTA_LIMIT - otherUsed} for this query)`;
+        render();
+        return;
+      }
+
+      q.count = count;
+      render();
+    }
+
+    function localToggle(index) {
+      const q = localQueries[index];
+      if (!q.enabled) {
+        // Enabling — check quota
+        if (getUsed() + q.count > QUOTA_LIMIT) {
+          document.getElementById('error').textContent = 'Would exceed quota';
+          return;
+        }
+      }
+      q.enabled = !q.enabled;
+      render();
+    }
+
+    function localDelete(index) {
+      localQueries.splice(index, 1);
+      render();
+    }
+
+    function addQuery() {
+      const queryInput = document.getElementById('newQuery');
+      const countInput = document.getElementById('newCount');
+      const query = queryInput.value.trim();
+      const count = parseInt(countInput.value);
+
+      if (!query) return;
+      if (isNaN(count) || count < 1) return;
+
+      if (getUsed() + count > QUOTA_LIMIT) {
+        document.getElementById('error').textContent = `Would exceed quota (${QUOTA_LIMIT - getUsed()} remaining)`;
+        return;
+      }
+
+      localQueries.push({ query, count, enabled: true });
+      queryInput.value = '';
+      countInput.value = '5';
+      render();
+    }
+
+    // --- Save all changes to server ---
+
+    async function saveAll() {
+      const btn = document.getElementById('saveBtn');
+      btn.disabled = true;
+      btn.textContent = 'Saving...';
+      document.getElementById('error').textContent = '';
+
+      const used = getUsed();
+      if (used > QUOTA_LIMIT) {
+        document.getElementById('error').textContent = `Total exceeds quota (${used} / ${QUOTA_LIMIT})`;
+        btn.disabled = false;
+        btn.textContent = 'Save Changes';
+        return;
+      }
+
+      try {
+        const res = await fetch(`/users/${userId}/queries`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            queries: localQueries.map(q => ({ query: q.query, count: q.count, enabled: q.enabled })),
+          }),
+        });
+
+        if (!res.ok) throw new Error('Server error');
+
+        savedQueries = await res.json();
+        localQueries = savedQueries.map(q => ({ ...q }));
+        render();
+        document.getElementById('status').textContent = 'Changes saved';
+        setTimeout(() => { document.getElementById('status').textContent = ''; }, 2000);
+      } catch (err) {
+        document.getElementById('error').textContent = 'Failed to save: ' + err.message;
+      }
+
+      btn.textContent = 'Save Changes';
+    }
+
+    async function runScan() {
+      if (hasChanges()) {
+        document.getElementById('error').textContent = 'Save your changes before scanning';
+        return;
+      }
+
+      const btn = document.getElementById('scanBtn');
+      const status = document.getElementById('status');
+      btn.disabled = true;
+      btn.textContent = 'Scanning...';
+      status.textContent = '';
+
+      const res = await fetch('/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      });
+
+      const data = await res.json();
+      btn.disabled = false;
+      btn.textContent = 'Run Scan';
+      status.textContent = data.message || 'Scan started';
+    }
+
+    init();
+  </script>
+</body>
+</html>

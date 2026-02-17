@@ -15,42 +15,44 @@ const eBay = new eBayApi({
   marketplaceId: eBayApi.MarketplaceId.EBAY_US,
 });
 
-// Search queries. Each one is it's own query
+// Default search queries (fallback if no DB queries exist)
 const VINTAGE_SEARCH_QUERIES = [
-  "vintage jacket",
-  "vintage pant"
-  // "old mens jacket",
-  // "vintage mens shirt",
-  // "old leather jacket",
-  // "vintage workwear",
-  // "old denim jacket",
-  // "vintage mens coat",
-  // "estate sale mens",
-  // "grandpa clothes",
+  { query: "vintage jacket", count: 10 },
+  { query: "vintage pant", count: 10 },
 ];
 
-export async function fetchListings(platform: Platform, limit: number): Promise<Listing[]> {
-  return fetchEbay(limit);
+export interface SearchQueryInput {
+  query: string;
+  count: number;
 }
 
-async function fetchEbay(limit: number): Promise<Listing[]> {
+export async function fetchListings(
+  platform: Platform,
+  limit: number,
+  queries?: SearchQueryInput[],
+): Promise<Listing[]> {
+  return fetchEbay(limit, queries || VINTAGE_SEARCH_QUERIES);
+}
+
+async function fetchEbay(limit: number, queries: SearchQueryInput[]): Promise<Listing[]> {
   if (USE_MOCK_DATA) {
     console.log(`[MOCK] Returning ${Math.min(limit, MOCK_LISTINGS.length)} mock listings`);
     return MOCK_LISTINGS.slice(0, limit);
   }
 
-  console.log(`Fetching ${limit} listings from eBay...`);
+  console.log(`Fetching up to ${limit} listings from eBay...`);
 
   const listings: Listing[] = [];
-  const perQueryLimit = Math.ceil(limit / VINTAGE_SEARCH_QUERIES.length);
 
-  for (const query of VINTAGE_SEARCH_QUERIES) {
+  for (const { query, count } of queries) {
     if (listings.length >= limit) break;
+
+    const queryLimit = Math.min(count, limit - listings.length);
 
     try {
       const response = await eBay.buy.browse.search({
         q: query,
-        limit: String(perQueryLimit),
+        limit: String(queryLimit),
         filter: [
           "price:[0..500]",           // Under $500 (seller likely doesn't know value)
           "conditionIds:{1000|1500|2000|2500|3000}", // New to Good condition

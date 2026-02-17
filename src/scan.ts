@@ -1,22 +1,39 @@
 import { PrismaClient } from "./generated/prisma/client";
-import { type Platform } from "./services/ecommerce";
+import { type Platform, type SearchQueryInput } from "./services/ecommerce";
 import type { Listing, Evaluation, ScanConfig } from "./types";
 
 export interface ScanDeps {
   prisma: PrismaClient;
-  fetchListings: (platform: Platform, limit: number) => Promise<Listing[]>;
+  fetchListings: (platform: Platform, limit: number, queries?: SearchQueryInput[]) => Promise<Listing[]>;
   filterListings: (listings: Listing[]) => Promise<Listing[]>;
   evaluateListing: (listing: Listing) => Promise<Evaluation>;
   sendAlert: (opportunities: { listing: Listing; evaluation: Evaluation }[]) => Promise<void>;
 }
 
-export async function runScan(config: ScanConfig, deps: ScanDeps) {
+export async function runScan(config: ScanConfig, deps: ScanDeps, userId?: string) {
   const { prisma } = deps;
 
   console.log(`Starting vintage scan on ${config.platform}...`);
 
+  // Load queries from DB if userId provided
+  let queries: SearchQueryInput[] | undefined;
+  if (userId) {
+    const dbQueries = await prisma.searchQuery.findMany({
+      where: { userId, enabled: true },
+    });
+    if (dbQueries.length > 0) {
+      queries = dbQueries.map((q) => ({ query: q.query, count: q.count }));
+      console.log(`Loaded ${queries.length} queries from DB for user ${userId}`);
+    }
+  }
+
+  // Safety cap: sum of query counts, capped at maxListings
+  const totalCount = queries
+    ? Math.min(queries.reduce((sum, q) => sum + q.count, 0), config.maxListings)
+    : config.maxListings;
+
   // 1. Fetch listings from platform
-  const listings = await deps.fetchListings(config.platform, config.maxListings);
+  const listings = await deps.fetchListings(config.platform, totalCount, queries);
   console.log(`Fetched ${listings.length} listings from ${config.platform}`);
 
   // 2. Pass 1: Filter with cheap/fast rules

@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import crypto from "crypto";
+import path from "path";
 import { PrismaClient } from "./generated/prisma/client";
 import { fetchListings } from "./services/ecommerce";
 import { filterListings } from "./services/filter";
@@ -23,6 +24,7 @@ const scanConfig: ScanConfig = {
 };
 
 app.use(express.json());
+app.use(express.static(path.join(import.meta.dirname, "..", "public")));
 
 // Health check
 app.get("/", (req, res) => {
@@ -80,9 +82,52 @@ app.get("/ebay/auth/callback", (req, res) => {
   }
 });
 
+// --- User & Query Management ---
+
+// List all users
+app.get("/users", async (req, res) => {
+  const users = await prisma.user.findMany({ orderBy: { createdAt: "asc" } });
+  res.json(users);
+});
+
+// Get queries for a user
+app.get("/users/:userId/queries", async (req, res) => {
+  const queries = await prisma.searchQuery.findMany({
+    where: { userId: req.params.userId },
+    orderBy: { createdAt: "asc" },
+  });
+  res.json(queries);
+});
+
+// Replace all queries for a user
+app.put("/users/:userId/queries", async (req, res) => {
+  const { queries } = req.body as { queries: { query: string; count: number; enabled: boolean }[] };
+  if (!Array.isArray(queries)) {
+    res.status(400).json({ error: "queries array required" });
+    return;
+  }
+
+  const userId = req.params.userId;
+  await prisma.$transaction([
+    prisma.searchQuery.deleteMany({ where: { userId } }),
+    ...queries.map((q) =>
+      prisma.searchQuery.create({
+        data: { query: q.query, count: q.count, enabled: q.enabled, userId },
+      }),
+    ),
+  ]);
+
+  const updated = await prisma.searchQuery.findMany({
+    where: { userId },
+    orderBy: { createdAt: "asc" },
+  });
+  res.json(updated);
+});
+
 // Trigger a scan (runs in background, responds immediately)
 app.post("/scan", (req, res) => {
-  console.log("Scan triggered via API");
+  const userId = req.body?.userId as string | undefined;
+  console.log(`Scan triggered via API${userId ? ` for user ${userId}` : ""}`);
   res.json({ status: "ok", message: "Scan started" });
 
   runScan(scanConfig, {
@@ -91,7 +136,7 @@ app.post("/scan", (req, res) => {
     filterListings,
     evaluateListing,
     sendAlert,
-  }).catch((error) => {
+  }, userId).catch((error) => {
     console.error("Scan failed:", error);
   });
 });
