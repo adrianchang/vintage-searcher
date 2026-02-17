@@ -72,6 +72,12 @@ function createMockPrisma() {
   let idCounter = 0;
 
   return {
+    user: {
+      findUnique: vi.fn(async () => null),
+    },
+    searchQuery: {
+      findMany: vi.fn(async () => []),
+    },
     filteredListing: {
       upsert: vi.fn(async ({ where, create }: any) => {
         if (!listings[where.url]) {
