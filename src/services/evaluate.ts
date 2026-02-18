@@ -134,16 +134,32 @@ async function callGeminiWithRetry(
         },
       });
       const elapsed = Date.now() - startTime;
-      const text = response.text ?? "";
 
-      // Parse JSON from response
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      // Extract text — fall back to reading candidate parts directly
+      let text = response.text ?? "";
+      if (!text && response.candidates?.[0]?.content?.parts) {
+        text = response.candidates[0].content.parts
+          .filter((p: { text?: string }) => p.text)
+          .map((p: { text?: string }) => p.text)
+          .join("");
+      }
+
+      // Parse JSON from response — strip markdown fences first
+      const stripped = text.replace(/```(?:json)?\s*/gi, "").replace(/```/g, "");
+      const jsonMatch = stripped.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
         console.log(`[${timestamp()}]   ✗ Failed to parse JSON from response (${elapsed}ms)`);
+        console.log(`[${timestamp()}]   Raw response: ${text.slice(0, 500)}`);
         throw new Error("Failed to parse LLM response as JSON");
       }
 
-      const evaluation = JSON.parse(jsonMatch[0]) as Evaluation;
+      let evaluation: Evaluation;
+      try {
+        evaluation = JSON.parse(jsonMatch[0]) as Evaluation;
+      } catch {
+        console.log(`[${timestamp()}]   ✗ Invalid JSON (${elapsed}ms): ${jsonMatch[0].slice(0, 200)}`);
+        throw new Error("Failed to parse LLM response as JSON");
+      }
 
       // Merge grounding references into evaluation
       const groundingRefs = extractGroundingReferences(response);
