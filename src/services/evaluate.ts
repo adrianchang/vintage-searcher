@@ -1,10 +1,10 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI, type GenerateContentResponse } from "@google/genai";
 import type { Listing, Evaluation } from "../types";
 
 // Set to true to use mock evaluations for testing
 const USE_MOCK_DATA = process.env.USE_MOCK_DATA === "true";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
 
 const EVALUATION_PROMPT = `You are an expert in vintage clothing (pre-1980s). Analyze this listing and determine if it's authentic vintage and potentially underpriced.
 
@@ -19,17 +19,19 @@ Analyze the photos for:
 - Fabric patterns and construction
 - Condition details
 
+Use Google Search to find actual sold/completed listings and current market prices for similar items. Base your estimatedValue on real comparable sales you find, not guesses. Include actual URLs and prices from search results in your references.
+
 Respond with JSON only:
 {
   "isAuthentic": boolean,        // Is this actually pre-1980s?
   "estimatedEra": string,        // e.g., "1960s" or "early 1970s"
-  "estimatedValue": number,      // What it could sell for (USD)
+  "estimatedValue": number,      // Based on actual sold prices found via search (USD)
   "currentPrice": number,        // The listed price
   "margin": number,              // estimatedValue - currentPrice
   "confidence": number,          // 0-1 score
   "reasoning": string,           // Why you think it's valuable/authentic
   "redFlags": string[],          // Potential issues
-  "references": string[]         // Comparable sales, known labels, pricing sources
+  "references": string[]         // Actual URLs and prices from comparable sold listings
 }`;
 
 const MAX_RETRIES = 3; // Max retry attempts before giving up
@@ -93,12 +95,25 @@ function buildPrompt(listing: Listing): string {
     .replace("{description}", listing.description);
 }
 
+function extractGroundingReferences(response: GenerateContentResponse): string[] {
+  const refs: string[] = [];
+  const metadata = response.candidates?.[0]?.groundingMetadata;
+  if (!metadata?.groundingChunks) return refs;
+
+  for (const chunk of metadata.groundingChunks) {
+    if (chunk.web?.uri) {
+      const title = chunk.web.title || "Source";
+      refs.push(`${title}: ${chunk.web.uri}`);
+    }
+  }
+  return refs;
+}
+
 async function callGeminiWithRetry(
   prompt: string,
   imageParts: ImagePart[],
   timestamp: () => string,
 ): Promise<Evaluation> {
-  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
   let lastError: Error | null = null;
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
@@ -106,12 +121,20 @@ async function callGeminiWithRetry(
       console.log(`[${timestamp()}]   Calling Gemini API${attempt > 0 ? ` (attempt ${attempt + 1})` : ""}...`);
       await throttle();
       const startTime = Date.now();
-      const result = await model.generateContent(
-        [prompt, ...imageParts],
-        { timeout: API_TIMEOUT_MS }
-      );
+      const response = await genAI.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: prompt }, ...imageParts],
+          },
+        ],
+        config: {
+          tools: [{ googleSearch: {} }],
+        },
+      });
       const elapsed = Date.now() - startTime;
-      const text = result.response.text();
+      const text = response.text ?? "";
 
       // Parse JSON from response
       const jsonMatch = text.match(/\{[\s\S]*\}/);
@@ -121,6 +144,15 @@ async function callGeminiWithRetry(
       }
 
       const evaluation = JSON.parse(jsonMatch[0]) as Evaluation;
+
+      // Merge grounding references into evaluation
+      const groundingRefs = extractGroundingReferences(response);
+      if (groundingRefs.length > 0) {
+        console.log(`[${timestamp()}]   Found ${groundingRefs.length} grounding sources`);
+        const existingRefs = evaluation.references ?? [];
+        evaluation.references = [...existingRefs, ...groundingRefs];
+      }
+
       console.log(`[${timestamp()}]   ✓ Evaluated in ${elapsed}ms - Era: ${evaluation.estimatedEra}, Margin: $${evaluation.margin ?? "N/A"}, Confidence: ${(evaluation.confidence * 100).toFixed(0)}%`);
 
       return evaluation;
