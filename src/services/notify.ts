@@ -54,12 +54,12 @@ async function sendDiscordAlert(webhookUrl: string, opportunities: Opportunity[]
       fields: [
         {
           name: "Price",
-          value: `$${listing.price} → $${evaluation.estimatedValue}`,
+          value: `$${listing.price} → ${evaluation.estimatedValue != null ? `$${evaluation.estimatedValue}` : "N/A"}`,
           inline: true,
         },
         {
           name: "Margin",
-          value: `$${evaluation.margin}`,
+          value: evaluation.margin != null ? `$${evaluation.margin}` : "N/A",
           inline: true,
         },
         {
@@ -69,7 +69,7 @@ async function sendDiscordAlert(webhookUrl: string, opportunities: Opportunity[]
         },
         {
           name: "Era",
-          value: evaluation.estimatedEra,
+          value: evaluation.estimatedEra || "Unknown",
           inline: true,
         },
         {
@@ -108,7 +108,10 @@ async function sendDiscordAlert(webhookUrl: string, opportunities: Opportunity[]
     });
 
     if (!response.ok) {
+      const body = await response.text();
       console.error(`Discord webhook failed: ${response.status} ${response.statusText}`);
+      console.error(`Discord response body: ${body}`);
+      console.error(`Payload sent: ${JSON.stringify(payload, null, 2)}`);
     } else {
       console.log(`Discord notification sent for ${opportunities.length} opportunities`);
     }
@@ -118,7 +121,8 @@ async function sendDiscordAlert(webhookUrl: string, opportunities: Opportunity[]
 }
 
 // Color based on margin: green for high, yellow for medium, orange for low
-function getColorByMargin(margin: number): number {
+function getColorByMargin(margin: number | null): number {
+  if (margin == null) return 0xffa500;
   if (margin >= 150) return 0x00ff00; // Green
   if (margin >= 100) return 0x7cfc00; // Light green
   if (margin >= 75) return 0xffff00;  // Yellow
