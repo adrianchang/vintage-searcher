@@ -95,17 +95,30 @@ function buildPrompt(listing: Listing): string {
     .replace("{description}", listing.description);
 }
 
-function extractGroundingReferences(response: GenerateContentResponse): string[] {
-  const refs: string[] = [];
-  const metadata = response.candidates?.[0]?.groundingMetadata;
-  if (!metadata?.groundingChunks) return refs;
-
-  for (const chunk of metadata.groundingChunks) {
-    if (chunk.web?.uri) {
-      const title = chunk.web.title || "Source";
-      refs.push(`${title}: ${chunk.web.uri}`);
-    }
+async function resolveRedirectUrl(url: string): Promise<string> {
+  try {
+    // Follow redirects manually to resolve vertexaisearch redirect URLs to actual source URLs
+    const response = await fetch(url, { method: "HEAD", redirect: "follow" });
+    return response.url;
+  } catch {
+    return url;
   }
+}
+
+async function extractGroundingReferences(response: GenerateContentResponse): Promise<string[]> {
+  // Gemini returns a single candidate by default, and only 1 is supported when tools are enabled
+  const metadata = response.candidates?.[0]?.groundingMetadata;
+  if (!metadata?.groundingChunks) return [];
+
+  const refs = await Promise.all(
+    metadata.groundingChunks
+      .filter((chunk) => chunk.web?.uri)
+      .map(async (chunk) => {
+        const title = chunk.web!.title || "Source";
+        const resolvedUrl = await resolveRedirectUrl(chunk.web!.uri!);
+        return `${title}: ${resolvedUrl}`;
+      }),
+  );
   return refs;
 }
 
@@ -135,7 +148,8 @@ async function callGeminiWithRetry(
       });
       const elapsed = Date.now() - startTime;
 
-      // Extract text — fall back to reading candidate parts directly
+      // Extract text — fall back to reading candidate parts directly.
+      // Gemini returns a single candidate by default, and only 1 is supported when tools are enabled.
       let text = response.text ?? "";
       if (!text && response.candidates?.[0]?.content?.parts) {
         text = response.candidates[0].content.parts
@@ -162,7 +176,7 @@ async function callGeminiWithRetry(
       }
 
       // Merge grounding references into evaluation
-      const groundingRefs = extractGroundingReferences(response);
+      const groundingRefs = await extractGroundingReferences(response);
       if (groundingRefs.length > 0) {
         console.log(`[${timestamp()}]   Found ${groundingRefs.length} grounding sources`);
         const existingRefs = evaluation.references ?? [];
