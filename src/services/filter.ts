@@ -33,6 +33,11 @@ export async function filterListings(listings: Listing[]): Promise<Listing[]> {
       }
     }
 
+    // Skip multi-variation listings (multiple sizes/colors) — vintage is one-of-one
+    if (listing.rawData.itemGroupType === "SELLER_DEFINED_VARIATIONS") {
+      return false;
+    }
+
     return true;
   });
 }

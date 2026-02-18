@@ -89,6 +89,7 @@ async function fetchEbay(limit: number, queries: SearchQueryInput[]): Promise<Li
               seller: item.seller,
               itemCreationDate: item.itemCreationDate,
               categories: item.categories,
+              itemGroupType: item.itemGroupType,
             },
           };
 
