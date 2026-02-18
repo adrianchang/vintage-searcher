@@ -144,6 +144,7 @@ async function callGeminiWithRetry(
         ],
         config: {
           tools: [{ googleSearch: {} }],
+          maxOutputTokens: 2048,
         },
       });
       const elapsed = Date.now() - startTime;

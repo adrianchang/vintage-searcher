@@ -92,6 +92,15 @@ async function sendDiscordAlert(webhookUrl: string, opportunities: Opportunity[]
       });
     }
 
+    // Add references if present
+    if (evaluation.references.length > 0) {
+      embed.fields.push({
+        name: "References",
+        value: truncate(evaluation.references.join("\n"), 1024),
+        inline: false,
+      });
+    }
+
     return embed;
   });
 

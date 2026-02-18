@@ -46,8 +46,6 @@ app.get("/ebay/webhook", (req, res) => {
       .digest("hex");
 
     console.log("eBay verification challenge received");
-    console.log("Challenge code:", challengeCode);
-    console.log("Response hash:", hash);
 
     res.set("Content-Type", "application/json");
     res.json({ challengeResponse: hash });
@@ -67,16 +65,7 @@ app.get("/ebay/auth/callback", (req, res) => {
   const { code, state } = req.query;
 
   if (code) {
-    console.log("eBay OAuth code received:", code);
-    res.send(`
-      <html>
-        <body>
-          <h1>Authorization successful!</h1>
-          <p>Code received. You can close this window.</p>
-          <pre>${code}</pre>
-        </body>
-      </html>
-    `);
+    console.log("eBay OAuth code received");
   } else {
     res.status(400).send("No authorization code received");
   }
