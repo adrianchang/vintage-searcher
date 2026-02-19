@@ -1,4 +1,4 @@
-import { GoogleGenAI, type GenerateContentResponse } from "@google/genai";
+import { GoogleGenAI, Type, type GenerateContentResponse } from "@google/genai";
 import type { Listing, Evaluation } from "../types";
 
 // Set to true to use mock evaluations for testing
@@ -19,20 +19,7 @@ Analyze the photos for:
 - Fabric patterns and construction
 - Condition details
 
-Use Google Search to find actual sold/completed listings and current market prices for similar items. Base your estimatedValue on real comparable sales you find, not guesses. Include actual URLs and prices from search results in your references.
-
-Respond with JSON only:
-{
-  "isAuthentic": boolean,        // Is this actually pre-1980s?
-  "estimatedEra": string,        // e.g., "1960s" or "early 1970s"
-  "estimatedValue": number,      // Based on actual sold prices found via search (USD)
-  "currentPrice": number,        // The listed price
-  "margin": number,              // estimatedValue - currentPrice
-  "confidence": number,          // 0-1 score
-  "reasoning": string,           // Why you think it's valuable/authentic
-  "redFlags": string[],          // Potential issues
-  "references": string[]         // Actual URLs and prices from comparable sold listings
-}`;
+Use Google Search to find actual sold/completed listings and current market prices for similar items. Base your estimatedValue on real comparable sales you find, not guesses. Include actual URLs and prices from search results in your references.`;
 
 const MAX_RETRIES = 3; // Max retry attempts before giving up
 const INITIAL_RETRY_DELAY_MS = 10000; // 10 seconds (reduced for faster retries)
@@ -135,7 +122,7 @@ async function callGeminiWithRetry(
       await throttle();
       const startTime = Date.now();
       const response = await genAI.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-3-flash-preview",
         contents: [
           {
             role: "user",
@@ -144,36 +131,33 @@ async function callGeminiWithRetry(
         ],
         config: {
           tools: [{ googleSearch: {} }],
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              isAuthentic: { type: Type.BOOLEAN },
+              estimatedEra: { type: Type.STRING },
+              estimatedValue: { type: Type.NUMBER },
+              currentPrice: { type: Type.NUMBER },
+              margin: { type: Type.NUMBER },
+              confidence: { type: Type.NUMBER },
+              reasoning: { type: Type.STRING },
+              redFlags: { type: Type.ARRAY, items: { type: Type.STRING } },
+              references: { type: Type.ARRAY, items: { type: Type.STRING } },
+            },
+            required: ["isAuthentic", "currentPrice", "confidence", "reasoning", "redFlags", "references"],
+          },
         },
       });
       const elapsed = Date.now() - startTime;
 
-      // Extract text — fall back to reading candidate parts directly.
-      // Gemini returns a single candidate by default, and only 1 is supported when tools are enabled.
-      let text = response.text ?? "";
-      if (!text && response.candidates?.[0]?.content?.parts) {
-        text = response.candidates[0].content.parts
-          .filter((p: { text?: string }) => p.text)
-          .map((p: { text?: string }) => p.text)
-          .join("");
+      const text = response.text ?? "";
+      if (!text) {
+        console.log(`[${timestamp()}]   ✗ Empty response from Gemini (${elapsed}ms)`);
+        throw new Error("Empty response from Gemini");
       }
 
-      // Parse JSON from response — strip markdown fences first
-      const stripped = text.replace(/```(?:json)?\s*/gi, "").replace(/```/g, "");
-      const jsonMatch = stripped.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        console.log(`[${timestamp()}]   ✗ Failed to parse JSON from response (${elapsed}ms)`);
-        console.log(`[${timestamp()}]   Raw response: ${text.slice(0, 500)}`);
-        throw new Error("Failed to parse LLM response as JSON");
-      }
-
-      let evaluation: Evaluation;
-      try {
-        evaluation = JSON.parse(jsonMatch[0]) as Evaluation;
-      } catch {
-        console.log(`[${timestamp()}]   ✗ Invalid JSON (${elapsed}ms): ${jsonMatch[0].slice(0, 200)}`);
-        throw new Error("Failed to parse LLM response as JSON");
-      }
+      const evaluation = JSON.parse(text) as Evaluation;
 
       // Merge grounding references into evaluation
       const groundingRefs = await extractGroundingReferences(response);
