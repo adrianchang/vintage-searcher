@@ -84,9 +84,10 @@ function buildPrompt(listing: Listing): string {
 
 async function resolveRedirectUrl(url: string): Promise<string> {
   try {
-    // Follow redirects manually to resolve vertexaisearch redirect URLs to actual source URLs
-    const response = await fetch(url, { method: "HEAD", redirect: "follow" });
-    return response.url;
+    // Don't follow redirects — read the Location header to get the actual source URL
+    const response = await fetch(url, { method: "GET", redirect: "manual" });
+    const location = response.headers.get("location");
+    return location || url;
   } catch {
     return url;
   }
@@ -143,9 +144,8 @@ async function callGeminiWithRetry(
               confidence: { type: Type.NUMBER },
               reasoning: { type: Type.STRING },
               redFlags: { type: Type.ARRAY, items: { type: Type.STRING } },
-              references: { type: Type.ARRAY, items: { type: Type.STRING } },
             },
-            required: ["isAuthentic", "currentPrice", "confidence", "reasoning", "redFlags", "references"],
+            required: ["isAuthentic", "currentPrice", "confidence", "reasoning", "redFlags"],
           },
         },
       });
@@ -159,12 +159,11 @@ async function callGeminiWithRetry(
 
       const evaluation = JSON.parse(text) as Evaluation;
 
-      // Merge grounding references into evaluation
+      // Use only grounding metadata for references (model-generated URLs are hallucinated)
       const groundingRefs = await extractGroundingReferences(response);
+      evaluation.references = groundingRefs;
       if (groundingRefs.length > 0) {
         console.log(`[${timestamp()}]   Found ${groundingRefs.length} grounding sources`);
-        const existingRefs = evaluation.references ?? [];
-        evaluation.references = [...existingRefs, ...groundingRefs];
       }
 
       console.log(`[${timestamp()}]   ✓ Evaluated in ${elapsed}ms - Era: ${evaluation.estimatedEra}, Margin: $${evaluation.margin ?? "N/A"}, Confidence: ${(evaluation.confidence * 100).toFixed(0)}%`);
