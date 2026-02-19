@@ -6,7 +6,7 @@ const USE_MOCK_DATA = process.env.USE_MOCK_DATA === "true";
 
 const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
 
-const EVALUATION_PROMPT = `You are an expert in vintage clothing (pre-1980s). Analyze this listing and determine if it's authentic vintage and potentially underpriced.
+const EVALUATION_PROMPT = `You are an expert in vintage clothing. Analyze this listing and search the internet to determine if it's authentic vintage. Then check the internet and see if it's undervalued. Especially look out for Japanese website like ebay Japan or mercari.
 
 Listing Title: {title}
 Listed Price: ${"{price}"}
@@ -19,7 +19,7 @@ Analyze the photos for:
 - Fabric patterns and construction
 - Condition details
 
-Use Google Search to find actual sold/completed listings and current market prices for similar items. Base your estimatedValue on real comparable sales you find, not guesses. Include actual URLs and prices from search results in your references.`;
+Use Google Search to find actual listings and current market prices for similar items. Base your estimatedValue on real comparable sales you find, not guesses. Include actual URLs and prices from search results in your references.`;
 
 const MAX_RETRIES = 3; // Max retry attempts before giving up
 const INITIAL_RETRY_DELAY_MS = 10000; // 10 seconds (reduced for faster retries)
