@@ -1,13 +1,19 @@
 import "dotenv/config";
+import "./types/express.d.ts";
 import express from "express";
 import crypto from "crypto";
 import path from "path";
+import session from "express-session";
+import connectPgSimple from "connect-pg-simple";
+import passport from "passport";
 import { PrismaClient } from "./generated/prisma/client";
 import { fetchListings } from "./services/ecommerce";
 import { filterListings } from "./services/filter";
 import { evaluateListing } from "./services/evaluate";
 import { sendAlert } from "./services/notify";
 import { runScan } from "./scan";
+import { configurePassport } from "./auth";
+import { requireAuth } from "./middleware/requireAuth";
 import type { ScanConfig } from "./types";
 
 const app = express();
@@ -23,21 +29,69 @@ const scanConfig: ScanConfig = {
   minConfidence: 0.7,
 };
 
+// --- Middleware ---
 app.use(express.json());
+
+const PgStore = connectPgSimple(session);
+app.use(
+  session({
+    store: new PgStore({
+      conString: process.env.DATABASE_URL,
+      createTableIfMissing: true,
+    }),
+    secret: process.env.SESSION_SECRET || "dev-secret-change-me",
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+    },
+  }),
+);
+
+configurePassport();
+app.use(passport.initialize());
+app.use(passport.session());
+
 app.use(express.static(path.join(import.meta.dirname, "..", "public")));
 
-// Health check
-app.get("/", (req, res) => {
-  res.json({ status: "ok", service: "vintage-searcher" });
+// --- Auth routes ---
+
+app.get("/auth/google", passport.authenticate("google", { scope: ["profile", "email"] }));
+
+app.get(
+  "/auth/google/callback",
+  passport.authenticate("google", { failureRedirect: "/" }),
+  (_req, res) => {
+    res.redirect("/");
+  },
+);
+
+app.get("/auth/status", (req, res) => {
+  res.set("Cache-Control", "no-cache, no-store, must-revalidate");
+  if (req.isAuthenticated()) {
+    res.json({ authenticated: true, user: { id: req.user!.id, name: req.user!.name } });
+  } else {
+    res.json({ authenticated: false });
+  }
 });
 
-// eBay marketplace account deletion notification (required for compliance)
-// https://developer.ebay.com/marketplace-account-deletion
+app.post("/auth/logout", (req, res) => {
+  req.logout((err) => {
+    if (err) {
+      res.status(500).json({ error: "Logout failed" });
+      return;
+    }
+    res.json({ ok: true });
+  });
+});
+
+// --- eBay webhooks (no auth required) ---
+
 app.get("/ebay/webhook", (req, res) => {
   const challengeCode = req.query.challenge_code as string;
 
   if (challengeCode) {
-    // eBay verification: hash = SHA256(challenge_code + verification_token + endpoint)
     const hash = crypto
       .createHash("sha256")
       .update(challengeCode)
@@ -55,14 +109,12 @@ app.get("/ebay/webhook", (req, res) => {
 });
 
 app.post("/ebay/webhook", (req, res) => {
-  // Handle eBay notifications (account deletion, etc.)
   console.log("eBay webhook received:", req.body);
   res.status(200).send("OK");
 });
 
-// eBay OAuth callback
 app.get("/ebay/auth/callback", (req, res) => {
-  const { code, state } = req.query;
+  const { code } = req.query;
 
   if (code) {
     console.log("eBay OAuth code received");
@@ -71,32 +123,26 @@ app.get("/ebay/auth/callback", (req, res) => {
   }
 });
 
-// --- User & Query Management ---
+// --- Protected API routes ---
 
-// List all users
-app.get("/users", async (req, res) => {
-  const users = await prisma.user.findMany({ orderBy: { createdAt: "asc" } });
-  res.json(users);
-});
-
-// Get queries for a user
-app.get("/users/:userId/queries", async (req, res) => {
+// Get queries for the logged-in user
+app.get("/users/me/queries", requireAuth, async (req, res) => {
   const queries = await prisma.searchQuery.findMany({
-    where: { userId: req.params.userId },
+    where: { userId: req.user!.id },
     orderBy: { createdAt: "asc" },
   });
   res.json(queries);
 });
 
-// Replace all queries for a user
-app.put("/users/:userId/queries", async (req, res) => {
+// Replace all queries for the logged-in user
+app.put("/users/me/queries", requireAuth, async (req, res) => {
   const { queries } = req.body as { queries: { query: string; count: number; enabled: boolean }[] };
   if (!Array.isArray(queries)) {
     res.status(400).json({ error: "queries array required" });
     return;
   }
 
-  const userId = req.params.userId;
+  const userId = req.user!.id;
   await prisma.$transaction([
     prisma.searchQuery.deleteMany({ where: { userId } }),
     ...queries.map((q) =>
@@ -113,10 +159,10 @@ app.put("/users/:userId/queries", async (req, res) => {
   res.json(updated);
 });
 
-// Trigger a scan (runs in background, responds immediately)
-app.post("/scan", (req, res) => {
-  const userId = req.body?.userId as string | undefined;
-  console.log(`Scan triggered via API${userId ? ` for user ${userId}` : ""}`);
+// Trigger a scan (uses logged-in user)
+app.post("/scan", requireAuth, (req, res) => {
+  const userId = req.user!.id;
+  console.log(`Scan triggered via API for user ${userId}`);
   res.json({ status: "ok", message: "Scan started" });
 
   runScan(scanConfig, {

@@ -9,6 +9,14 @@
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 640px; margin: 0 auto; padding: 20px; background: #f5f5f5; color: #333; }
     h1 { margin-bottom: 16px; font-size: 1.4em; }
 
+    .auth-section { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; padding: 12px 16px; background: #fff; border-radius: 8px; }
+    .auth-user { font-weight: 500; }
+    .auth-btn { padding: 8px 20px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.95em; font-weight: 600; }
+    .login-btn { background: #4285f4; color: #fff; }
+    .login-btn:hover { background: #3367d6; }
+    .logout-btn { background: #e0e0e0; color: #333; }
+    .logout-btn:hover { background: #ccc; }
+
     .quota-bar { background: #e0e0e0; border-radius: 8px; height: 32px; position: relative; margin-bottom: 20px; overflow: hidden; }
     .quota-fill { height: 100%; border-radius: 8px; transition: width 0.3s, background 0.3s; }
     .quota-label { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 0.9em; }
@@ -39,51 +47,74 @@
     .error { color: #f44336; font-size: 0.85em; margin-bottom: 8px; }
     .status { color: #4caf50; font-size: 0.85em; margin-top: 8px; text-align: center; }
     .unsaved { color: #ff9800; font-size: 0.85em; margin-bottom: 8px; text-align: center; }
+    #appContent { display: none; }
   </style>
 </head>
 <body>
   <h1>Vintage Searcher</h1>
 
-  <div class="quota-bar">
-    <div class="quota-fill" id="quotaFill"></div>
-    <div class="quota-label" id="quotaLabel">Used: 0 / 20</div>
+  <div class="auth-section" id="authSection">
+    <span id="authInfo">Loading...</span>
+    <span id="authAction"></span>
   </div>
 
-  <ul class="query-list" id="queryList"></ul>
+  <div id="appContent">
+    <div class="quota-bar">
+      <div class="quota-fill" id="quotaFill"></div>
+      <div class="quota-label" id="quotaLabel">Used: 0 / 20</div>
+    </div>
 
-  <div class="error" id="error"></div>
-  <div class="unsaved" id="unsaved"></div>
+    <ul class="query-list" id="queryList"></ul>
 
-  <div class="add-form">
-    <input type="text" id="newQuery" placeholder="Search query...">
-    <input type="number" id="newCount" value="5" min="1" max="20">
-    <button id="addBtn" onclick="addQuery()">Add</button>
+    <div class="error" id="error"></div>
+    <div class="unsaved" id="unsaved"></div>
+
+    <div class="add-form">
+      <input type="text" id="newQuery" placeholder="Search query...">
+      <input type="number" id="newCount" value="5" min="1" max="20">
+      <button id="addBtn" onclick="addQuery()">Add</button>
+    </div>
+
+    <div class="actions">
+      <button class="save-btn" id="saveBtn" onclick="saveAll()" disabled>Save Changes</button>
+      <button class="scan-btn" id="scanBtn" onclick="runScan()">Run Scan</button>
+    </div>
+    <div class="status" id="status"></div>
   </div>
-
-  <div class="actions">
-    <button class="save-btn" id="saveBtn" onclick="saveAll()" disabled>Save Changes</button>
-    <button class="scan-btn" id="scanBtn" onclick="runScan()">Run Scan</button>
-  </div>
-  <div class="status" id="status"></div>
 
   <script>
     const QUOTA_LIMIT = 20;
-    let userId = null;
     // Server state (last saved)
     let savedQueries = [];
     // Local working copy (edited in UI, not yet saved)
     let localQueries = [];
 
-    async function init() {
-      const users = await fetch('/users').then(r => r.json());
-      if (users.length === 0) return;
-      userId = users[0].id;
-      await loadQueries();
+    async function checkAuth() {
+      const res = await fetch('/auth/status');
+      const data = await res.json();
+      const infoEl = document.getElementById('authInfo');
+      const actionEl = document.getElementById('authAction');
+
+      if (data.authenticated) {
+        infoEl.className = 'auth-user';
+        infoEl.textContent = data.user.name;
+        actionEl.innerHTML = '<button class="auth-btn logout-btn" onclick="logout()">Log out</button>';
+        document.getElementById('appContent').style.display = 'block';
+        await loadQueries();
+      } else {
+        infoEl.textContent = '';
+        actionEl.innerHTML = '<a href="/auth/google"><button class="auth-btn login-btn">Sign in with Google</button></a>';
+        document.getElementById('appContent').style.display = 'none';
+      }
+    }
+
+    async function logout() {
+      await fetch('/auth/logout', { method: 'POST' });
+      window.location.reload();
     }
 
     async function loadQueries() {
-      if (!userId) return;
-      savedQueries = await fetch(`/users/${userId}/queries`).then(r => r.json());
+      savedQueries = await fetch('/users/me/queries').then(r => r.json());
       localQueries = savedQueries.map(q => ({ ...q }));
       render();
     }
@@ -215,7 +246,7 @@
       }
 
       try {
-        const res = await fetch(`/users/${userId}/queries`, {
+        const res = await fetch('/users/me/queries', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -252,7 +283,6 @@
       const res = await fetch('/scan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId }),
       });
 
       const data = await res.json();
@@ -261,7 +291,7 @@
       status.textContent = data.message || 'Scan started';
     }
 
-    init();
+    checkAuth();
   </script>
 </body>
 </html>

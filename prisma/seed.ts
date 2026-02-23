@@ -6,8 +6,8 @@ const prisma = new PrismaClient();
 async function main() {
   const user = await prisma.user.upsert({
     where: { name: "Adrian" },
-    update: {},
-    create: { name: "Adrian" },
+    update: { email: "adrianchang@gmail.com" },
+    create: { name: "Adrian", email: "adrianchang@gmail.com" },
   });
 
   console.log(`User: ${user.name} (${user.id})`);
