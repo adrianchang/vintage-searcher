@@ -102,8 +102,6 @@ app.get("/ebay/webhook", (req, res) => {
       .update(EBAY_ENDPOINT)
       .digest("hex");
 
-    console.log("eBay verification challenge received");
-
     res.set("Content-Type", "application/json");
     res.json({ challengeResponse: hash });
   } else {
@@ -112,7 +110,6 @@ app.get("/ebay/webhook", (req, res) => {
 });
 
 app.post("/ebay/webhook", (req, res) => {
-  console.log("eBay webhook received:", req.body);
   res.status(200).send("OK");
 });
 
@@ -120,7 +117,7 @@ app.get("/ebay/auth/callback", (req, res) => {
   const { code } = req.query;
 
   if (code) {
-    console.log("eBay OAuth code received");
+    // eBay OAuth code received — not currently used
   } else {
     res.status(400).send("No authorization code received");
   }
