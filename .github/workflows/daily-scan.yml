@@ -12,4 +12,5 @@ jobs:
       - name: Trigger scan endpoint
         run: |
           curl -X POST -f --max-time 300 \
+            -H "X-API-Key: ${{ secrets.SCAN_API_KEY }}" \
             https://vintage-searcher.onrender.com/scan

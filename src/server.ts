@@ -159,10 +159,18 @@ app.put("/users/me/queries", requireAuth, async (req, res) => {
   res.json(updated);
 });
 
-// Trigger a scan (uses logged-in user)
-app.post("/scan", requireAuth, (req, res) => {
-  const userId = req.user!.id;
-  console.log(`Scan triggered via API for user ${userId}`);
+// Trigger a scan — authenticated user or cron with API key
+app.post("/scan", (req, res) => {
+  const cronKey = req.headers["x-api-key"];
+  const isCron = cronKey && cronKey === process.env.SCAN_API_KEY;
+
+  if (!isCron && !req.isAuthenticated()) {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
+
+  const userId = req.user?.id; // undefined for cron — falls back to Adrian in runScan
+  console.log(`Scan triggered via API${userId ? ` for user ${userId}` : " (cron)"}`);
   res.json({ status: "ok", message: "Scan started" });
 
   runScan(scanConfig, {
