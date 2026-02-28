@@ -162,7 +162,10 @@ app.put("/users/me/queries", requireAuth, async (req, res) => {
 // Trigger a scan — authenticated user or cron with API key
 app.post("/scan", (req, res) => {
   const cronKey = req.headers["x-api-key"];
-  const isCron = cronKey && cronKey === process.env.SCAN_API_KEY;
+  const envKey = process.env.SCAN_API_KEY;
+  const isCron = cronKey && cronKey === envKey;
+
+  console.log(`Scan auth: hasKey=${!!cronKey}, envKeySet=${!!envKey}, match=${isCron}, authenticated=${req.isAuthenticated()}`);
 
   if (!isCron && !req.isAuthenticated()) {
     res.status(401).json({ error: "Authentication required" });
