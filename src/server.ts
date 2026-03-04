@@ -160,10 +160,13 @@ app.put("/users/me/queries", requireAuth, async (req, res) => {
   res.json(updated);
 });
 
-// Get all listings for the logged-in user
+// Get opportunity listings for the logged-in user
 app.get("/users/me/listings", requireAuth, async (req, res) => {
   const listings = await prisma.filteredListing.findMany({
-    where: { userId: req.user!.id },
+    where: {
+      userId: req.user!.id,
+      evaluation: { isOpportunity: true },
+    },
     include: { evaluation: true },
     orderBy: { createdAt: "desc" },
   });
