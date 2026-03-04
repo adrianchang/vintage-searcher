@@ -12,12 +12,13 @@ datasource db {
 }
 
 model User {
-  id        String        @id @default(cuid())
-  name      String        @unique
-  googleId  String?       @unique
-  email     String?       @unique
-  createdAt DateTime      @default(now())
+  id        String             @id @default(cuid())
+  name      String             @unique
+  googleId  String?            @unique
+  email     String?            @unique
+  createdAt DateTime           @default(now())
   queries   SearchQuery[]
+  listings  FilteredListing[]
 }
 
 model SearchQuery {
@@ -35,7 +36,7 @@ model SearchQuery {
 // Listings that passed the first filter (for iteration on filter rules)
 model FilteredListing {
   id          String   @id @default(cuid())
-  url         String   @unique
+  url         String
   platform    String   // ebay, shopgoodwill, etc.
   title       String
   price       Float
@@ -44,8 +45,14 @@ model FilteredListing {
   rawData     String   // Full raw listing data as JSON
   createdAt   DateTime @default(now())
 
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+
   // Evaluation result (null if not yet evaluated)
   evaluation  Evaluation?
+  chatMessages ChatMessage[]
+
+  @@unique([userId, url])
 }
 
 // Full LLM evaluation results
@@ -66,4 +73,13 @@ model Evaluation {
 
   isOpportunity  Boolean  // margin > threshold && confidence > threshold
   createdAt      DateTime @default(now())
+}
+
+model ChatMessage {
+  id        String          @id @default(cuid())
+  listingId String
+  listing   FilteredListing @relation(fields: [listingId], references: [id])
+  role      String          // "user" or "assistant"
+  content   String
+  createdAt DateTime        @default(now())
 }

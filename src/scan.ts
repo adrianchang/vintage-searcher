@@ -47,7 +47,7 @@ export async function runScan(config: ScanConfig, deps: ScanDeps, userId?: strin
   // 3. Store filtered listings for future filter iteration
   for (const listing of filtered) {
     await prisma.filteredListing.upsert({
-      where: { url: listing.url },
+      where: { userId_url: { userId: userId!, url: listing.url } },
       update: {},
       create: {
         url: listing.url,
@@ -57,6 +57,7 @@ export async function runScan(config: ScanConfig, deps: ScanDeps, userId?: strin
         imageUrls: JSON.stringify(listing.imageUrls),
         description: listing.description,
         rawData: JSON.stringify(listing.rawData),
+        userId: userId!,
       },
     });
   }
@@ -69,7 +70,7 @@ export async function runScan(config: ScanConfig, deps: ScanDeps, userId?: strin
 
   for (const listing of filtered) {
     const dbListing = await prisma.filteredListing.findUnique({
-      where: { url: listing.url },
+      where: { userId_url: { userId: userId!, url: listing.url } },
     });
     if (!dbListing) continue;
 

@@ -14,6 +14,7 @@ import { sendAlert } from "./services/notify";
 import { runScan } from "./scan";
 import { configurePassport } from "./auth";
 import { requireAuth } from "./middleware/requireAuth";
+import { chatWithListing } from "./services/chat";
 import type { ScanConfig } from "./types";
 
 const app = express();
@@ -157,6 +158,93 @@ app.put("/users/me/queries", requireAuth, async (req, res) => {
     orderBy: { createdAt: "asc" },
   });
   res.json(updated);
+});
+
+// Get all listings for the logged-in user
+app.get("/users/me/listings", requireAuth, async (req, res) => {
+  const listings = await prisma.filteredListing.findMany({
+    where: { userId: req.user!.id },
+    include: { evaluation: true },
+    orderBy: { createdAt: "desc" },
+  });
+  res.json(listings);
+});
+
+// Get a single listing by ID (verify ownership)
+app.get("/users/me/listings/:listingId", requireAuth, async (req, res) => {
+  const listingId = req.params.listingId as string;
+  const listing = await prisma.filteredListing.findUnique({
+    where: { id: listingId },
+    include: { evaluation: true },
+  });
+  if (!listing || listing.userId !== req.user!.id) {
+    res.status(404).json({ error: "Listing not found" });
+    return;
+  }
+  res.json(listing);
+});
+
+// Get chat messages for a listing
+app.get("/users/me/listings/:listingId/messages", requireAuth, async (req, res) => {
+  const listingId = req.params.listingId as string;
+  const listing = await prisma.filteredListing.findUnique({
+    where: { id: listingId },
+  });
+  if (!listing || listing.userId !== req.user!.id) {
+    res.status(404).json({ error: "Listing not found" });
+    return;
+  }
+  const messages = await prisma.chatMessage.findMany({
+    where: { listingId: listing.id },
+    orderBy: { createdAt: "asc" },
+  });
+  res.json(messages);
+});
+
+// Send a chat message about a listing
+app.post("/users/me/listings/:listingId/chat", requireAuth, async (req, res) => {
+  const { message } = req.body as { message: string };
+  if (!message || typeof message !== "string" || message.trim().length === 0) {
+    res.status(400).json({ error: "message required" });
+    return;
+  }
+  if (message.length > 1000) {
+    res.status(400).json({ error: "message too long (max 1000 chars)" });
+    return;
+  }
+
+  const listingId = req.params.listingId as string;
+  const listing = await prisma.filteredListing.findUnique({
+    where: { id: listingId },
+    include: { evaluation: true },
+  });
+  if (!listing || listing.userId !== req.user!.id) {
+    res.status(404).json({ error: "Listing not found" });
+    return;
+  }
+
+  // Save user message
+  await prisma.chatMessage.create({
+    data: { listingId: listing.id, role: "user", content: message.trim() },
+  });
+
+  try {
+    const reply = await chatWithListing(prisma, listing, message.trim());
+
+    // Save assistant reply
+    const assistantMsg = await prisma.chatMessage.create({
+      data: { listingId: listing.id, role: "assistant", content: reply },
+    });
+
+    res.json(assistantMsg);
+  } catch (error) {
+    console.error("Chat error:", error);
+    const errorReply = "Sorry, I encountered an error processing your request. Please try again.";
+    const assistantMsg = await prisma.chatMessage.create({
+      data: { listingId: listing.id, role: "assistant", content: errorReply },
+    });
+    res.json(assistantMsg);
+  }
 });
 
 // Trigger a scan — authenticated user or cron with API key

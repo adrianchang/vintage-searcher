@@ -80,14 +80,16 @@ function createMockPrisma() {
     },
     filteredListing: {
       upsert: vi.fn(async ({ where, create }: any) => {
-        if (!listings[where.url]) {
+        const url = where.userId_url?.url ?? where.url;
+        if (!listings[url]) {
           const id = `cuid-${++idCounter}`;
-          listings[where.url] = { id, ...create };
+          listings[url] = { id, ...create };
         }
-        return listings[where.url];
+        return listings[url];
       }),
       findUnique: vi.fn(async ({ where }: any) => {
-        return listings[where.url] ?? null;
+        const url = where.userId_url?.url ?? where.url;
+        return listings[url] ?? null;
       }),
       findMany: vi.fn(async () => Object.values(listings)),
     },
