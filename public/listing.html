@@ -1,60 +1,21 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Listing Detail — Vintage Searcher</title>
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@4/dist/full.min.css" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 640px; margin: 0 auto; padding: 20px; background: #f5f5f5; color: #333; }
-
-    .back-btn { display: inline-block; margin-bottom: 16px; padding: 6px 14px; background: #e0e0e0; color: #333; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9em; font-weight: 600; text-decoration: none; }
-    .back-btn:hover { background: #ccc; }
-
-    .images-scroll { display: flex; gap: 8px; overflow-x: auto; margin-bottom: 16px; scroll-snap-type: x mandatory; }
-    .images-scroll img { height: 240px; border-radius: 8px; object-fit: cover; flex-shrink: 0; scroll-snap-align: start; background: #eee; }
-
-    .listing-info { background: #fff; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
-    .listing-title { font-size: 1.15em; font-weight: 700; margin-bottom: 8px; }
-    .listing-meta { font-size: 0.9em; color: #666; margin-bottom: 4px; }
-    .listing-meta strong { color: #333; }
-    .listing-desc { font-size: 0.85em; color: #555; margin-top: 10px; line-height: 1.5; white-space: pre-wrap; }
-    .listing-link { display: inline-block; margin-top: 10px; color: #2196f3; font-size: 0.85em; }
-
-    .eval-section { background: #fff; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
-    .eval-section h2 { font-size: 1em; margin-bottom: 12px; }
-    .eval-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; font-size: 0.85em; margin-bottom: 12px; }
-    .eval-label { color: #888; }
-    .eval-value { font-weight: 600; }
-    .eval-reasoning { font-size: 0.85em; color: #555; line-height: 1.5; margin-top: 8px; padding-top: 8px; border-top: 1px solid #eee; }
-    .eval-flags { margin-top: 8px; }
-    .eval-flags li { font-size: 0.82em; color: #f44336; margin-left: 16px; }
-    .eval-refs { margin-top: 8px; }
-    .eval-refs li { font-size: 0.82em; color: #2196f3; margin-left: 16px; word-break: break-all; }
-
-    .badge { font-size: 0.7em; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
-    .badge-opportunity { background: #4caf50; color: #fff; }
-    .badge-authentic { background: #2196f3; color: #fff; }
-
-    .chat-section { background: #fff; border-radius: 8px; padding: 16px; }
-    .chat-section h2 { font-size: 1em; margin-bottom: 12px; }
-    .chat-messages { max-height: 400px; overflow-y: auto; margin-bottom: 12px; display: flex; flex-direction: column; gap: 8px; }
-    .chat-msg { padding: 8px 12px; border-radius: 12px; font-size: 0.85em; line-height: 1.5; max-width: 85%; white-space: pre-wrap; }
-    .chat-msg.user { background: #2196f3; color: #fff; align-self: flex-end; border-bottom-right-radius: 4px; }
-    .chat-msg.assistant { background: #f0f0f0; color: #333; align-self: flex-start; border-bottom-left-radius: 4px; }
-    .chat-msg.thinking { background: #f0f0f0; color: #999; font-style: italic; align-self: flex-start; border-bottom-left-radius: 4px; }
-    .chat-empty { text-align: center; color: #aaa; font-size: 0.85em; padding: 20px 0; }
-    .chat-input-row { display: flex; gap: 8px; }
-    .chat-input-row input { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 8px; font-size: 0.9em; }
-    .chat-input-row button { padding: 10px 20px; background: #333; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 0.9em; }
-    .chat-input-row button:disabled { opacity: 0.5; cursor: not-allowed; }
-
-    .loading { text-align: center; padding: 40px; color: #999; }
+    .images-scroll { scroll-snap-type: x mandatory; }
+    .images-scroll img { scroll-snap-align: start; }
   </style>
 </head>
-<body>
-  <a href="/" class="back-btn">Back</a>
-  <div id="content"><div class="loading">Loading...</div></div>
+<body class="bg-base-200 min-h-screen">
+  <div class="max-w-xl mx-auto p-5">
+    <a href="/" class="btn btn-ghost btn-sm mb-4">← Back</a>
+    <div id="content"><div class="text-center py-10 text-base-content/50">Loading...</div></div>
+  </div>
 
   <script>
     const listingId = new URLSearchParams(window.location.search).get('id');
@@ -64,7 +25,7 @@
 
     async function init() {
       const res = await fetch('/users/me/listings/' + listingId);
-      if (!res.ok) { document.getElementById('content').innerHTML = '<div class="loading">Listing not found</div>'; return; }
+      if (!res.ok) { document.getElementById('content').innerHTML = '<div class="text-center py-10 text-base-content/50">Listing not found</div>'; return; }
       const listing = await res.json();
       renderListing(listing);
       loadMessages();
@@ -75,56 +36,58 @@
       const ev = l.evaluation;
       const fallback = "this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 1 1%22><rect fill=%22%23ddd%22 width=%221%22 height=%221%22/></svg>'";
 
-      let html = '<div class="images-scroll">';
+      let html = '<div class="images-scroll flex gap-2 overflow-x-auto mb-4">';
       if (images.length) {
-        html += images.map(url => '<img src="' + esc(url) + '" onerror="' + fallback + '">').join('');
+        html += images.map(url => '<img src="' + esc(url) + '" class="h-60 rounded-lg object-cover flex-shrink-0 bg-base-300" onerror="' + fallback + '">').join('');
       }
       html += '</div>';
 
-      html += '<div class="listing-info">';
-      html += '<div class="listing-title">' + esc(l.title) + '</div>';
-      html += '<div class="listing-meta"><strong>$' + l.price.toFixed(2) + '</strong> &middot; ' + esc(l.platform) + '</div>';
-      if (l.description) html += '<div class="listing-desc">' + esc(l.description) + '</div>';
-      html += '<a class="listing-link" href="' + esc(l.url) + '" target="_blank" rel="noopener">View original listing</a>';
-      html += '</div>';
+      html += '<div class="card bg-base-100 mb-4"><div class="card-body">';
+      html += '<h2 class="card-title text-lg">' + esc(l.title) + '</h2>';
+      html += '<p class="text-sm text-base-content/70"><span class="font-bold text-base-content">$' + l.price.toFixed(2) + '</span> · ' + esc(l.platform) + '</p>';
+      if (l.description) html += '<p class="text-sm text-base-content/60 mt-2 whitespace-pre-wrap leading-relaxed">' + esc(l.description) + '</p>';
+      html += '<a class="link link-primary text-sm mt-2" href="' + esc(l.url) + '" target="_blank" rel="noopener">View original listing</a>';
+      html += '</div></div>';
 
       if (ev) {
-        html += '<div class="eval-section"><h2>Evaluation ';
-        if (ev.isOpportunity) html += '<span class="badge badge-opportunity">Opportunity</span> ';
-        if (ev.isAuthentic) html += '<span class="badge badge-authentic">Authentic</span>';
+        html += '<div class="card bg-base-100 mb-4"><div class="card-body">';
+        html += '<h2 class="card-title text-base">Evaluation ';
+        if (ev.isOpportunity) html += '<span class="badge badge-success">Opportunity</span> ';
+        if (ev.isAuthentic) html += '<span class="badge badge-info">Authentic</span>';
         html += '</h2>';
-        html += '<div class="eval-grid">';
-        html += '<span class="eval-label">Era</span><span class="eval-value">' + esc(ev.estimatedEra || 'Unknown') + '</span>';
-        html += '<span class="eval-label">Est. Value</span><span class="eval-value">' + (ev.estimatedValue != null ? '$' + ev.estimatedValue.toFixed(2) : 'Unknown') + '</span>';
-        html += '<span class="eval-label">Current Price</span><span class="eval-value">$' + ev.currentPrice.toFixed(2) + '</span>';
-        html += '<span class="eval-label">Margin</span><span class="eval-value">' + (ev.margin != null ? '$' + ev.margin.toFixed(2) : 'N/A') + '</span>';
-        html += '<span class="eval-label">Confidence</span><span class="eval-value">' + (ev.confidence * 100).toFixed(0) + '%</span>';
+        html += '<div class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">';
+        html += '<span class="text-base-content/50">Era</span><span class="font-semibold">' + esc(ev.estimatedEra || 'Unknown') + '</span>';
+        html += '<span class="text-base-content/50">Est. Value</span><span class="font-semibold">' + (ev.estimatedValue != null ? '$' + ev.estimatedValue.toFixed(2) : 'Unknown') + '</span>';
+        html += '<span class="text-base-content/50">Current Price</span><span class="font-semibold">$' + ev.currentPrice.toFixed(2) + '</span>';
+        html += '<span class="text-base-content/50">Margin</span><span class="font-semibold">' + (ev.margin != null ? '$' + ev.margin.toFixed(2) : 'N/A') + '</span>';
+        html += '<span class="text-base-content/50">Confidence</span><span class="font-semibold">' + (ev.confidence * 100).toFixed(0) + '%</span>';
         html += '</div>';
-        html += '<div class="eval-reasoning">' + esc(ev.reasoning) + '</div>';
+        html += '<p class="text-sm text-base-content/60 leading-relaxed mt-3 pt-3 border-t border-base-200">' + esc(ev.reasoning) + '</p>';
 
         const flags = JSON.parse(ev.redFlags);
         if (flags.length) {
-          html += '<div class="eval-flags"><strong style="font-size:0.85em">Red Flags:</strong><ul>';
+          html += '<div class="mt-3"><p class="text-sm font-semibold">Red Flags:</p><ul class="list-disc list-inside text-sm text-error">';
           flags.forEach(f => html += '<li>' + esc(f) + '</li>');
           html += '</ul></div>';
         }
 
         const refs = JSON.parse(ev.references);
         if (refs.length) {
-          html += '<div class="eval-refs"><strong style="font-size:0.85em">References:</strong><ul>';
+          html += '<div class="mt-3"><p class="text-sm font-semibold">References:</p><ul class="list-disc list-inside text-sm text-primary break-all">';
           refs.forEach(r => html += '<li>' + esc(r) + '</li>');
           html += '</ul></div>';
         }
 
-        html += '</div>';
+        html += '</div></div>';
       }
 
-      html += '<div class="chat-section"><h2>Chat</h2>';
-      html += '<div class="chat-messages" id="chatMessages"><div class="chat-empty">Ask a question about this listing...</div></div>';
-      html += '<div class="chat-input-row">';
-      html += '<input type="text" id="chatInput" placeholder="Ask about this listing..." maxlength="1000" onkeydown="if(event.key===\'Enter\')sendMessage()">';
-      html += '<button id="sendBtn" onclick="sendMessage()">Send</button>';
-      html += '</div></div>';
+      html += '<div class="card bg-base-100"><div class="card-body">';
+      html += '<h2 class="card-title text-base">Chat</h2>';
+      html += '<div class="max-h-96 overflow-y-auto flex flex-col gap-2 mb-3" id="chatMessages"><p class="text-center text-base-content/40 text-sm py-5">Ask a question about this listing...</p></div>';
+      html += '<div class="join w-full">';
+      html += '<input type="text" id="chatInput" placeholder="Ask about this listing..." maxlength="1000" class="input input-bordered join-item flex-1" onkeydown="if(event.key===\'Enter\')sendMessage()">';
+      html += '<button id="sendBtn" class="btn btn-neutral join-item" onclick="sendMessage()">Send</button>';
+      html += '</div></div></div>';
 
       document.getElementById('content').innerHTML = html;
     }
@@ -135,9 +98,13 @@
       const messages = await res.json();
       const container = document.getElementById('chatMessages');
       if (!messages.length) return;
-      container.innerHTML = messages.map(m =>
-        '<div class="chat-msg ' + m.role + '">' + esc(m.content) + '</div>'
-      ).join('');
+      container.innerHTML = messages.map(m => {
+        if (m.role === 'user') {
+          return '<div class="chat chat-end"><div class="chat-bubble chat-bubble-primary">' + esc(m.content) + '</div></div>';
+        } else {
+          return '<div class="chat chat-start"><div class="chat-bubble">' + esc(m.content) + '</div></div>';
+        }
+      }).join('');
       container.scrollTop = container.scrollHeight;
     }
 
@@ -152,12 +119,12 @@
 
       const container = document.getElementById('chatMessages');
       // Clear empty state
-      const empty = container.querySelector('.chat-empty');
-      if (empty) empty.remove();
+      const empty = container.querySelector('p');
+      if (empty && empty.textContent.includes('Ask a question')) empty.remove();
 
       // Optimistic user message
-      container.innerHTML += '<div class="chat-msg user">' + esc(message) + '</div>';
-      container.innerHTML += '<div class="chat-msg thinking" id="thinkingMsg">Thinking...</div>';
+      container.innerHTML += '<div class="chat chat-end"><div class="chat-bubble chat-bubble-primary">' + esc(message) + '</div></div>';
+      container.innerHTML += '<div class="chat chat-start" id="thinkingMsg"><div class="chat-bubble opacity-60 italic">Thinking...</div></div>';
       container.scrollTop = container.scrollHeight;
 
       try {
@@ -169,16 +136,14 @@
         const reply = await res.json();
         const thinking = document.getElementById('thinkingMsg');
         if (thinking) {
-          thinking.className = 'chat-msg assistant';
+          thinking.innerHTML = '<div class="chat-bubble">' + esc(reply.content) + '</div>';
           thinking.id = '';
-          thinking.textContent = reply.content;
         }
       } catch (e) {
         const thinking = document.getElementById('thinkingMsg');
         if (thinking) {
-          thinking.className = 'chat-msg assistant';
+          thinking.innerHTML = '<div class="chat-bubble chat-bubble-error">Failed to get a response. Please try again.</div>';
           thinking.id = '';
-          thinking.textContent = 'Failed to get a response. Please try again.';
         }
       }
 

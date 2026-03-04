@@ -1,105 +1,55 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Vintage Searcher</title>
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@4/dist/full.min.css" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 640px; margin: 0 auto; padding: 20px; background: #f5f5f5; color: #333; }
-    h1 { margin-bottom: 16px; font-size: 1.4em; }
-
-    .auth-section { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; padding: 12px 16px; background: #fff; border-radius: 8px; }
-    .auth-user { font-weight: 500; }
-    .auth-btn { padding: 8px 20px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.95em; font-weight: 600; }
-    .login-btn { background: #4285f4; color: #fff; }
-    .login-btn:hover { background: #3367d6; }
-    .logout-btn { background: #e0e0e0; color: #333; }
-    .logout-btn:hover { background: #ccc; }
-
-    .quota-bar { background: #e0e0e0; border-radius: 8px; height: 32px; position: relative; margin-bottom: 20px; overflow: hidden; }
-    .quota-fill { height: 100%; border-radius: 8px; transition: width 0.3s, background 0.3s; }
-    .quota-label { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 0.9em; }
-
-    .query-list { list-style: none; margin-bottom: 16px; }
-    .query-item { display: flex; align-items: center; gap: 8px; background: #fff; padding: 10px 12px; border-radius: 6px; margin-bottom: 6px; }
-    .query-item .query-text { flex: 1; font-weight: 500; }
-    .query-item input[type="number"] { width: 60px; padding: 4px 6px; border: 1px solid #ccc; border-radius: 4px; text-align: center; }
-    .query-item button { padding: 4px 10px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85em; }
-    .btn-toggle { background: #e0e0e0; }
-    .btn-toggle.enabled { background: #4caf50; color: #fff; }
-    .btn-delete { background: #f44336; color: #fff; }
-
-    .add-form { display: flex; gap: 8px; margin-bottom: 16px; }
-    .add-form input[type="text"] { flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
-    .add-form input[type="number"] { width: 60px; padding: 8px; border: 1px solid #ccc; border-radius: 4px; text-align: center; }
-    .add-form button { padding: 8px 16px; background: #2196f3; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; }
-    .add-form button:disabled { opacity: 0.5; cursor: not-allowed; }
-
-    .actions { display: flex; gap: 8px; margin-bottom: 8px; }
-    .save-btn { flex: 1; padding: 12px; background: #2196f3; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 1em; font-weight: 600; }
-    .save-btn:hover { background: #1976d2; }
-    .save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-    .scan-btn { flex: 1; padding: 12px; background: #333; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 1em; font-weight: 600; }
-    .scan-btn:hover { background: #555; }
-    .scan-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-    .error { color: #f44336; font-size: 0.85em; margin-bottom: 8px; }
-    .status { color: #4caf50; font-size: 0.85em; margin-top: 8px; text-align: center; }
-    .unsaved { color: #ff9800; font-size: 0.85em; margin-bottom: 8px; text-align: center; }
-    #appContent { display: none; }
-
-    .listings-section { margin-top: 24px; }
-    .listings-section h2 { font-size: 1.1em; margin-bottom: 12px; }
-    .listings-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
-    .listing-card { background: #fff; border-radius: 8px; overflow: hidden; cursor: pointer; transition: box-shadow 0.2s; }
-    .listing-card:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.15); }
-    .listing-card img { width: 100%; aspect-ratio: 1; object-fit: cover; background: #eee; }
-    .listing-card-body { padding: 8px 10px 10px; }
-    .listing-card-title { font-size: 0.85em; font-weight: 600; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin-bottom: 4px; }
-    .listing-card-price { font-size: 0.9em; font-weight: 700; color: #333; margin-bottom: 6px; }
-    .listing-card-badges { display: flex; flex-wrap: wrap; gap: 4px; }
-    .badge { font-size: 0.65em; padding: 2px 6px; border-radius: 10px; font-weight: 600; }
-    .badge-opportunity { background: #4caf50; color: #fff; }
-    .badge-authentic { background: #2196f3; color: #fff; }
-    .badge-era { background: #9c27b0; color: #fff; }
-    .badge-flags { background: #f44336; color: #fff; }
+    .listing-card-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   </style>
 </head>
-<body>
-  <h1>Vintage Searcher</h1>
+<body class="bg-base-200 min-h-screen">
+  <div class="max-w-xl mx-auto p-5">
+    <h1 class="text-2xl font-bold mb-4">Vintage Searcher</h1>
 
-  <div class="auth-section" id="authSection">
-    <span id="authInfo">Loading...</span>
-    <span id="authAction"></span>
-  </div>
-
-  <div id="appContent">
-    <div class="quota-bar">
-      <div class="quota-fill" id="quotaFill"></div>
-      <div class="quota-label" id="quotaLabel">Used: 0 / 20</div>
+    <div class="card bg-base-100 mb-5" id="authSection">
+      <div class="card-body flex-row items-center justify-between p-4">
+        <span id="authInfo" class="font-medium">Loading...</span>
+        <span id="authAction"></span>
+      </div>
     </div>
 
-    <ul class="query-list" id="queryList"></ul>
+    <div id="appContent" style="display:none">
+      <div class="mb-5">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-sm font-semibold" id="quotaLabel">Used: 0 / 20</span>
+        </div>
+        <progress class="progress w-full" id="quotaProgress" value="0" max="100"></progress>
+      </div>
 
-    <div class="error" id="error"></div>
-    <div class="unsaved" id="unsaved"></div>
+      <ul class="space-y-2 mb-4" id="queryList"></ul>
 
-    <div class="add-form">
-      <input type="text" id="newQuery" placeholder="Search query...">
-      <input type="number" id="newCount" value="5" min="1" max="20">
-      <button id="addBtn" onclick="addQuery()">Add</button>
-    </div>
+      <div class="text-error text-sm mb-2" id="error"></div>
+      <div class="text-warning text-sm mb-2 text-center" id="unsaved"></div>
 
-    <div class="actions">
-      <button class="save-btn" id="saveBtn" onclick="saveAll()" disabled>Save Changes</button>
-      <button class="scan-btn" id="scanBtn" onclick="runScan()">Run Scan</button>
-    </div>
-    <div class="status" id="status"></div>
+      <div class="join w-full mb-4">
+        <input type="text" id="newQuery" placeholder="Search query..." class="input input-bordered join-item flex-1">
+        <input type="number" id="newCount" value="5" min="1" max="20" class="input input-bordered join-item w-20 text-center">
+        <button id="addBtn" class="btn btn-primary join-item" onclick="addQuery()">Add</button>
+      </div>
 
-    <div class="listings-section" id="listingsSection" style="display:none">
-      <h2>Discovered Listings</h2>
-      <div class="listings-grid" id="listingsGrid"></div>
+      <div class="flex gap-2 mb-2">
+        <button class="btn btn-primary flex-1" id="saveBtn" onclick="saveAll()" disabled>Save Changes</button>
+        <button class="btn btn-neutral flex-1" id="scanBtn" onclick="runScan()">Run Scan</button>
+      </div>
+      <div class="text-success text-sm text-center mt-2" id="status"></div>
+
+      <div class="mt-6" id="listingsSection" style="display:none">
+        <h2 class="text-lg font-bold mb-3">Discovered Listings</h2>
+        <div id="listingsContainer"></div>
+      </div>
     </div>
   </div>
 
@@ -117,15 +67,14 @@
       const actionEl = document.getElementById('authAction');
 
       if (data.authenticated) {
-        infoEl.className = 'auth-user';
         infoEl.textContent = data.user.name;
-        actionEl.innerHTML = '<button class="auth-btn logout-btn" onclick="logout()">Log out</button>';
+        actionEl.innerHTML = '<button class="btn btn-ghost btn-sm" onclick="logout()">Log out</button>';
         document.getElementById('appContent').style.display = 'block';
         await loadQueries();
         await loadListings();
       } else {
         infoEl.textContent = '';
-        actionEl.innerHTML = '<a href="/auth/google"><button class="auth-btn login-btn">Sign in with Google</button></a>';
+        actionEl.innerHTML = '<a href="/auth/google"><button class="btn btn-primary btn-sm">Sign in with Google</button></a>';
         document.getElementById('appContent').style.display = 'none';
       }
     }
@@ -158,25 +107,23 @@
       const used = getUsed();
       const pct = Math.min(100, (used / QUOTA_LIMIT) * 100);
 
-      const fill = document.getElementById('quotaFill');
-      fill.style.width = pct + '%';
-      if (pct <= 50) fill.style.background = '#4caf50';
-      else if (pct <= 80) fill.style.background = '#ff9800';
-      else fill.style.background = '#f44336';
+      const prog = document.getElementById('quotaProgress');
+      prog.value = pct;
+      prog.className = 'progress w-full';
+      if (pct <= 50) prog.classList.add('progress-success');
+      else if (pct <= 80) prog.classList.add('progress-warning');
+      else prog.classList.add('progress-error');
 
       document.getElementById('quotaLabel').textContent = `Used: ${used} / ${QUOTA_LIMIT}`;
 
       const list = document.getElementById('queryList');
       list.innerHTML = localQueries.map((q, i) => `
-        <li class="query-item">
-          <span class="query-text">${esc(q.query)}</span>
+        <li class="flex items-center gap-2 bg-base-100 p-3 rounded-lg">
+          <span class="flex-1 font-medium">${esc(q.query)}</span>
           <input type="number" value="${q.count}" min="1" max="20"
+            class="input input-bordered input-sm w-16 text-center"
             onchange="localUpdateCount(${i}, this.value)">
-          <button class="btn-toggle ${q.enabled ? 'enabled' : ''}"
-            onclick="localToggle(${i})">
-            ${q.enabled ? 'On' : 'Off'}
-          </button>
-          <button class="btn-delete" onclick="localDelete(${i})">X</button>
+          <button class="btn btn-error btn-sm btn-square" onclick="localDelete(${i})">✕</button>
         </li>
       `).join('');
 
@@ -313,31 +260,60 @@
       status.textContent = data.message || 'Scan started';
     }
 
+    function renderListingCard(l) {
+      const images = JSON.parse(l.imageUrls);
+      const imgSrc = images[0] || '';
+      const ev = l.evaluation;
+      let badges = '';
+      if (ev) {
+        const flags = JSON.parse(ev.redFlags);
+        if (flags.length) badges += '<span class="badge badge-error">' + flags.length + ' flag' + (flags.length > 1 ? 's' : '') + '</span>';
+      }
+      return '<div class="card bg-base-100 cursor-pointer hover:shadow-lg transition-shadow" onclick="window.location.href=\'/listing.html?id=' + l.id + '\'">' +
+        '<figure><img src="' + esc(imgSrc) + '" class="w-full aspect-[3/4] object-cover bg-base-300" onerror="this.src=\'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 1 1%22><rect fill=%22%23ddd%22 width=%221%22 height=%221%22/></svg>\'" alt=""></figure>' +
+        '<div class="card-body p-3 gap-2">' +
+        '<p class="listing-card-title text-sm font-semibold leading-tight">' + esc(l.title) + '</p>' +
+        '<p class="font-bold">$' + l.price.toFixed(2) + '</p>' +
+        (ev && ev.estimatedEra ? '<p class="text-xs text-base-content/60">' + esc(ev.estimatedEra) + '</p>' : '') +
+        '<div class="flex flex-wrap gap-1.5">' + badges + '</div>' +
+        '</div></div>';
+    }
+
+    function formatDayLabel(dateStr) {
+      const date = new Date(dateStr);
+      const today = new Date();
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      if (date.toDateString() === today.toDateString()) return 'Today';
+      if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
+      return date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+    }
+
     async function loadListings() {
       try {
         const listings = await fetch('/users/me/listings').then(r => r.json());
         const section = document.getElementById('listingsSection');
-        const grid = document.getElementById('listingsGrid');
+        const container = document.getElementById('listingsContainer');
         if (!listings.length) { section.style.display = 'none'; return; }
         section.style.display = 'block';
-        grid.innerHTML = listings.map(l => {
-          const images = JSON.parse(l.imageUrls);
-          const imgSrc = images[0] || '';
-          const ev = l.evaluation;
-          let badges = '';
-          if (ev) {
-            if (ev.isOpportunity) badges += '<span class="badge badge-opportunity">Opportunity</span>';
-            if (ev.isAuthentic) badges += '<span class="badge badge-authentic">Authentic</span>';
-            if (ev.estimatedEra) badges += '<span class="badge badge-era">' + esc(ev.estimatedEra) + '</span>';
-            const flags = JSON.parse(ev.redFlags);
-            if (flags.length) badges += '<span class="badge badge-flags">' + flags.length + ' flag' + (flags.length > 1 ? 's' : '') + '</span>';
-          }
-          return '<div class="listing-card" onclick="window.location.href=\'/listing.html?id=' + l.id + '\'">' +
-            '<img src="' + esc(imgSrc) + '" onerror="this.src=\'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 1 1%22><rect fill=%22%23ddd%22 width=%221%22 height=%221%22/></svg>\'" alt="">' +
-            '<div class="listing-card-body">' +
-            '<div class="listing-card-title">' + esc(l.title) + '</div>' +
-            '<div class="listing-card-price">$' + l.price.toFixed(2) + '</div>' +
-            '<div class="listing-card-badges">' + badges + '</div>' +
+
+        // Group by day
+        const groups = {};
+        listings.forEach(l => {
+          const day = new Date(l.createdAt).toDateString();
+          if (!groups[day]) groups[day] = [];
+          groups[day].push(l);
+        });
+
+        // Sort days newest first
+        const sortedDays = Object.keys(groups).sort((a, b) => new Date(b) - new Date(a));
+
+        container.innerHTML = sortedDays.map(day => {
+          const dayListings = groups[day];
+          return '<div class="mb-6">' +
+            '<h3 class="text-sm font-semibold text-base-content/60 mb-2">' + formatDayLabel(dayListings[0].createdAt) + '</h3>' +
+            '<div class="grid grid-cols-2 sm:grid-cols-3 gap-3">' +
+            dayListings.map(renderListingCard).join('') +
             '</div></div>';
         }).join('');
       } catch (e) {
