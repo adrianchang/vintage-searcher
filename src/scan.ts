@@ -15,10 +15,10 @@ export async function runScan(config: ScanConfig, deps: ScanDeps, userId?: strin
 
   console.log(`Starting vintage scan on ${config.platform}...`);
 
-  // Load queries from DB — default to Adrian if no userId provided
+  // Load queries from DB — default to cron user if no userId provided
   let queries: SearchQueryInput[] | undefined;
   if (!userId) {
-    const defaultUser = await prisma.user.findUnique({ where: { name: "Adrian" } });
+    const defaultUser = await prisma.user.findUnique({ where: { email: "adrian.aa.chang.aa@gmail.com" } });
     if (defaultUser) userId = defaultUser.id;
   }
   if (userId) {
