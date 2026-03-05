@@ -274,7 +274,7 @@
         '<figure><img src="' + esc(imgSrc) + '" class="w-full aspect-[3/4] object-cover bg-base-100/20" onerror="this.src=\'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 1 1%22><rect fill=%22%23333%22 width=%221%22 height=%221%22/></svg>\'" alt=""></figure>' +
         '<div class="p-3 space-y-1.5">' +
         '<p class="listing-card-title text-sm font-semibold leading-tight">' + esc(l.title) + '</p>' +
-        '<p class="font-bold text-primary">$' + l.price.toFixed(2) + '</p>' +
+        '<p class="font-bold"><span class="text-base-content/60">$' + l.price.toFixed(2) + '</span>' + (ev && ev.estimatedValue != null ? ' → <span class="text-success">$' + ev.estimatedValue.toFixed(2) + '</span>' : '') + '</p>' +
         (ev && ev.estimatedEra ? '<p class="text-xs text-base-content/50">' + esc(ev.estimatedEra) + '</p>' : '') +
         '<div class="flex flex-wrap gap-1.5">' + badges + '</div>' +
         '</div></div>';
