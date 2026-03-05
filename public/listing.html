@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="dim">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,11 +9,12 @@
   <style>
     .images-scroll { scroll-snap-type: x mandatory; }
     .images-scroll img { scroll-snap-align: start; }
+    .glass-card { background: rgba(255,255,255,0.05); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.08); }
   </style>
 </head>
-<body class="bg-base-200 min-h-screen">
-  <div class="max-w-xl mx-auto p-5">
-    <a href="/" class="btn btn-ghost btn-sm mb-4">← Back</a>
+<body class="bg-base-300 min-h-screen">
+  <div class="max-w-2xl mx-auto px-5 py-8">
+    <a href="/" class="btn btn-ghost btn-sm mb-6">← Back</a>
     <div id="content"><div class="text-center py-10 text-base-content/50">Loading...</div></div>
   </div>
 
@@ -34,60 +35,60 @@
     function renderListing(l) {
       const images = JSON.parse(l.imageUrls);
       const ev = l.evaluation;
-      const fallback = "this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 1 1%22><rect fill=%22%23ddd%22 width=%221%22 height=%221%22/></svg>'";
+      const fallback = "this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 1 1%22><rect fill=%22%23333%22 width=%221%22 height=%221%22/></svg>'";
 
-      let html = '<div class="images-scroll flex gap-2 overflow-x-auto mb-4">';
+      let html = '<div class="images-scroll flex gap-3 overflow-x-auto mb-6 pb-1">';
       if (images.length) {
-        html += images.map(url => '<img src="' + esc(url) + '" class="h-60 rounded-lg object-cover flex-shrink-0 bg-base-300" onerror="' + fallback + '">').join('');
+        html += images.map(url => '<img src="' + esc(url) + '" class="h-64 rounded-2xl object-cover flex-shrink-0 bg-base-100/20 shadow-lg" onerror="' + fallback + '">').join('');
       }
       html += '</div>';
 
-      html += '<div class="card bg-base-100 mb-4"><div class="card-body">';
-      html += '<h2 class="card-title text-lg">' + esc(l.title) + '</h2>';
-      html += '<p class="text-sm text-base-content/70"><span class="font-bold text-base-content">$' + l.price.toFixed(2) + '</span> · ' + esc(l.platform) + '</p>';
-      if (l.description) html += '<p class="text-sm text-base-content/60 mt-2 whitespace-pre-wrap leading-relaxed">' + esc(l.description) + '</p>';
-      html += '<a class="link link-primary text-sm mt-2" href="' + esc(l.url) + '" target="_blank" rel="noopener">View original listing</a>';
-      html += '</div></div>';
+      html += '<div class="glass-card rounded-2xl p-5 mb-5">';
+      html += '<h2 class="text-xl font-bold mb-2">' + esc(l.title) + '</h2>';
+      html += '<p class="text-sm text-base-content/60"><span class="font-bold text-primary text-lg">$' + l.price.toFixed(2) + '</span> · ' + esc(l.platform) + '</p>';
+      if (l.description) html += '<p class="text-sm text-base-content/50 mt-3 whitespace-pre-wrap leading-relaxed">' + esc(l.description) + '</p>';
+      html += '<a class="link link-primary text-sm mt-3 inline-block" href="' + esc(l.url) + '" target="_blank" rel="noopener">View original listing →</a>';
+      html += '</div>';
 
       if (ev) {
-        html += '<div class="card bg-base-100 mb-4"><div class="card-body">';
-        html += '<h2 class="card-title text-base">Evaluation ';
+        html += '<div class="glass-card rounded-2xl p-5 mb-5">';
+        html += '<h2 class="text-lg font-bold mb-4">Evaluation ';
         if (ev.isOpportunity) html += '<span class="badge badge-success">Opportunity</span> ';
         if (ev.isAuthentic) html += '<span class="badge badge-info">Authentic</span>';
         html += '</h2>';
-        html += '<div class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">';
-        html += '<span class="text-base-content/50">Era</span><span class="font-semibold">' + esc(ev.estimatedEra || 'Unknown') + '</span>';
-        html += '<span class="text-base-content/50">Est. Value</span><span class="font-semibold">' + (ev.estimatedValue != null ? '$' + ev.estimatedValue.toFixed(2) : 'Unknown') + '</span>';
-        html += '<span class="text-base-content/50">Current Price</span><span class="font-semibold">$' + ev.currentPrice.toFixed(2) + '</span>';
-        html += '<span class="text-base-content/50">Margin</span><span class="font-semibold">' + (ev.margin != null ? '$' + ev.margin.toFixed(2) : 'N/A') + '</span>';
-        html += '<span class="text-base-content/50">Confidence</span><span class="font-semibold">' + (ev.confidence * 100).toFixed(0) + '%</span>';
+        html += '<div class="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">';
+        html += '<span class="text-base-content/40 uppercase text-xs tracking-wider">Era</span><span class="font-semibold">' + esc(ev.estimatedEra || 'Unknown') + '</span>';
+        html += '<span class="text-base-content/40 uppercase text-xs tracking-wider">Est. Value</span><span class="font-semibold">' + (ev.estimatedValue != null ? '$' + ev.estimatedValue.toFixed(2) : 'Unknown') + '</span>';
+        html += '<span class="text-base-content/40 uppercase text-xs tracking-wider">Current Price</span><span class="font-semibold">$' + ev.currentPrice.toFixed(2) + '</span>';
+        html += '<span class="text-base-content/40 uppercase text-xs tracking-wider">Margin</span><span class="font-semibold">' + (ev.margin != null ? '$' + ev.margin.toFixed(2) : 'N/A') + '</span>';
+        html += '<span class="text-base-content/40 uppercase text-xs tracking-wider">Confidence</span><span class="font-semibold">' + (ev.confidence * 100).toFixed(0) + '%</span>';
         html += '</div>';
-        html += '<p class="text-sm text-base-content/60 leading-relaxed mt-3 pt-3 border-t border-base-200">' + esc(ev.reasoning) + '</p>';
+        html += '<p class="text-sm text-base-content/50 leading-relaxed mt-4 pt-4 border-t border-base-content/10">' + esc(ev.reasoning) + '</p>';
 
         const flags = JSON.parse(ev.redFlags);
         if (flags.length) {
-          html += '<div class="mt-3"><p class="text-sm font-semibold">Red Flags:</p><ul class="list-disc list-inside text-sm text-error">';
+          html += '<div class="mt-4"><p class="text-xs font-semibold uppercase tracking-wider text-error mb-1">Red Flags</p><ul class="list-disc list-inside text-sm text-error/80">';
           flags.forEach(f => html += '<li>' + esc(f) + '</li>');
           html += '</ul></div>';
         }
 
         const refs = JSON.parse(ev.references);
         if (refs.length) {
-          html += '<div class="mt-3"><p class="text-sm font-semibold">References:</p><ul class="list-disc list-inside text-sm text-primary break-all">';
+          html += '<div class="mt-4"><p class="text-xs font-semibold uppercase tracking-wider text-base-content/40 mb-1">References</p><ul class="list-disc list-inside text-sm text-primary/70 break-all">';
           refs.forEach(r => html += '<li>' + esc(r) + '</li>');
           html += '</ul></div>';
         }
 
-        html += '</div></div>';
+        html += '</div>';
       }
 
-      html += '<div class="card bg-base-100"><div class="card-body">';
-      html += '<h2 class="card-title text-base">Chat</h2>';
-      html += '<div class="max-h-96 overflow-y-auto flex flex-col gap-2 mb-3" id="chatMessages"><p class="text-center text-base-content/40 text-sm py-5">Ask a question about this listing...</p></div>';
-      html += '<div class="join w-full">';
-      html += '<input type="text" id="chatInput" placeholder="Ask about this listing..." maxlength="1000" class="input input-bordered join-item flex-1" onkeydown="if(event.key===\'Enter\')sendMessage()">';
-      html += '<button id="sendBtn" class="btn btn-neutral join-item" onclick="sendMessage()">Send</button>';
-      html += '</div></div></div>';
+      html += '<div class="glass-card rounded-2xl p-5">';
+      html += '<h2 class="text-lg font-bold mb-4">Chat</h2>';
+      html += '<div class="max-h-96 overflow-y-auto flex flex-col gap-2 mb-4" id="chatMessages"><p class="text-center text-base-content/30 text-sm py-8">Ask a question about this listing...</p></div>';
+      html += '<div class="join w-full shadow-lg">';
+      html += '<input type="text" id="chatInput" placeholder="Ask about this listing..." maxlength="1000" class="input input-bordered join-item flex-1 bg-base-100/50" onkeydown="if(event.key===\'Enter\')sendMessage()">';
+      html += '<button id="sendBtn" class="btn btn-primary join-item" onclick="sendMessage()">Send</button>';
+      html += '</div></div>';
 
       document.getElementById('content').innerHTML = html;
     }
@@ -124,7 +125,7 @@
 
       // Optimistic user message
       container.innerHTML += '<div class="chat chat-end"><div class="chat-bubble chat-bubble-primary">' + esc(message) + '</div></div>';
-      container.innerHTML += '<div class="chat chat-start" id="thinkingMsg"><div class="chat-bubble opacity-60 italic">Thinking...</div></div>';
+      container.innerHTML += '<div class="chat chat-start" id="thinkingMsg"><div class="chat-bubble opacity-50 italic">Thinking...</div></div>';
       container.scrollTop = container.scrollHeight;
 
       try {
