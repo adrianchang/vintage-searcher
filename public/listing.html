@@ -72,7 +72,7 @@
           html += '</ul></div>';
         }
 
-        const refs = JSON.parse(ev.references);
+        const refs = typeof ev.references === 'string' ? JSON.parse(ev.references) : (ev.references || []);
         if (refs.length) {
           html += '<div class="mt-4"><p class="text-xs font-semibold uppercase tracking-wider text-base-content/40 mb-1">References</p><ul class="list-disc list-inside text-sm text-primary/70 break-all">';
           refs.forEach(r => html += '<li>' + esc(r) + '</li>');
