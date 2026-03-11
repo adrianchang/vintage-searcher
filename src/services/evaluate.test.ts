@@ -21,6 +21,8 @@ describe("Opportunity Detection", () => {
   it("should detect a valid opportunity", () => {
     const evaluation: Evaluation = {
       isAuthentic: true,
+      itemIdentification: "Vintage 1960s item",
+      identificationConfidence: 0.9,
       estimatedEra: "1960s",
       estimatedValue: 200,
       currentPrice: 100,
@@ -37,6 +39,8 @@ describe("Opportunity Detection", () => {
   it("should reject when margin is below threshold", () => {
     const evaluation: Evaluation = {
       isAuthentic: true,
+      itemIdentification: "1970s item",
+      identificationConfidence: 0.8,
       estimatedEra: "1970s",
       estimatedValue: 120,
       currentPrice: 100,
@@ -53,6 +57,8 @@ describe("Opportunity Detection", () => {
   it("should reject when confidence is below threshold", () => {
     const evaluation: Evaluation = {
       isAuthentic: true,
+      itemIdentification: "Possibly 1960s item",
+      identificationConfidence: 0.5,
       estimatedEra: "1960s",
       estimatedValue: 200,
       currentPrice: 100,
@@ -69,6 +75,8 @@ describe("Opportunity Detection", () => {
   it("should reject when margin is null (non-vintage item)", () => {
     const evaluation: Evaluation = {
       isAuthentic: false,
+      itemIdentification: "Modern production dress",
+      identificationConfidence: 0.95,
       estimatedEra: "N/A (Modern Production)",
       estimatedValue: null,
       currentPrice: 59.4,
@@ -85,6 +93,8 @@ describe("Opportunity Detection", () => {
   it("should reject when estimatedValue is null but margin is calculated as 0", () => {
     const evaluation: Evaluation = {
       isAuthentic: false,
+      itemIdentification: "Unknown item",
+      identificationConfidence: 0.1,
       estimatedEra: "Unknown",
       estimatedValue: null,
       currentPrice: 50,

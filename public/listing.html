@@ -56,6 +56,11 @@
         if (ev.isOpportunity) html += '<span class="badge badge-success">Opportunity</span> ';
         if (ev.isAuthentic) html += '<span class="badge badge-info">Authentic</span>';
         html += '</h2>';
+        if (ev.itemIdentification) {
+          html += '<p class="text-sm text-base-content/70 mb-4">' + esc(ev.itemIdentification);
+          if (ev.identificationConfidence != null) html += ' <span class="text-xs text-base-content/40">(' + (ev.identificationConfidence * 100).toFixed(0) + '% sure)</span>';
+          html += '</p>';
+        }
         html += '<div class="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">';
         html += '<span class="text-base-content/40 uppercase text-xs tracking-wider">Era</span><span class="font-semibold">' + esc(ev.estimatedEra || 'Unknown') + '</span>';
         html += '<span class="text-base-content/40 uppercase text-xs tracking-wider">Est. Value</span><span class="font-semibold">' + (ev.estimatedValue != null ? '$' + ev.estimatedValue.toFixed(2) : 'Unknown') + '</span>';

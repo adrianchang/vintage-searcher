@@ -61,9 +61,11 @@ model Evaluation {
   listingId      String   @unique
   listing        FilteredListing @relation(fields: [listingId], references: [id])
 
-  isAuthentic    Boolean
-  estimatedEra   String?  // Nullable - Gemini may return null for non-vintage
-  estimatedValue Float?   // Nullable - Gemini may return null for non-vintage
+  isAuthentic              Boolean
+  itemIdentification       String   @default("")
+  identificationConfidence Float    @default(0)
+  estimatedEra             String?  // Nullable - Gemini may return null for non-vintage
+  estimatedValue           Float?   // Nullable - Gemini may return null for non-vintage
   currentPrice   Float
   margin         Float?   // Nullable - can't calculate if estimatedValue is null
   confidence     Float
@@ -73,6 +75,15 @@ model Evaluation {
 
   isOpportunity  Boolean  // margin > threshold && confidence > threshold
   createdAt      DateTime @default(now())
+}
+
+// Managed by connect-pg-simple (express-session), not by Prisma
+model session {
+  sid    String   @id @db.VarChar
+  sess   Json
+  expire DateTime @db.Timestamptz(6)
+
+  @@index([expire])
 }
 
 model ChatMessage {

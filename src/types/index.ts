@@ -12,11 +12,13 @@ export interface Listing {
 // LLM evaluation output
 export interface Evaluation {
   isAuthentic: boolean;
+  itemIdentification: string;        // What the agent thinks the item actually is
+  identificationConfidence: number;  // How confident the agent is in its identification (0-1)
   estimatedEra: string | null;    // Null if can't determine era (non-vintage items)
   estimatedValue: number | null;  // Null if can't estimate (non-vintage items)
   currentPrice: number;
   margin: number | null;          // Null if estimatedValue is null
-  confidence: number;
+  confidence: number;             // Confidence in the valuation/pricing (0-1)
   reasoning: string;
   redFlags: string[];
   references: string[];

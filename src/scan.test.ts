@@ -36,6 +36,8 @@ const MOCK_LISTINGS: Listing[] = [
 const MOCK_EVALUATIONS: Record<string, Evaluation> = {
   "https://www.ebay.com/itm/test-001": {
     isAuthentic: true,
+    itemIdentification: "Pendleton Board Shirt, loop collar, wool, 1960s",
+    identificationConfidence: 0.9,
     estimatedEra: "1960s",
     estimatedValue: 120,
     currentPrice: 45,
@@ -47,6 +49,8 @@ const MOCK_EVALUATIONS: Record<string, Evaluation> = {
   },
   "https://www.ebay.com/itm/test-002": {
     isAuthentic: true,
+    itemIdentification: "1950s rayon bowling shirt, chain stitch embroidery",
+    identificationConfidence: 0.92,
     estimatedEra: "1950s",
     estimatedValue: 180,
     currentPrice: 35,
@@ -180,6 +184,8 @@ describe("runScan", () => {
   it("should mark low-margin listings as not opportunities", async () => {
     const lowMarginEval: Evaluation = {
       isAuthentic: true,
+      itemIdentification: "Generic 1990s item",
+      identificationConfidence: 0.6,
       estimatedEra: "1990s",
       estimatedValue: 50,
       currentPrice: 45,
@@ -235,6 +241,8 @@ describe("runScan", () => {
     await runScan(config, makeDeps({
       evaluateListing: async () => ({
         isAuthentic: false,
+        itemIdentification: "Unknown item",
+        identificationConfidence: 0.1,
         estimatedEra: "Unknown",
         estimatedValue: null,
         currentPrice: 45,

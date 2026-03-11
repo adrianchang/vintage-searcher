@@ -2,6 +2,14 @@ import { PrismaClient } from "./generated/prisma/client";
 import { type Platform, type SearchQueryInput } from "./services/ecommerce";
 import type { Listing, Evaluation, ScanConfig } from "./types";
 
+export type ScanProgress = {
+  stage: 'fetch' | 'filter' | 'evaluate' | 'done' | 'error';
+  message: string;
+  evaluated?: number;
+  total?: number;
+  opportunities?: number;
+};
+
 export interface ScanDeps {
   prisma: PrismaClient;
   fetchListings: (platform: Platform, limit: number, queries?: SearchQueryInput[]) => Promise<Listing[]>;
@@ -10,7 +18,7 @@ export interface ScanDeps {
   sendAlert: (opportunities: { listing: Listing; evaluation: Evaluation }[]) => Promise<void>;
 }
 
-export async function runScan(config: ScanConfig, deps: ScanDeps, userId?: string) {
+export async function runScan(config: ScanConfig, deps: ScanDeps, userId?: string, onProgress?: (progress: ScanProgress) => void) {
   const { prisma } = deps;
 
   console.log(`Starting vintage scan on ${config.platform}...`);
@@ -39,10 +47,12 @@ export async function runScan(config: ScanConfig, deps: ScanDeps, userId?: strin
   // 1. Fetch listings from platform
   const listings = await deps.fetchListings(config.platform, totalCount, queries);
   console.log(`Fetched ${listings.length} listings from ${config.platform}`);
+  onProgress?.({ stage: 'fetch', message: `Fetched ${listings.length} listings` });
 
   // 2. Pass 1: Filter with cheap/fast rules
   const filtered = await deps.filterListings(listings);
   console.log(`${filtered.length} listings passed initial filter`);
+  onProgress?.({ stage: 'filter', message: `${filtered.length} passed filter` });
 
   // 3. Store filtered listings for future filter iteration
   for (const listing of filtered) {
@@ -83,6 +93,13 @@ export async function runScan(config: ScanConfig, deps: ScanDeps, userId?: strin
       continue;
     }
 
+    onProgress?.({
+      stage: 'evaluate',
+      message: `Evaluating: ${listing.title.slice(0, 50)}...`,
+      evaluated: evaluatedCount + skippedCount,
+      total: filtered.length,
+    });
+
     try {
       const evaluation = await deps.evaluateListing(listing);
       evaluatedCount++;
@@ -96,6 +113,8 @@ export async function runScan(config: ScanConfig, deps: ScanDeps, userId?: strin
         data: {
           listing: { connect: { id: dbListing.id } },
           isAuthentic: evaluation.isAuthentic,
+          itemIdentification: evaluation.itemIdentification,
+          identificationConfidence: evaluation.identificationConfidence,
           estimatedEra: evaluation.estimatedEra,
           estimatedValue: evaluation.estimatedValue,
           currentPrice: evaluation.currentPrice,
@@ -130,4 +149,5 @@ export async function runScan(config: ScanConfig, deps: ScanDeps, userId?: strin
   }
 
   console.log("Scan complete.");
+  onProgress?.({ stage: 'done', message: `Found ${opportunities.length} opportunities`, opportunities: opportunities.length });
 }

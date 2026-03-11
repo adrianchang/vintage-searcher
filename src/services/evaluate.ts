@@ -6,20 +6,51 @@ const USE_MOCK_DATA = process.env.USE_MOCK_DATA === "true";
 
 const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
 
-const EVALUATION_PROMPT = `You are an expert in vintage clothing. Analyze this listing and search the internet to determine if it's authentic vintage. Then check the internet and see if it's undervalued. Especially look out for Japanese website like ebay Japan or mercari.
+const EVALUATION_PROMPT = `You are a veteran vintage clothing collector evaluating an eBay listing. You MUST use Google Search — never skip searching.
 
 Listing Title: {title}
 Listed Price: ${"{price}"}
 Description: {description}
 
-Analyze the photos for:
-- Labels/tags (union labels, care tags, brand logos)
-- Stitching patterns (single vs chain stitch)
-- Hardware (zippers - Talon, Crown vs modern YKK)
-- Fabric patterns and construction
-- Condition details
+You approach this the way an experienced collector would at a flea market — photos first, description second.
 
-Use Google Search to find actual listings and current market prices for similar items. Base your estimatedValue on real comparable sales you find, not guesses. Include actual URLs and prices from search results in your references.`;
+STEP 1 — VISUAL INSPECTION
+Examine the photos carefully. Do NOT trust the listing title/description blindly — sellers often mislabel items. Determine:
+- Category: jacket, shirt, pants, dress, coat, etc.
+- Brand: check tags, labels, and logos in photos. Also consider the style, material, and design — some brands have iconic/recognizable construction even without a visible tag.
+- Key construction details (check whichever apply to this item type):
+  - Tags/labels: brand tag, care tag, union label (ILGWU, ACWA, etc.), Woolmark logo, country of origin, lot/style numbers
+  - Material: fabric type, weight, weave, texture
+  - Stitching: single-needle vs chain stitch, bartacks, selvedge
+  - Construction: hem style, seam type, pocket construction, lining
+  - Hardware: buttons (logo'd?), zippers (Talon, Crown, YKK, Ideal, Scovill), snaps, rivets
+  - Cut & design: silhouette, collar style, fit era indicators
+  - Condition: wear patterns, fading, holes, stains, repairs, patina
+
+STEP 2 — ITEM IDENTIFICATION
+Based on your visual inspection, record your identification in itemIdentification. Be specific:
+- Brand + model/style (e.g. "Levi's Type III Trucker Jacket, 70505-0217")
+- Estimated era of manufacture
+- Key authenticating details you observed
+Note where the listing description differs from what you see.
+Set identificationConfidence (0-1): how sure are you about WHAT this item is? High if tags/labels are clear and construction details match. Low if you're guessing based on limited photos.
+
+STEP 3 — COMPARABLE SALES RESEARCH (REQUIRED — search for each)
+Search for comparable SOLD items to establish market value:
+- eBay sold: "{brand} {item type} {era} sold vintage"
+- Japanese markets: "mercari {brand} {item}" (Japanese vintage market often has strong comps)
+- Price guides: "{brand} {era} vintage value guide"
+If you cannot find truly similar sold items, state this explicitly in reasoning and set confidence LOW.
+
+STEP 4 — VALUATION
+Based on comparable sales found:
+- Set estimatedValue based on actual sold prices you found
+- Cite which sold listings support your number
+- If comps are weak or not truly similar, be conservative and note it
+- Calculate margin (estimatedValue - currentPrice)
+- Set confidence (0-1): how confident are you in the VALUATION? High if you found strong, truly similar comps. Low if comps are weak, dissimilar, or missing.
+
+IMPORTANT: estimatedValue MUST come from real sold comps, not guesses. No comps = low confidence.`;
 
 const MAX_RETRIES = 3; // Max retry attempts before giving up
 const INITIAL_RETRY_DELAY_MS = 10000; // 10 seconds (reduced for faster retries)
@@ -137,6 +168,8 @@ async function callGeminiWithRetry(
             type: Type.OBJECT,
             properties: {
               isAuthentic: { type: Type.BOOLEAN },
+              itemIdentification: { type: Type.STRING },
+              identificationConfidence: { type: Type.NUMBER },
               estimatedEra: { type: Type.STRING },
               estimatedValue: { type: Type.NUMBER },
               currentPrice: { type: Type.NUMBER },
@@ -145,7 +178,7 @@ async function callGeminiWithRetry(
               reasoning: { type: Type.STRING },
               redFlags: { type: Type.ARRAY, items: { type: Type.STRING } },
             },
-            required: ["isAuthentic", "currentPrice", "confidence", "reasoning", "redFlags"],
+            required: ["isAuthentic", "itemIdentification", "identificationConfidence", "currentPrice", "confidence", "reasoning", "redFlags"],
           },
         },
       });
@@ -216,6 +249,8 @@ function getMockEvaluation(listing: Listing): Evaluation {
   const mockEvaluations: Record<string, Evaluation> = {
     "https://www.ebay.com/itm/123456789001": {
       isAuthentic: true,
+      itemIdentification: "Pendleton Board Shirt, loop collar, wool flannel, Made in USA",
+      identificationConfidence: 0.9,
       estimatedEra: "1960s",
       estimatedValue: 120,
       currentPrice: 45,
@@ -227,6 +262,8 @@ function getMockEvaluation(listing: Listing): Evaluation {
     },
     "https://www.ebay.com/itm/123456789002": {
       isAuthentic: true,
+      itemIdentification: "Mixed lot of women's dresses, likely 1950s-1960s, brands unverifiable from photos",
+      identificationConfidence: 0.35,
       estimatedEra: "1950s-1960s",
       estimatedValue: 200,
       currentPrice: 89,
@@ -238,6 +275,8 @@ function getMockEvaluation(listing: Listing): Evaluation {
     },
     "https://www.ebay.com/itm/123456789003": {
       isAuthentic: true,
+      itemIdentification: "Levi's 501 Big E, redline selvedge, single stitch, sz 32x30, pre-1971",
+      identificationConfidence: 0.95,
       estimatedEra: "1960s",
       estimatedValue: 400,
       currentPrice: 150,
@@ -249,6 +288,8 @@ function getMockEvaluation(listing: Listing): Evaluation {
     },
     "https://www.ebay.com/itm/123456789004": {
       isAuthentic: true,
+      itemIdentification: "Unknown brand wool overcoat, possibly 1950s, no visible labels",
+      identificationConfidence: 0.3,
       estimatedEra: "1950s",
       estimatedValue: 85,
       currentPrice: 25,
@@ -260,6 +301,8 @@ function getMockEvaluation(listing: Listing): Evaluation {
     },
     "https://www.ebay.com/itm/123456789005": {
       isAuthentic: true,
+      itemIdentification: "1950s two-tone rayon bowling shirt, chain stitch embroidery 'Joes Auto Shop'",
+      identificationConfidence: 0.92,
       estimatedEra: "1950s",
       estimatedValue: 180,
       currentPrice: 35,
@@ -271,6 +314,8 @@ function getMockEvaluation(listing: Listing): Evaluation {
     },
     "https://www.ebay.com/itm/123456789007": {
       isAuthentic: true,
+      itemIdentification: "Landlubber high-waist bell bottom jeans, deadstock with original tags, sz 26",
+      identificationConfidence: 0.88,
       estimatedEra: "1970s",
       estimatedValue: 150,
       currentPrice: 55,
@@ -282,6 +327,8 @@ function getMockEvaluation(listing: Listing): Evaluation {
     },
     "https://www.ebay.com/itm/123456789008": {
       isAuthentic: true,
+      itemIdentification: "Unbranded blanket-lined denim chore coat, workwear, heavily worn",
+      identificationConfidence: 0.5,
       estimatedEra: "1960s-1970s",
       estimatedValue: 120,
       currentPrice: 40,
@@ -293,6 +340,8 @@ function getMockEvaluation(listing: Listing): Evaluation {
     },
     "https://www.ebay.com/itm/123456789009": {
       isAuthentic: true,
+      itemIdentification: "1960s sequin evening gown, ILGWU union label, formal full-length dress",
+      identificationConfidence: 0.88,
       estimatedEra: "1960s",
       estimatedValue: 175,
       currentPrice: 48,
@@ -304,6 +353,8 @@ function getMockEvaluation(listing: Listing): Evaluation {
     },
     "https://www.ebay.com/itm/123456789010": {
       isAuthentic: true,
+      itemIdentification: "Carhartt Detroit Jacket, Made in USA, blanket-lined, 1990s production",
+      identificationConfidence: 0.85,
       estimatedEra: "1990s",
       estimatedValue: 95,
       currentPrice: 75,
@@ -324,6 +375,8 @@ function getMockEvaluation(listing: Listing): Evaluation {
   // Default evaluation for unknown listings
   return {
     isAuthentic: false,
+    itemIdentification: "Unknown item",
+    identificationConfidence: 0.1,
     estimatedEra: "Unknown",
     estimatedValue: listing.price,
     currentPrice: listing.price,

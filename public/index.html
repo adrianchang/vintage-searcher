@@ -247,18 +247,67 @@
       const btn = document.getElementById('scanBtn');
       const status = document.getElementById('status');
       btn.disabled = true;
-      btn.textContent = 'Scanning...';
+      btn.textContent = 'Starting scan...';
       status.textContent = '';
+      document.getElementById('error').textContent = '';
 
-      const res = await fetch('/scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
+      try {
+        const res = await fetch('/scan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        });
 
-      const data = await res.json();
-      btn.disabled = false;
-      btn.textContent = 'Run Scan';
-      status.textContent = data.message || 'Scan started';
+        const data = await res.json();
+        if (!data.scanId) {
+          btn.disabled = false;
+          btn.textContent = 'Run Scan';
+          status.textContent = data.message || 'Scan started';
+          return;
+        }
+
+        const es = new EventSource('/scan/' + data.scanId + '/progress');
+        es.onmessage = function(event) {
+          const progress = JSON.parse(event.data);
+          switch (progress.stage) {
+            case 'fetch':
+              btn.textContent = 'Fetching listings...';
+              status.textContent = progress.message;
+              break;
+            case 'filter':
+              btn.textContent = 'Filtering...';
+              status.textContent = progress.message;
+              break;
+            case 'evaluate':
+              btn.textContent = 'Evaluating ' + (progress.evaluated + 1) + '/' + progress.total + '...';
+              status.textContent = progress.message;
+              break;
+            case 'done':
+              btn.disabled = false;
+              btn.textContent = 'Run Scan';
+              status.textContent = 'Found ' + (progress.opportunities || 0) + ' opportunities!';
+              es.close();
+              loadListings();
+              break;
+            case 'error':
+              btn.disabled = false;
+              btn.textContent = 'Run Scan';
+              status.textContent = '';
+              document.getElementById('error').textContent = progress.message;
+              es.close();
+              break;
+          }
+        };
+        es.onerror = function() {
+          btn.disabled = false;
+          btn.textContent = 'Run Scan';
+          document.getElementById('error').textContent = 'Lost connection to scan progress';
+          es.close();
+        };
+      } catch (err) {
+        btn.disabled = false;
+        btn.textContent = 'Run Scan';
+        document.getElementById('error').textContent = 'Failed to start scan: ' + err.message;
+      }
     }
 
     function renderListingCard(l) {
@@ -275,7 +324,7 @@
         '<div class="p-3 space-y-1.5">' +
         '<p class="listing-card-title text-sm font-semibold leading-tight">' + esc(l.title) + '</p>' +
         '<p class="font-bold"><span class="text-base-content/60">$' + l.price.toFixed(2) + '</span>' + (ev && ev.estimatedValue != null ? ' → <span class="text-success">$' + ev.estimatedValue.toFixed(2) + '</span>' : '') + '</p>' +
-        (ev && ev.estimatedEra ? '<p class="text-xs text-base-content/50">' + esc(ev.estimatedEra) + '</p>' : '') +
+        (ev && ev.itemIdentification ? '<p class="text-xs text-base-content/50 leading-snug">' + esc(ev.itemIdentification) + '</p>' : ev && ev.estimatedEra ? '<p class="text-xs text-base-content/50">' + esc(ev.estimatedEra) + '</p>' : '') +
         '<div class="flex flex-wrap gap-1.5">' + badges + '</div>' +
         '</div></div>';
     }
