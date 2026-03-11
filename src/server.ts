@@ -3,6 +3,7 @@ import "./types/express.d.ts";
 import express from "express";
 import crypto from "crypto";
 import path from "path";
+import { EventEmitter } from "events";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import passport from "passport";
@@ -11,7 +12,7 @@ import { fetchListings } from "./services/ecommerce";
 import { filterListings } from "./services/filter";
 import { evaluateListing } from "./services/evaluate";
 import { sendAlert } from "./services/notify";
-import { runScan } from "./scan";
+import { runScan, type ScanProgress } from "./scan";
 import { configurePassport } from "./auth";
 import { requireAuth } from "./middleware/requireAuth";
 import { chatWithListing } from "./services/chat";
@@ -29,6 +30,9 @@ const scanConfig: ScanConfig = {
   minMargin: 50,
   minConfidence: 0.7,
 };
+
+// In-memory scan progress emitters keyed by scanId
+const scanEmitters = new Map<string, EventEmitter>();
 
 // --- Middleware ---
 if (process.env.NODE_ENV === "production") {
@@ -264,8 +268,19 @@ app.post("/scan", (req, res) => {
   }
 
   const userId = req.user?.id; // undefined for cron — falls back to Adrian in runScan
-  console.log(`Scan triggered via API${userId ? ` for user ${userId}` : " (cron)"}`);
-  res.json({ status: "ok", message: "Scan started" });
+  const scanId = crypto.randomUUID();
+  const emitter = new EventEmitter();
+  scanEmitters.set(scanId, emitter);
+
+  // Clean up after 5 minutes
+  setTimeout(() => { scanEmitters.delete(scanId); }, 5 * 60 * 1000);
+
+  const onProgress = (progress: ScanProgress) => {
+    emitter.emit("progress", progress);
+  };
+
+  console.log(`Scan triggered via API${userId ? ` for user ${userId}` : " (cron)"} [${scanId}]`);
+  res.json({ status: "ok", message: "Scan started", scanId });
 
   runScan(scanConfig, {
     prisma,
@@ -273,8 +288,40 @@ app.post("/scan", (req, res) => {
     filterListings,
     evaluateListing,
     sendAlert,
-  }, userId).catch((error) => {
+  }, userId, onProgress).catch((error) => {
     console.error("Scan failed:", error);
+    emitter.emit("progress", { stage: "error", message: `Scan failed: ${error instanceof Error ? error.message : error}` });
+  });
+});
+
+// SSE endpoint for scan progress
+app.get("/scan/:scanId/progress", (req, res) => {
+  const { scanId } = req.params;
+  const emitter = scanEmitters.get(scanId);
+
+  if (!emitter) {
+    res.status(404).json({ error: "Scan not found" });
+    return;
+  }
+
+  res.set({
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    Connection: "keep-alive",
+  });
+  res.flushHeaders();
+
+  const onProgress = (progress: ScanProgress) => {
+    res.write(`data: ${JSON.stringify(progress)}\n\n`);
+    if (progress.stage === "done" || progress.stage === "error") {
+      res.end();
+    }
+  };
+
+  emitter.on("progress", onProgress);
+
+  req.on("close", () => {
+    emitter.off("progress", onProgress);
   });
 });
 
