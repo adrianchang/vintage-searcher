@@ -72,6 +72,7 @@ model Evaluation {
   reasoning      String
   redFlags       String   // JSON array
   references     String   // JSON array
+  soldListings   String   @default("[]")  // JSON array
 
   isOpportunity  Boolean  // margin > threshold && confidence > threshold
   createdAt      DateTime @default(now())

@@ -77,6 +77,19 @@
           html += '</ul></div>';
         }
 
+        const comps = typeof ev.soldListings === 'string' ? JSON.parse(ev.soldListings) : (ev.soldListings || []);
+        if (comps.length) {
+          html += '<div class="mt-4"><p class="text-xs font-semibold uppercase tracking-wider text-base-content/40 mb-2">Comparable Sales</p>';
+          html += '<div class="space-y-1">';
+          comps.forEach(c => {
+            html += '<div class="flex justify-between text-sm">';
+            html += '<span class="text-base-content/70">' + esc(c.title) + '</span>';
+            html += '<span class="font-semibold text-success shrink-0 ml-2">' + (c.price != null ? '$' + c.price.toFixed(2) : 'N/A') + '</span>';
+            html += '</div>';
+          });
+          html += '</div></div>';
+        }
+
         const refs = typeof ev.references === 'string' ? JSON.parse(ev.references) : (ev.references || []);
         if (refs.length) {
           html += '<div class="mt-4"><p class="text-xs font-semibold uppercase tracking-wider text-base-content/40 mb-1">References</p><ul class="list-disc list-inside text-sm text-primary/70 break-all">';

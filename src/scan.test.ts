@@ -46,6 +46,9 @@ const MOCK_EVALUATIONS: Record<string, Evaluation> = {
     reasoning: "Pendleton board shirts with loop collars are collectible.",
     redFlags: ["Condition not fully visible"],
     references: ["Similar sold for $135"],
+    soldListings: [
+      { title: "Pendleton loop collar board shirt sz M", price: 135, url: null },
+    ],
   },
   "https://www.ebay.com/itm/test-002": {
     isAuthentic: true,
@@ -59,6 +62,9 @@ const MOCK_EVALUATIONS: Record<string, Evaluation> = {
     reasoning: "Chain stitch bowling shirts are highly collectible.",
     redFlags: [],
     references: ["Chain stitch bowling shirts sold $150-300"],
+    soldListings: [
+      { title: "1950s chain stitch bowling shirt two-tone", price: 225, url: null },
+    ],
   },
 };
 
@@ -194,6 +200,7 @@ describe("runScan", () => {
       reasoning: "Not much margin here.",
       redFlags: [],
       references: [],
+      soldListings: [],
     };
 
     await runScan(config, makeDeps({
@@ -251,6 +258,7 @@ describe("runScan", () => {
         reasoning: "Not vintage",
         redFlags: [],
         references: [],
+        soldListings: [],
       }),
       sendAlert,
     }));
@@ -268,5 +276,7 @@ describe("runScan", () => {
     expect(typeof firstEvalData.references).toBe("string");
     expect(JSON.parse(firstEvalData.redFlags)).toBeInstanceOf(Array);
     expect(JSON.parse(firstEvalData.references)).toBeInstanceOf(Array);
+    expect(typeof firstEvalData.soldListings).toBe("string");
+    expect(JSON.parse(firstEvalData.soldListings)).toBeInstanceOf(Array);
   });
 });

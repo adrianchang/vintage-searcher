@@ -31,6 +31,7 @@ describe("Opportunity Detection", () => {
       reasoning: "Authentic vintage item",
       redFlags: [],
       references: [],
+      soldListings: [],
     };
 
     expect(isOpportunity(evaluation, minMargin, minConfidence)).toBe(true);
@@ -49,6 +50,7 @@ describe("Opportunity Detection", () => {
       reasoning: "Low margin item",
       redFlags: [],
       references: [],
+      soldListings: [],
     };
 
     expect(isOpportunity(evaluation, minMargin, minConfidence)).toBe(false);
@@ -67,6 +69,7 @@ describe("Opportunity Detection", () => {
       reasoning: "Uncertain authenticity",
       redFlags: ["Cannot verify label"],
       references: [],
+      soldListings: [],
     };
 
     expect(isOpportunity(evaluation, minMargin, minConfidence)).toBe(false);
@@ -85,6 +88,7 @@ describe("Opportunity Detection", () => {
       reasoning: "This is a modern item, not vintage",
       redFlags: ["Item is modern, not vintage"],
       references: [],
+      soldListings: [],
     };
 
     expect(isOpportunity(evaluation, minMargin, minConfidence)).toBe(false);
@@ -103,6 +107,7 @@ describe("Opportunity Detection", () => {
       reasoning: "Unable to determine value",
       redFlags: ["Insufficient data"],
       references: [],
+      soldListings: [],
     };
 
     expect(isOpportunity(evaluation, minMargin, minConfidence)).toBe(false);

@@ -40,12 +40,18 @@ Search for comparable SOLD items to establish market value:
 - eBay sold: "{brand} {item type} {era} sold vintage"
 - Japanese markets: "mercari {brand} {item}" (Japanese vintage market often has strong comps)
 - Price guides: "{brand} {era} vintage value guide"
-If you cannot find truly similar sold items, state this explicitly in reasoning and set confidence LOW.
+
+For EACH comparable sold item you find, add it to the soldListings array with:
+- title: description of the sold item (e.g. "Levi's 501 Big E redline selvedge 32x30")
+- price: the sold price in USD (null if unknown)
+- url: the listing URL if available (null otherwise)
+
+If you cannot find truly similar sold items, leave soldListings empty, state this in reasoning, and set confidence LOW.
 
 STEP 4 — VALUATION
 Based on comparable sales found:
 - Set estimatedValue based on actual sold prices you found
-- Cite which sold listings support your number
+- Cite which items from soldListings support your estimatedValue
 - If comps are weak or not truly similar, be conservative and note it
 - Calculate margin (estimatedValue - currentPrice)
 - Set confidence (0-1): how confident are you in the VALUATION? High if you found strong, truly similar comps. Low if comps are weak, dissimilar, or missing.
@@ -177,8 +183,20 @@ async function callGeminiWithRetry(
               confidence: { type: Type.NUMBER },
               reasoning: { type: Type.STRING },
               redFlags: { type: Type.ARRAY, items: { type: Type.STRING } },
+              soldListings: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    title: { type: Type.STRING },
+                    price: { type: Type.NUMBER },
+                    url: { type: Type.STRING },
+                  },
+                  required: ["title"],
+                },
+              },
             },
-            required: ["isAuthentic", "itemIdentification", "identificationConfidence", "currentPrice", "confidence", "reasoning", "redFlags"],
+            required: ["isAuthentic", "itemIdentification", "identificationConfidence", "currentPrice", "confidence", "reasoning", "redFlags", "soldListings"],
           },
         },
       });
@@ -191,6 +209,9 @@ async function callGeminiWithRetry(
       }
 
       const evaluation = JSON.parse(text) as Evaluation;
+
+      // Ensure soldListings defaults to empty array if not returned
+      evaluation.soldListings = evaluation.soldListings ?? [];
 
       // Use only grounding metadata for references (model-generated URLs are hallucinated)
       const groundingRefs = await extractGroundingReferences(response);
@@ -259,6 +280,10 @@ function getMockEvaluation(listing: Listing): Evaluation {
       reasoning: "Pendleton board shirts with loop collars are highly collectible. The loop collar indicates pre-1960s manufacture. Made in USA Pendleton wool shirts from this era typically sell for $100-150.",
       redFlags: ["Condition not fully visible in photos"],
       references: ["Similar Pendleton loop collar sold for $135 on eBay 2024", "Vintage Pendleton price guide"],
+      soldListings: [
+        { title: "Pendleton loop collar board shirt sz M", price: 135, url: null },
+        { title: "Pendleton wool board shirt 1960s blue plaid", price: 110, url: null },
+      ],
     },
     "https://www.ebay.com/itm/123456789002": {
       isAuthentic: true,
@@ -272,6 +297,9 @@ function getMockEvaluation(listing: Listing): Evaluation {
       reasoning: "Estate sale lots often contain hidden gems. The description mentions 50s/60s dresses. If even 2-3 pieces are authentic vintage in good condition, the lot could be worth significantly more.",
       redFlags: ["Mixed lot - quality varies", "Cannot verify individual pieces", "As-is condition"],
       references: ["Vintage dress lots typically yield 2-3x return for experienced resellers"],
+      soldListings: [
+        { title: "Lot of 5 1950s vintage dresses mixed sizes", price: 175, url: null },
+      ],
     },
     "https://www.ebay.com/itm/123456789003": {
       isAuthentic: true,
@@ -285,6 +313,11 @@ function getMockEvaluation(listing: Listing): Evaluation {
       reasoning: "Big E Levi's 501s with redline selvedge are highly valuable. The single stitch construction confirms pre-1971 manufacture. Size 32x30 is desirable. Seller appears knowledgeable but price is still below market.",
       redFlags: ["Seller may know value - could be auction bait"],
       references: ["Big E 501s sold for $300-600 on eBay in 2024", "Levi's vintage dating guide confirms Big E = pre-1971"],
+      soldListings: [
+        { title: "Levi's 501 Big E redline selvedge 33x30", price: 450, url: null },
+        { title: "Levi's 501 Big E single stitch 1960s 31x32", price: 380, url: null },
+        { title: "Vintage Levi's 501 Big E selvedge denim", price: 520, url: null },
+      ],
     },
     "https://www.ebay.com/itm/123456789004": {
       isAuthentic: true,
@@ -298,6 +331,7 @@ function getMockEvaluation(listing: Listing): Evaluation {
       reasoning: "Description suggests casual seller clearing estate. 'Grandmas coat' language indicates potential true vintage. Wool coats from 1950s can be valuable if from quality makers.",
       redFlags: ["Moth holes mentioned", "No label visible", "Only one photo", "Low confidence without more details"],
       references: ["1950s wool coats range $50-200 depending on maker and condition"],
+      soldListings: [],
     },
     "https://www.ebay.com/itm/123456789005": {
       isAuthentic: true,
@@ -311,6 +345,10 @@ function getMockEvaluation(listing: Listing): Evaluation {
       reasoning: "1950s bowling shirts with chain stitch embroidery are highly collectible. The two-tone design and custom embroidery ('Joes Auto Shop') add significant value. This is a prime example of underpriced vintage.",
       redFlags: [],
       references: ["Chain stitch bowling shirts sold $150-300 on vintage marketplaces", "Rockabilly collectors pay premium for authentic 50s pieces"],
+      soldListings: [
+        { title: "1950s chain stitch bowling shirt two-tone rayon", price: 225, url: null },
+        { title: "Vintage 50s bowling shirt embroidered 'Al's Garage'", price: 180, url: null },
+      ],
     },
     "https://www.ebay.com/itm/123456789007": {
       isAuthentic: true,
@@ -324,6 +362,9 @@ function getMockEvaluation(listing: Listing): Evaluation {
       reasoning: "Deadstock 1970s Landlubber jeans are collectible. High waist bell bottoms are currently trending. Original tags add significant value. Size 26 waist is desirable for the vintage market.",
       redFlags: ["Verify deadstock claim - check for storage wear"],
       references: ["Deadstock 70s jeans typically sell $100-200", "Landlubber was popular 70s brand"],
+      soldListings: [
+        { title: "Landlubber bell bottom jeans 1970s deadstock sz 28", price: 160, url: null },
+      ],
     },
     "https://www.ebay.com/itm/123456789008": {
       isAuthentic: true,
@@ -337,6 +378,9 @@ function getMockEvaluation(listing: Listing): Evaluation {
       reasoning: "Blanket-lined denim chore coats are sought after in workwear market. 'Well worn with character' is desirable for this aesthetic. No brand tag suggests possible vintage work coat.",
       redFlags: ["No brand identification", "Heavy wear may limit value"],
       references: ["Vintage chore coats sell $80-200 depending on condition and brand"],
+      soldListings: [
+        { title: "Vintage blanket-lined denim chore coat workwear", price: 130, url: null },
+      ],
     },
     "https://www.ebay.com/itm/123456789009": {
       isAuthentic: true,
@@ -350,6 +394,10 @@ function getMockEvaluation(listing: Listing): Evaluation {
       reasoning: "ILGWU union label definitively dates this to 1960s. Sequin evening gowns from this era are highly collectible. The label provides authentication that most sellers overlook.",
       redFlags: ["Minor sequin loss mentioned"],
       references: ["ILGWU labels date pieces to 1900-1995, style suggests 1960s", "60s sequin gowns sell $150-300"],
+      soldListings: [
+        { title: "1960s ILGWU sequin evening gown full length", price: 195, url: null },
+        { title: "Vintage 60s sequin formal dress gold", price: 165, url: null },
+      ],
     },
     "https://www.ebay.com/itm/123456789010": {
       isAuthentic: true,
@@ -363,6 +411,9 @@ function getMockEvaluation(listing: Listing): Evaluation {
       reasoning: "Made in USA Carhartt Detroit jackets are collectible but this appears to be 1990s production rather than true vintage. Still has value but margin is slim.",
       redFlags: ["Likely 1990s not pre-1980s", "Common item - many available"],
       references: ["90s Carhartt Detroit jackets sell $80-120"],
+      soldListings: [
+        { title: "Carhartt Detroit jacket Made in USA blanket lined", price: 95, url: null },
+      ],
     },
   };
 
@@ -385,5 +436,6 @@ function getMockEvaluation(listing: Listing): Evaluation {
     reasoning: "Unable to determine authenticity or value from available information.",
     redFlags: ["Insufficient data for evaluation"],
     references: [],
+    soldListings: [],
   };
 }

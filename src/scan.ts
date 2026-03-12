@@ -123,6 +123,7 @@ export async function runScan(config: ScanConfig, deps: ScanDeps, userId?: strin
           reasoning: evaluation.reasoning,
           redFlags: JSON.stringify(evaluation.redFlags),
           references: JSON.stringify(evaluation.references),
+          soldListings: JSON.stringify(evaluation.soldListings),
           isOpportunity,
         },
       });
