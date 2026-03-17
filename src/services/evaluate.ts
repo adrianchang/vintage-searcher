@@ -139,9 +139,7 @@ async function extractGroundingReferences(response: GenerateContentResponse): Pr
     metadata.groundingChunks
       .filter((chunk) => chunk.web?.uri)
       .map(async (chunk) => {
-        const title = chunk.web!.title || "Source";
-        const resolvedUrl = await resolveRedirectUrl(chunk.web!.uri!);
-        return `${title}: ${resolvedUrl}`;
+        return await resolveRedirectUrl(chunk.web!.uri!);
       }),
   );
   return refs;

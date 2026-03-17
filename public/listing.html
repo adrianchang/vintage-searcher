@@ -83,7 +83,7 @@
           html += '<div class="space-y-1">';
           comps.forEach(c => {
             html += '<div class="flex justify-between text-sm">';
-            html += '<span class="text-base-content/70">' + esc(c.title) + '</span>';
+            html += c.url ? '<a href="' + esc(c.url) + '" target="_blank" rel="noopener" class="link text-base-content/70 hover:text-primary">' + esc(c.title) + '</a>' : '<span class="text-base-content/70">' + esc(c.title) + '</span>';
             html += '<span class="font-semibold text-success shrink-0 ml-2">' + (c.price != null ? '$' + c.price.toFixed(2) : 'N/A') + '</span>';
             html += '</div>';
           });
@@ -93,7 +93,13 @@
         const refs = typeof ev.references === 'string' ? JSON.parse(ev.references) : (ev.references || []);
         if (refs.length) {
           html += '<div class="mt-4"><p class="text-xs font-semibold uppercase tracking-wider text-base-content/40 mb-1">References</p><ul class="list-disc list-inside text-sm text-primary/70 break-all">';
-          refs.forEach(r => html += '<li>' + esc(r) + '</li>');
+          refs.forEach(r => {
+            if (r.startsWith('http')) {
+              html += '<li><a href="' + esc(r) + '" target="_blank" rel="noopener" class="link hover:text-primary">' + esc(r) + '</a></li>';
+            } else {
+              html += '<li>' + esc(r) + '</li>';
+            }
+          });
           html += '</ul></div>';
         }
 
