@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type, type GenerateContentResponse } from "@google/genai";
+import { GoogleGenAI, type GenerateContentResponse } from "@google/genai";
 import type { Listing, Evaluation } from "../types";
 
 // Set to true to use mock evaluations for testing
@@ -217,7 +217,7 @@ async function callGemini<T>(config: CallGeminiConfig<T>): Promise<{ result: T; 
         config: {
           ...(useSearch ? { tools: [{ googleSearch: {} }] } : {}),
           responseMimeType: "application/json",
-          responseSchema: schema,
+          responseJsonSchema: schema,
         },
       });
       const elapsed = Date.now() - startTime;
@@ -272,37 +272,37 @@ async function callGemini<T>(config: CallGeminiConfig<T>): Promise<{ result: T; 
 }
 
 const IDENTIFICATION_SCHEMA = {
-  type: Type.OBJECT,
+  type: "object",
   properties: {
-    isAuthentic: { type: Type.BOOLEAN },
-    itemIdentification: { type: Type.STRING },
-    identificationConfidence: { type: Type.NUMBER },
-    estimatedEra: { type: Type.STRING },
-    redFlags: { type: Type.ARRAY, items: { type: Type.STRING } },
+    isAuthentic: { type: "boolean" },
+    itemIdentification: { type: "string" },
+    identificationConfidence: { type: "number" },
+    estimatedEra: { type: "string" },
+    redFlags: { type: "array", items: { type: "string" } },
   },
   required: ["isAuthentic", "itemIdentification", "identificationConfidence", "estimatedEra", "redFlags"],
 };
 
 const VALUATION_SCHEMA = {
-  type: Type.OBJECT,
+  type: "object",
   properties: {
     soldListings: {
-      type: Type.ARRAY,
+      type: "array",
       items: {
-        type: Type.OBJECT,
+        type: "object",
         properties: {
-          title: { type: Type.STRING },
-          price: { type: Type.NUMBER },
-          url: { type: Type.STRING },
+          title: { type: "string" },
+          price: { type: "number" },
+          url: { type: "string" },
         },
         required: ["title"],
       },
     },
-    estimatedValue: { type: Type.NUMBER },
-    currentPrice: { type: Type.NUMBER },
-    margin: { type: Type.NUMBER },
-    confidence: { type: Type.NUMBER },
-    reasoning: { type: Type.STRING },
+    estimatedValue: { type: "number" },
+    currentPrice: { type: "number" },
+    margin: { type: "number" },
+    confidence: { type: "number" },
+    reasoning: { type: "string" },
   },
   required: ["soldListings", "currentPrice", "confidence", "reasoning"],
 };
