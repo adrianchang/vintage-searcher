@@ -47,7 +47,7 @@ const MOCK_EVALUATIONS: Record<string, Evaluation> = {
     redFlags: ["Condition not fully visible"],
     references: ["Similar sold for $135"],
     soldListings: [
-      { title: "Pendleton loop collar board shirt sz M", price: 135 },
+      { title: "Pendleton loop collar board shirt sz M", price: 135, url: null },
     ],
   },
   "https://www.ebay.com/itm/test-002": {
@@ -63,7 +63,7 @@ const MOCK_EVALUATIONS: Record<string, Evaluation> = {
     redFlags: [],
     references: ["Chain stitch bowling shirts sold $150-300"],
     soldListings: [
-      { title: "1950s chain stitch bowling shirt two-tone", price: 225 },
+      { title: "1950s chain stitch bowling shirt two-tone", price: 225, url: null },
     ],
   },
 };

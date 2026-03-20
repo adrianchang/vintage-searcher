@@ -56,6 +56,7 @@ Search for comparable SOLD items to establish market value. Use these search ter
 For EACH comparable sold item you find, add it to the soldListings array with:
 - title: description of the sold item (e.g. "Levi's 501 Big E redline selvedge 32x30")
 - price: the sold price in USD (null if unknown)
+- url: the listing URL if available (null otherwise)
 
 If you cannot find truly similar sold items, leave soldListings empty, state this in reasoning, and set confidence LOW.
 
@@ -133,7 +134,7 @@ interface IdentificationResult {
 }
 
 interface ValuationResult {
-  soldListings: { title: string; price: number | null }[];
+  soldListings: { title: string; price: number | null; url: string | null }[];
   estimatedValue: number | null;
   currentPrice: number;
   margin: number | null;
@@ -291,6 +292,7 @@ const VALUATION_SCHEMA = {
         properties: {
           title: { type: Type.STRING },
           price: { type: Type.NUMBER },
+          url: { type: Type.STRING },
         },
         required: ["title"],
       },
@@ -372,8 +374,8 @@ function getMockEvaluation(listing: Listing): Evaluation {
       redFlags: ["Condition not fully visible in photos"],
       references: ["Similar Pendleton loop collar sold for $135 on eBay 2024", "Vintage Pendleton price guide"],
       soldListings: [
-        { title: "Pendleton loop collar board shirt sz M", price: 135 },
-        { title: "Pendleton wool board shirt 1960s blue plaid", price: 110 },
+        { title: "Pendleton loop collar board shirt sz M", price: 135, url: null },
+        { title: "Pendleton wool board shirt 1960s blue plaid", price: 110, url: null },
       ],
     },
     "https://www.ebay.com/itm/123456789002": {
@@ -389,7 +391,7 @@ function getMockEvaluation(listing: Listing): Evaluation {
       redFlags: ["Mixed lot - quality varies", "Cannot verify individual pieces", "As-is condition"],
       references: ["Vintage dress lots typically yield 2-3x return for experienced resellers"],
       soldListings: [
-        { title: "Lot of 5 1950s vintage dresses mixed sizes", price: 175 },
+        { title: "Lot of 5 1950s vintage dresses mixed sizes", price: 175, url: null },
       ],
     },
     "https://www.ebay.com/itm/123456789003": {
@@ -405,9 +407,9 @@ function getMockEvaluation(listing: Listing): Evaluation {
       redFlags: ["Seller may know value - could be auction bait"],
       references: ["Big E 501s sold for $300-600 on eBay in 2024", "Levi's vintage dating guide confirms Big E = pre-1971"],
       soldListings: [
-        { title: "Levi's 501 Big E redline selvedge 33x30", price: 450 },
-        { title: "Levi's 501 Big E single stitch 1960s 31x32", price: 380 },
-        { title: "Vintage Levi's 501 Big E selvedge denim", price: 520 },
+        { title: "Levi's 501 Big E redline selvedge 33x30", price: 450, url: null },
+        { title: "Levi's 501 Big E single stitch 1960s 31x32", price: 380, url: null },
+        { title: "Vintage Levi's 501 Big E selvedge denim", price: 520, url: null },
       ],
     },
     "https://www.ebay.com/itm/123456789004": {
@@ -437,8 +439,8 @@ function getMockEvaluation(listing: Listing): Evaluation {
       redFlags: [],
       references: ["Chain stitch bowling shirts sold $150-300 on vintage marketplaces", "Rockabilly collectors pay premium for authentic 50s pieces"],
       soldListings: [
-        { title: "1950s chain stitch bowling shirt two-tone rayon", price: 225 },
-        { title: "Vintage 50s bowling shirt embroidered 'Al's Garage'", price: 180 },
+        { title: "1950s chain stitch bowling shirt two-tone rayon", price: 225, url: null },
+        { title: "Vintage 50s bowling shirt embroidered 'Al's Garage'", price: 180, url: null },
       ],
     },
     "https://www.ebay.com/itm/123456789007": {
@@ -454,7 +456,7 @@ function getMockEvaluation(listing: Listing): Evaluation {
       redFlags: ["Verify deadstock claim - check for storage wear"],
       references: ["Deadstock 70s jeans typically sell $100-200", "Landlubber was popular 70s brand"],
       soldListings: [
-        { title: "Landlubber bell bottom jeans 1970s deadstock sz 28", price: 160 },
+        { title: "Landlubber bell bottom jeans 1970s deadstock sz 28", price: 160, url: null },
       ],
     },
     "https://www.ebay.com/itm/123456789008": {
@@ -470,7 +472,7 @@ function getMockEvaluation(listing: Listing): Evaluation {
       redFlags: ["No brand identification", "Heavy wear may limit value"],
       references: ["Vintage chore coats sell $80-200 depending on condition and brand"],
       soldListings: [
-        { title: "Vintage blanket-lined denim chore coat workwear", price: 130 },
+        { title: "Vintage blanket-lined denim chore coat workwear", price: 130, url: null },
       ],
     },
     "https://www.ebay.com/itm/123456789009": {
@@ -486,8 +488,8 @@ function getMockEvaluation(listing: Listing): Evaluation {
       redFlags: ["Minor sequin loss mentioned"],
       references: ["ILGWU labels date pieces to 1900-1995, style suggests 1960s", "60s sequin gowns sell $150-300"],
       soldListings: [
-        { title: "1960s ILGWU sequin evening gown full length", price: 195 },
-        { title: "Vintage 60s sequin formal dress gold", price: 165 },
+        { title: "1960s ILGWU sequin evening gown full length", price: 195, url: null },
+        { title: "Vintage 60s sequin formal dress gold", price: 165, url: null },
       ],
     },
     "https://www.ebay.com/itm/123456789010": {
@@ -503,7 +505,7 @@ function getMockEvaluation(listing: Listing): Evaluation {
       redFlags: ["Likely 1990s not pre-1980s", "Common item - many available"],
       references: ["90s Carhartt Detroit jackets sell $80-120"],
       soldListings: [
-        { title: "Carhartt Detroit jacket Made in USA blanket lined", price: 95 },
+        { title: "Carhartt Detroit jacket Made in USA blanket lined", price: 95, url: null },
       ],
     },
   };
