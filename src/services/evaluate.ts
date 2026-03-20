@@ -230,10 +230,11 @@ async function callGemini<T>(config: CallGeminiConfig<T>): Promise<{ result: T; 
 
       const result = JSON.parse(text) as T;
 
+      const groundingMetadata = response.candidates?.[0]?.groundingMetadata;
+      console.log(`[${timestamp()}]   ${phaseLabel}: Grounding metadata:`, JSON.stringify(groundingMetadata, null, 2));
+
       const references = await extractGroundingReferences(response);
-      if (references.length > 0) {
-        console.log(`[${timestamp()}]   ${phaseLabel}: Found ${references.length} grounding sources`);
-      }
+      console.log(`[${timestamp()}]   ${phaseLabel}: Resolved references (${references.length}):`, references);
 
       console.log(`[${timestamp()}]   ✓ ${phaseLabel}: Completed in ${elapsed}ms`);
 
