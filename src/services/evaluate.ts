@@ -6,7 +6,7 @@ const USE_MOCK_DATA = process.env.USE_MOCK_DATA === "true";
 
 const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
 
-const EVALUATION_PROMPT = `You are a veteran vintage clothing collector evaluating an eBay listing. You MUST use Google Search — never skip searching.
+const IDENTIFICATION_PROMPT = `You are a veteran vintage clothing collector evaluating an eBay listing. You MUST use Google Search to verify brand/model/era details.
 
 Listing Title: {title}
 Listed Price: ${"{price}"}
@@ -33,22 +33,33 @@ Based on your visual inspection, record your identification in itemIdentificatio
 - Estimated era of manufacture
 - Key authenticating details you observed
 Note where the listing description differs from what you see.
-Set identificationConfidence (0-1): how sure are you about WHAT this item is? High if tags/labels are clear and construction details match. Low if you're guessing based on limited photos.
+Set identificationConfidence (0-1): how sure are you about WHAT this item is? High if tags/labels are clear and construction details match. Low if you're guessing based on limited photos.`;
 
-STEP 3 — COMPARABLE SALES RESEARCH (REQUIRED — search for each)
-Search for comparable SOLD items to establish market value:
-- eBay sold: "{brand} {item type} {era} sold vintage"
-- Japanese markets: "mercari {brand} {item}" (Japanese vintage market often has strong comps)
-- Price guides: "{brand} {era} vintage value guide"
+const VALUATION_PROMPT = `You are a veteran vintage clothing collector researching comparable sales for a specific item. You MUST use Google Search — never skip searching.
+
+ITEM IDENTIFIED IN PREVIOUS ANALYSIS:
+- Identification: {itemIdentification}
+- Estimated Era: {estimatedEra}
+- Identification Confidence: {identificationConfidence}
+- Red Flags: {redFlags}
+
+Original Listing:
+- Title: {title}
+- Listed Price: ${"{price}"}
+
+STEP 1 — COMPARABLE SALES RESEARCH (REQUIRED — search for each)
+Search for comparable SOLD items to establish market value. Use these search terms:
+- eBay sold: "{searchTerms} sold vintage"
+- Japanese markets: "mercari {searchTerms}" (Japanese vintage market often has strong comps)
+- Price guides: "{searchTerms} vintage value guide"
 
 For EACH comparable sold item you find, add it to the soldListings array with:
 - title: description of the sold item (e.g. "Levi's 501 Big E redline selvedge 32x30")
 - price: the sold price in USD (null if unknown)
-- url: the listing URL if available (null otherwise)
 
 If you cannot find truly similar sold items, leave soldListings empty, state this in reasoning, and set confidence LOW.
 
-STEP 4 — VALUATION
+STEP 2 — VALUATION
 Based on comparable sales found:
 - Set estimatedValue based on actual sold prices you found
 - Cite which items from soldListings support your estimatedValue
@@ -112,11 +123,42 @@ async function fetchListingImages(
   return imageParts;
 }
 
-function buildPrompt(listing: Listing): string {
-  return EVALUATION_PROMPT
+// Phase result types (internal only — merged into Evaluation before returning)
+interface IdentificationResult {
+  isAuthentic: boolean;
+  itemIdentification: string;
+  identificationConfidence: number;
+  estimatedEra: string;
+  redFlags: string[];
+}
+
+interface ValuationResult {
+  soldListings: { title: string; price: number | null }[];
+  estimatedValue: number | null;
+  currentPrice: number;
+  margin: number | null;
+  confidence: number;
+  reasoning: string;
+}
+
+function buildIdentificationPrompt(listing: Listing): string {
+  return IDENTIFICATION_PROMPT
     .replace("{title}", listing.title)
     .replace("{price}", listing.price.toString())
     .replace("{description}", listing.description);
+}
+
+function buildValuationPrompt(listing: Listing, identification: IdentificationResult): string {
+  // Derive search terms from the identification
+  const searchTerms = identification.itemIdentification;
+  return VALUATION_PROMPT
+    .replace("{itemIdentification}", identification.itemIdentification)
+    .replace("{estimatedEra}", identification.estimatedEra || "Unknown")
+    .replace("{identificationConfidence}", identification.identificationConfidence.toFixed(2))
+    .replace("{redFlags}", identification.redFlags.length > 0 ? identification.redFlags.join(", ") : "None")
+    .replace("{title}", listing.title)
+    .replace("{price}", listing.price.toString())
+    .replace(/\{searchTerms\}/g, searchTerms);
 }
 
 async function resolveRedirectUrl(url: string): Promise<string> {
@@ -145,16 +187,22 @@ async function extractGroundingReferences(response: GenerateContentResponse): Pr
   return refs;
 }
 
-async function callGeminiWithRetry(
-  prompt: string,
-  imageParts: ImagePart[],
-  timestamp: () => string,
-): Promise<Evaluation> {
+interface CallGeminiConfig<T> {
+  prompt: string;
+  imageParts: ImagePart[];
+  schema: Record<string, unknown>;
+  useSearch: boolean;
+  timestamp: () => string;
+  phaseLabel: string;
+}
+
+async function callGemini<T>(config: CallGeminiConfig<T>): Promise<{ result: T; references: string[] }> {
+  const { prompt, imageParts, schema, useSearch, timestamp, phaseLabel } = config;
   let lastError: Error | null = null;
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
-      console.log(`[${timestamp()}]   Calling Gemini API${attempt > 0 ? ` (attempt ${attempt + 1})` : ""}...`);
+      console.log(`[${timestamp()}]   ${phaseLabel}: Calling Gemini API${attempt > 0 ? ` (attempt ${attempt + 1})` : ""}...`);
       await throttle();
       const startTime = Date.now();
       const response = await genAI.models.generateContent({
@@ -166,61 +214,29 @@ async function callGeminiWithRetry(
           },
         ],
         config: {
-          tools: [{ googleSearch: {} }],
+          ...(useSearch ? { tools: [{ googleSearch: {} }] } : {}),
           responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              isAuthentic: { type: Type.BOOLEAN },
-              itemIdentification: { type: Type.STRING },
-              identificationConfidence: { type: Type.NUMBER },
-              estimatedEra: { type: Type.STRING },
-              estimatedValue: { type: Type.NUMBER },
-              currentPrice: { type: Type.NUMBER },
-              margin: { type: Type.NUMBER },
-              confidence: { type: Type.NUMBER },
-              reasoning: { type: Type.STRING },
-              redFlags: { type: Type.ARRAY, items: { type: Type.STRING } },
-              soldListings: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    title: { type: Type.STRING },
-                    price: { type: Type.NUMBER },
-                    url: { type: Type.STRING },
-                  },
-                  required: ["title"],
-                },
-              },
-            },
-            required: ["isAuthentic", "itemIdentification", "identificationConfidence", "currentPrice", "confidence", "reasoning", "redFlags", "soldListings"],
-          },
+          responseSchema: schema,
         },
       });
       const elapsed = Date.now() - startTime;
 
       const text = response.text ?? "";
       if (!text) {
-        console.log(`[${timestamp()}]   ✗ Empty response from Gemini (${elapsed}ms)`);
-        throw new Error("Empty response from Gemini");
+        console.log(`[${timestamp()}]   ✗ ${phaseLabel}: Empty response from Gemini (${elapsed}ms)`);
+        throw new Error(`${phaseLabel}: Empty response from Gemini`);
       }
 
-      const evaluation = JSON.parse(text) as Evaluation;
+      const result = JSON.parse(text) as T;
 
-      // Ensure soldListings defaults to empty array if not returned
-      evaluation.soldListings = evaluation.soldListings ?? [];
-
-      // Use only grounding metadata for references (model-generated URLs are hallucinated)
-      const groundingRefs = await extractGroundingReferences(response);
-      evaluation.references = groundingRefs;
-      if (groundingRefs.length > 0) {
-        console.log(`[${timestamp()}]   Found ${groundingRefs.length} grounding sources`);
+      const references = await extractGroundingReferences(response);
+      if (references.length > 0) {
+        console.log(`[${timestamp()}]   ${phaseLabel}: Found ${references.length} grounding sources`);
       }
 
-      console.log(`[${timestamp()}]   ✓ Evaluated in ${elapsed}ms - Era: ${evaluation.estimatedEra}, Margin: $${evaluation.margin ?? "N/A"}, Confidence: ${(evaluation.confidence * 100).toFixed(0)}%`);
+      console.log(`[${timestamp()}]   ✓ ${phaseLabel}: Completed in ${elapsed}ms`);
 
-      return evaluation;
+      return { result, references };
     } catch (error: unknown) {
       lastError = error as Error;
       const errorMsg = error instanceof Error ? error.message : String(error);
@@ -236,22 +252,57 @@ async function callGeminiWithRetry(
       if (isRetryable && attempt < MAX_RETRIES - 1) {
         const delay = INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt);
         const reason = errorMsg.includes("429") ? "Rate limited" : "Network error";
-        console.log(`[${timestamp()}]   ⚠ ${reason}: ${errorMsg.slice(0, 100)}`);
+        console.log(`[${timestamp()}]   ⚠ ${phaseLabel}: ${reason}: ${errorMsg.slice(0, 100)}`);
         console.log(`[${timestamp()}]   Retrying in ${delay / 1000}s... (attempt ${attempt + 1}/${MAX_RETRIES})`);
         await sleep(delay);
         continue;
       }
 
       // Log full error details before throwing
-      console.error(`[${timestamp()}]   ✗ Error:`, error);
+      console.error(`[${timestamp()}]   ✗ ${phaseLabel} Error:`, error);
       throw error;
     }
   }
 
   // If we exhausted retries, throw the last error
-  console.log(`[${timestamp()}]   ✗ Max retries exceeded`);
-  throw lastError || new Error("Max retries exceeded");
+  console.log(`[${timestamp()}]   ✗ ${phaseLabel}: Max retries exceeded`);
+  throw lastError || new Error(`${phaseLabel}: Max retries exceeded`);
 }
+
+const IDENTIFICATION_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    isAuthentic: { type: Type.BOOLEAN },
+    itemIdentification: { type: Type.STRING },
+    identificationConfidence: { type: Type.NUMBER },
+    estimatedEra: { type: Type.STRING },
+    redFlags: { type: Type.ARRAY, items: { type: Type.STRING } },
+  },
+  required: ["isAuthentic", "itemIdentification", "identificationConfidence", "estimatedEra", "redFlags"],
+};
+
+const VALUATION_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    soldListings: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          title: { type: Type.STRING },
+          price: { type: Type.NUMBER },
+        },
+        required: ["title"],
+      },
+    },
+    estimatedValue: { type: Type.NUMBER },
+    currentPrice: { type: Type.NUMBER },
+    margin: { type: Type.NUMBER },
+    confidence: { type: Type.NUMBER },
+    reasoning: { type: Type.STRING },
+  },
+  required: ["soldListings", "currentPrice", "confidence", "reasoning"],
+};
 
 export async function evaluateListing(listing: Listing): Promise<Evaluation> {
   if (USE_MOCK_DATA) return getMockEvaluation(listing);
@@ -259,8 +310,50 @@ export async function evaluateListing(listing: Listing): Promise<Evaluation> {
   console.log(`[${timestamp()}] Evaluating: ${listing.title.slice(0, 50)}...`);
 
   const imageParts = await fetchListingImages(listing, timestamp);
-  const prompt = buildPrompt(listing);
-  return callGeminiWithRetry(prompt, imageParts, timestamp);
+
+  // Phase 1: Identification (with images + search for verification)
+  const identificationPrompt = buildIdentificationPrompt(listing);
+  const { result: identification, references: refs1 } = await callGemini<IdentificationResult>({
+    prompt: identificationPrompt,
+    imageParts,
+    schema: IDENTIFICATION_SCHEMA,
+    useSearch: true,
+    timestamp,
+    phaseLabel: "Phase 1: Identification",
+  });
+
+  console.log(`[${timestamp()}]   Identified as: ${identification.itemIdentification} (${(identification.identificationConfidence * 100).toFixed(0)}% confidence)`);
+
+  // Phase 2: Valuation (search-heavy, uses identification context)
+  const valuationPrompt = buildValuationPrompt(listing, identification);
+  const { result: valuation, references: refs2 } = await callGemini<ValuationResult>({
+    prompt: valuationPrompt,
+    imageParts,
+    schema: VALUATION_SCHEMA,
+    useSearch: true,
+    timestamp,
+    phaseLabel: "Phase 2: Valuation",
+  });
+
+  // Merge into single Evaluation
+  const evaluation: Evaluation = {
+    isAuthentic: identification.isAuthentic,
+    itemIdentification: identification.itemIdentification,
+    identificationConfidence: identification.identificationConfidence,
+    estimatedEra: identification.estimatedEra,
+    redFlags: identification.redFlags,
+    soldListings: valuation.soldListings ?? [],
+    estimatedValue: valuation.estimatedValue ?? null,
+    currentPrice: valuation.currentPrice,
+    margin: valuation.margin ?? null,
+    confidence: valuation.confidence,
+    reasoning: valuation.reasoning,
+    references: [...refs1, ...refs2],
+  };
+
+  console.log(`[${timestamp()}]   ✓ Final: Era: ${evaluation.estimatedEra}, Margin: $${evaluation.margin ?? "N/A"}, Confidence: ${(evaluation.confidence * 100).toFixed(0)}%`);
+
+  return evaluation;
 }
 
 // Mock evaluations based on listing URL (matches mock listings in ecommerce.ts)
@@ -279,8 +372,8 @@ function getMockEvaluation(listing: Listing): Evaluation {
       redFlags: ["Condition not fully visible in photos"],
       references: ["Similar Pendleton loop collar sold for $135 on eBay 2024", "Vintage Pendleton price guide"],
       soldListings: [
-        { title: "Pendleton loop collar board shirt sz M", price: 135, url: null },
-        { title: "Pendleton wool board shirt 1960s blue plaid", price: 110, url: null },
+        { title: "Pendleton loop collar board shirt sz M", price: 135 },
+        { title: "Pendleton wool board shirt 1960s blue plaid", price: 110 },
       ],
     },
     "https://www.ebay.com/itm/123456789002": {
@@ -296,7 +389,7 @@ function getMockEvaluation(listing: Listing): Evaluation {
       redFlags: ["Mixed lot - quality varies", "Cannot verify individual pieces", "As-is condition"],
       references: ["Vintage dress lots typically yield 2-3x return for experienced resellers"],
       soldListings: [
-        { title: "Lot of 5 1950s vintage dresses mixed sizes", price: 175, url: null },
+        { title: "Lot of 5 1950s vintage dresses mixed sizes", price: 175 },
       ],
     },
     "https://www.ebay.com/itm/123456789003": {
@@ -312,9 +405,9 @@ function getMockEvaluation(listing: Listing): Evaluation {
       redFlags: ["Seller may know value - could be auction bait"],
       references: ["Big E 501s sold for $300-600 on eBay in 2024", "Levi's vintage dating guide confirms Big E = pre-1971"],
       soldListings: [
-        { title: "Levi's 501 Big E redline selvedge 33x30", price: 450, url: null },
-        { title: "Levi's 501 Big E single stitch 1960s 31x32", price: 380, url: null },
-        { title: "Vintage Levi's 501 Big E selvedge denim", price: 520, url: null },
+        { title: "Levi's 501 Big E redline selvedge 33x30", price: 450 },
+        { title: "Levi's 501 Big E single stitch 1960s 31x32", price: 380 },
+        { title: "Vintage Levi's 501 Big E selvedge denim", price: 520 },
       ],
     },
     "https://www.ebay.com/itm/123456789004": {
@@ -344,8 +437,8 @@ function getMockEvaluation(listing: Listing): Evaluation {
       redFlags: [],
       references: ["Chain stitch bowling shirts sold $150-300 on vintage marketplaces", "Rockabilly collectors pay premium for authentic 50s pieces"],
       soldListings: [
-        { title: "1950s chain stitch bowling shirt two-tone rayon", price: 225, url: null },
-        { title: "Vintage 50s bowling shirt embroidered 'Al's Garage'", price: 180, url: null },
+        { title: "1950s chain stitch bowling shirt two-tone rayon", price: 225 },
+        { title: "Vintage 50s bowling shirt embroidered 'Al's Garage'", price: 180 },
       ],
     },
     "https://www.ebay.com/itm/123456789007": {
@@ -361,7 +454,7 @@ function getMockEvaluation(listing: Listing): Evaluation {
       redFlags: ["Verify deadstock claim - check for storage wear"],
       references: ["Deadstock 70s jeans typically sell $100-200", "Landlubber was popular 70s brand"],
       soldListings: [
-        { title: "Landlubber bell bottom jeans 1970s deadstock sz 28", price: 160, url: null },
+        { title: "Landlubber bell bottom jeans 1970s deadstock sz 28", price: 160 },
       ],
     },
     "https://www.ebay.com/itm/123456789008": {
@@ -377,7 +470,7 @@ function getMockEvaluation(listing: Listing): Evaluation {
       redFlags: ["No brand identification", "Heavy wear may limit value"],
       references: ["Vintage chore coats sell $80-200 depending on condition and brand"],
       soldListings: [
-        { title: "Vintage blanket-lined denim chore coat workwear", price: 130, url: null },
+        { title: "Vintage blanket-lined denim chore coat workwear", price: 130 },
       ],
     },
     "https://www.ebay.com/itm/123456789009": {
@@ -393,8 +486,8 @@ function getMockEvaluation(listing: Listing): Evaluation {
       redFlags: ["Minor sequin loss mentioned"],
       references: ["ILGWU labels date pieces to 1900-1995, style suggests 1960s", "60s sequin gowns sell $150-300"],
       soldListings: [
-        { title: "1960s ILGWU sequin evening gown full length", price: 195, url: null },
-        { title: "Vintage 60s sequin formal dress gold", price: 165, url: null },
+        { title: "1960s ILGWU sequin evening gown full length", price: 195 },
+        { title: "Vintage 60s sequin formal dress gold", price: 165 },
       ],
     },
     "https://www.ebay.com/itm/123456789010": {
@@ -410,7 +503,7 @@ function getMockEvaluation(listing: Listing): Evaluation {
       redFlags: ["Likely 1990s not pre-1980s", "Common item - many available"],
       references: ["90s Carhartt Detroit jackets sell $80-120"],
       soldListings: [
-        { title: "Carhartt Detroit jacket Made in USA blanket lined", price: 95, url: null },
+        { title: "Carhartt Detroit jacket Made in USA blanket lined", price: 95 },
       ],
     },
   };

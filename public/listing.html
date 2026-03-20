@@ -83,7 +83,7 @@
           html += '<div class="space-y-1">';
           comps.forEach(c => {
             html += '<div class="flex justify-between text-sm">';
-            html += c.url ? '<a href="' + esc(c.url) + '" target="_blank" rel="noopener" class="link text-base-content/70 hover:text-primary">' + esc(c.title) + '</a>' : '<span class="text-base-content/70">' + esc(c.title) + '</span>';
+            html += '<span class="text-base-content/70">' + esc(c.title) + '</span>';
             html += '<span class="font-semibold text-success shrink-0 ml-2">' + (c.price != null ? '$' + c.price.toFixed(2) : 'N/A') + '</span>';
             html += '</div>';
           });

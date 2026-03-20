@@ -22,7 +22,7 @@ export interface Evaluation {
   reasoning: string;
   redFlags: string[];
   references: string[];
-  soldListings: { title: string; price: number | null; url: string | null }[];
+  soldListings: { title: string; price: number | null }[];
 }
 
 // Config for the scanner
