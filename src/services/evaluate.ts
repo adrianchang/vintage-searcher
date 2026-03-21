@@ -35,7 +35,7 @@ Based on your visual inspection, record your identification in itemIdentificatio
 Note where the listing description differs from what you see.
 Set identificationConfidence (0-1): how sure are you about WHAT this item is? High if tags/labels are clear and construction details match. Low if you're guessing based on limited photos.`;
 
-const VALUATION_PROMPT = `You are a veteran vintage clothing collector researching comparable sales for a specific item. You MUST use Google Search — never skip searching.
+const VALUATION_PROMPT = `You are a veteran vintage clothing collector evaluating comparable sales data.
 
 ITEM IDENTIFIED IN PREVIOUS ANALYSIS:
 - Identification: {itemIdentification}
@@ -47,28 +47,26 @@ Original Listing:
 - Title: {title}
 - Listed Price: ${"{price}"}
 
-STEP 1 — COMPARABLE SALES RESEARCH (REQUIRED — search for each)
-Search for comparable SOLD items to establish market value. Use these search terms:
-- eBay sold: "{searchTerms} sold vintage"
-- Japanese markets: "mercari {searchTerms}" (Japanese vintage market often has strong comps)
-- Price guides: "{searchTerms} vintage value guide"
+COMPARABLE LISTINGS FOUND (from web search):
+{searchResults}
 
-For EACH comparable sold item you find, add it to the soldListings array with:
-- title: description of the sold item (e.g. "Levi's 501 Big E redline selvedge 32x30")
-- price: the sold price in USD (null if unknown)
-- url: the listing URL if available (null otherwise)
+INSTRUCTIONS:
+Visit each URL above using your URL context tool. Read the actual listing pages to extract:
+- The item title/description
+- The sold price (or listed price if not sold)
+- Condition and any relevant details
 
-If you cannot find truly similar sold items, leave soldListings empty, state this in reasoning, and set confidence LOW.
+For EACH listing you can verify, add it to soldListings with:
+- title: description of the item
+- price: the price in USD (null if unknown)
+- url: the listing URL
 
-STEP 2 — VALUATION
-Based on comparable sales found:
-- Set estimatedValue based on actual sold prices you found
-- Cite which items from soldListings support your estimatedValue
-- If comps are weak or not truly similar, be conservative and note it
+Then produce your valuation:
+- Set estimatedValue based on the prices you found
 - Calculate margin (estimatedValue - currentPrice)
-- Set confidence (0-1): how confident are you in the VALUATION? High if you found strong, truly similar comps. Low if comps are weak, dissimilar, or missing.
+- Set confidence (0-1): high if you found strong, similar comps. Low if comps are weak or dissimilar.
 
-IMPORTANT: estimatedValue MUST come from real sold comps, not guesses. No comps = low confidence.`;
+IMPORTANT: estimatedValue MUST come from the comps above, not guesses. If none of the URLs are useful, set confidence LOW.`;
 
 const MAX_RETRIES = 3; // Max retry attempts before giving up
 const INITIAL_RETRY_DELAY_MS = 10000; // 10 seconds (reduced for faster retries)
@@ -142,6 +140,70 @@ interface ValuationResult {
   reasoning: string;
 }
 
+interface SearchResult {
+  title: string;
+  link: string;
+  snippet: string;
+  price?: string;
+}
+
+async function searchForComps(
+  identification: IdentificationResult,
+  timestamp: () => string,
+): Promise<SearchResult[]> {
+  const apiKey = process.env.GOOGLE_CSE_API_KEY;
+  const cx = process.env.GOOGLE_CSE_CX;
+  if (!apiKey || !cx) {
+    console.log(`[${timestamp()}]   ⚠ Google CSE not configured (missing GOOGLE_CSE_API_KEY or GOOGLE_CSE_CX)`);
+    return [];
+  }
+
+  const query = `${identification.itemIdentification} sold`;
+  console.log(`[${timestamp()}]   Google CSE: Searching for "${query}"`);
+
+  try {
+    const url = new URL("https://www.googleapis.com/customsearch/v1");
+    url.searchParams.set("key", apiKey);
+    url.searchParams.set("cx", cx);
+    url.searchParams.set("q", query);
+    url.searchParams.set("num", "10");
+
+    const response = await fetch(url.toString());
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.log(`[${timestamp()}]   ⚠ Google CSE error (${response.status}): ${errorText.slice(0, 200)}`);
+      return [];
+    }
+
+    const data = await response.json() as {
+      items?: Array<{
+        title: string;
+        link: string;
+        snippet: string;
+        pagemap?: { metatags?: Array<Record<string, string>> };
+      }>;
+    };
+
+    const results: SearchResult[] = (data.items ?? []).map((item) => {
+      const price = item.pagemap?.metatags?.[0]?.["product:price:amount"]
+        || item.pagemap?.metatags?.[0]?.["og:price:amount"];
+      return {
+        title: item.title,
+        link: item.link,
+        snippet: item.snippet,
+        ...(price ? { price } : {}),
+      };
+    });
+
+    console.log(`[${timestamp()}]   Google CSE: Found ${results.length} results`);
+    return results;
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : "Unknown error";
+    console.log(`[${timestamp()}]   ⚠ Google CSE fetch error: ${errMsg}`);
+    return [];
+  }
+}
+
 function buildIdentificationPrompt(listing: Listing): string {
   return IDENTIFICATION_PROMPT
     .replace("{title}", listing.title)
@@ -149,9 +211,17 @@ function buildIdentificationPrompt(listing: Listing): string {
     .replace("{description}", listing.description);
 }
 
-function buildValuationPrompt(listing: Listing, identification: IdentificationResult): string {
-  // Derive search terms from the identification
-  const searchTerms = identification.itemIdentification;
+function buildValuationPrompt(listing: Listing, identification: IdentificationResult, searchResults: SearchResult[]): string {
+  const formattedResults = searchResults.length > 0
+    ? searchResults.map((r, i) => {
+      let entry = `${i + 1}. "${r.title}"`;
+      if (r.price) entry += ` - $${r.price}`;
+      entry += `\n   ${r.link}`;
+      entry += `\n   Snippet: "${r.snippet}"`;
+      return entry;
+    }).join("\n\n")
+    : "(No comparable listings found from web search)";
+
   return VALUATION_PROMPT
     .replace("{itemIdentification}", identification.itemIdentification)
     .replace("{estimatedEra}", identification.estimatedEra || "Unknown")
@@ -159,7 +229,7 @@ function buildValuationPrompt(listing: Listing, identification: IdentificationRe
     .replace("{redFlags}", identification.redFlags.length > 0 ? identification.redFlags.join(", ") : "None")
     .replace("{title}", listing.title)
     .replace("{price}", listing.price.toString())
-    .replace(/\{searchTerms\}/g, searchTerms);
+    .replace("{searchResults}", formattedResults);
 }
 
 async function resolveRedirectUrl(url: string): Promise<string> {
@@ -192,13 +262,13 @@ interface CallGeminiConfig<T> {
   prompt: string;
   imageParts: ImagePart[];
   schema: Record<string, unknown>;
-  useSearch: boolean;
+  tools: Record<string, unknown>[];
   timestamp: () => string;
   phaseLabel: string;
 }
 
 async function callGemini<T>(config: CallGeminiConfig<T>): Promise<{ result: T; references: string[] }> {
-  const { prompt, imageParts, schema, useSearch, timestamp, phaseLabel } = config;
+  const { prompt, imageParts, schema, tools, timestamp, phaseLabel } = config;
   let lastError: Error | null = null;
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
@@ -215,7 +285,7 @@ async function callGemini<T>(config: CallGeminiConfig<T>): Promise<{ result: T; 
           },
         ],
         config: {
-          ...(useSearch ? { tools: [{ googleSearch: {} }] } : {}),
+          ...(tools.length > 0 ? { tools } : {}),
           responseMimeType: "application/json",
           responseJsonSchema: schema,
         },
@@ -314,26 +384,29 @@ export async function evaluateListing(listing: Listing): Promise<Evaluation> {
 
   const imageParts = await fetchListingImages(listing, timestamp);
 
-  // Phase 1: Identification (with images + search for verification)
+  // Phase 1: Identification (with images + Google Search for verification)
   const identificationPrompt = buildIdentificationPrompt(listing);
   const { result: identification, references: refs1 } = await callGemini<IdentificationResult>({
     prompt: identificationPrompt,
     imageParts,
     schema: IDENTIFICATION_SCHEMA,
-    useSearch: true,
+    tools: [{ googleSearch: {} }],
     timestamp,
     phaseLabel: "Phase 1: Identification",
   });
 
   console.log(`[${timestamp()}]   Identified as: ${identification.itemIdentification} (${(identification.identificationConfidence * 100).toFixed(0)}% confidence)`);
 
-  // Phase 2: Valuation (search-heavy, uses identification context)
-  const valuationPrompt = buildValuationPrompt(listing, identification);
+  // Google Custom Search: find comparable listings
+  const searchResults = await searchForComps(identification, timestamp);
+
+  // Phase 2: Valuation (Gemini visits URLs via urlContext)
+  const valuationPrompt = buildValuationPrompt(listing, identification, searchResults);
   const { result: valuation, references: refs2 } = await callGemini<ValuationResult>({
     prompt: valuationPrompt,
     imageParts,
     schema: VALUATION_SCHEMA,
-    useSearch: true,
+    tools: [{ urlContext: {} }],
     timestamp,
     phaseLabel: "Phase 2: Valuation",
   });
