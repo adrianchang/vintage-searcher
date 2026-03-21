@@ -28,11 +28,12 @@ Examine the photos carefully. Do NOT trust the listing title/description blindly
   - Condition: wear patterns, fading, holes, stains, repairs, patina
 
 STEP 2 — ITEM IDENTIFICATION
-Based on your visual inspection, record your identification in itemIdentification. Be specific:
-- Brand + model/style (e.g. "Levi's Type III Trucker Jacket, 70505-0217")
-- Estimated era of manufacture
-- Key authenticating details you observed
-Note where the listing description differs from what you see.
+Based on your visual inspection, record your identification in itemIdentification as a SHORT label (under 15 words). This will be used as a search query, so keep it concise.
+- Format: "Brand Model/Style, Era" — e.g. "Levi's Type III Trucker Jacket 70505, 1970s" or "Pendleton Board Shirt Loop Collar, 1960s"
+- Do NOT include lengthy descriptions, construction details, or explanations in this field.
+
+Set estimatedEra to the decade or range (e.g. "1970s", "1960s-1970s").
+Put authenticating details (tags, hardware, stitching, red flags) in the redFlags array and let identificationConfidence reflect your certainty.
 Set identificationConfidence (0-1): how sure are you about WHAT this item is? High if tags/labels are clear and construction details match. Low if you're guessing based on limited photos.`;
 
 const VALUATION_PROMPT = `You are a veteran vintage clothing collector evaluating comparable sales data.
