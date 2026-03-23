@@ -1,10 +1,11 @@
 import { GoogleGenAI, type GenerateContentResponse } from "@google/genai";
+import { GoogleAuth } from "google-auth-library";
 import type { Listing, Evaluation } from "../types";
 
 // Set to true to use mock evaluations for testing
 const USE_MOCK_DATA = process.env.USE_MOCK_DATA === "true";
 
-const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "not-set" });
 
 const IDENTIFICATION_PROMPT = `You are a veteran vintage clothing collector evaluating an eBay listing. You MUST use Google Search to verify brand/model/era details.
 
@@ -36,38 +37,6 @@ Set estimatedEra to the decade or range (e.g. "1970s", "1960s-1970s").
 Put authenticating details (tags, hardware, stitching, red flags) in the redFlags array and let identificationConfidence reflect your certainty.
 Set identificationConfidence (0-1): how sure are you about WHAT this item is? High if tags/labels are clear and construction details match. Low if you're guessing based on limited photos.`;
 
-const VALUATION_PROMPT = `You are a veteran vintage clothing collector evaluating comparable sales data.
-
-ITEM IDENTIFIED IN PREVIOUS ANALYSIS:
-- Identification: {itemIdentification}
-- Estimated Era: {estimatedEra}
-- Identification Confidence: {identificationConfidence}
-- Red Flags: {redFlags}
-
-Original Listing:
-- Title: {title}
-- Listed Price: ${"{price}"}
-
-COMPARABLE LISTINGS FOUND (from web search):
-{searchResults}
-
-INSTRUCTIONS:
-Visit each URL above using your URL context tool. Read the actual listing pages to extract:
-- The item title/description
-- The sold price (or listed price if not sold)
-- Condition and any relevant details
-
-For EACH listing you can verify, add it to soldListings with:
-- title: description of the item
-- price: the price in USD (null if unknown)
-- url: the listing URL
-
-Then produce your valuation:
-- Set estimatedValue based on the prices you found
-- Calculate margin (estimatedValue - currentPrice)
-- Set confidence (0-1): high if you found strong, similar comps. Low if comps are weak or dissimilar.
-
-IMPORTANT: estimatedValue MUST come from the comps above, not guesses. If none of the URLs are useful, set confidence LOW.`;
 
 const MAX_RETRIES = 3; // Max retry attempts before giving up
 const INITIAL_RETRY_DELAY_MS = 10000; // 10 seconds (reduced for faster retries)
@@ -132,14 +101,6 @@ interface IdentificationResult {
   redFlags: string[];
 }
 
-interface ValuationResult {
-  soldListings: { title: string; price: number | null; url: string | null }[];
-  estimatedValue: number | null;
-  currentPrice: number;
-  margin: number | null;
-  confidence: number;
-  reasoning: string;
-}
 
 interface SearchResult {
   title: string;
@@ -148,60 +109,157 @@ interface SearchResult {
   price?: string;
 }
 
-async function searchForComps(
-  identification: IdentificationResult,
-  timestamp: () => string,
-): Promise<SearchResult[]> {
-  const apiKey = process.env.GOOGLE_CSE_API_KEY;
-  const cx = process.env.GOOGLE_CSE_CX;
-  if (!apiKey || !cx) {
-    console.log(`[${timestamp()}]   ⚠ Google CSE not configured (missing GOOGLE_CSE_API_KEY or GOOGLE_CSE_CX)`);
-    return [];
+interface VertexSearchResponse {
+  results?: Array<{
+    document?: {
+      derivedStructData?: {
+        title?: string;
+        link?: string;
+        snippets?: Array<{ snippet?: string }>;
+        pagemap?: { metatags?: Array<Record<string, string>> };
+      };
+    };
+  }>;
+  summary?: {
+    summaryText?: string;
+  };
+}
+
+const vertexAuth = new GoogleAuth({
+  keyFilename: process.env.GOOGLE_SERVICE_ACCOUNT_PATH || "./service-account.json",
+  scopes: ["https://www.googleapis.com/auth/cloud-platform"],
+});
+
+const VERTEX_PROJECT_ID = process.env.VERTEX_PROJECT_ID || "vintage-searcher";
+const VERTEX_ENGINE_ID = process.env.VERTEX_ENGINE_ID || "vintage-pricer_1774229259628";
+
+interface ValuationSummary {
+  estimatedValue: number | null;
+  confidence: number;
+  reasoning: string;
+  soldListings: { title: string; price: number | null; url: string }[];
+}
+
+const FALLBACK_VALUATION: ValuationSummary = {
+  estimatedValue: null,
+  confidence: 0.2,
+  reasoning: "No comparable listings found.",
+  soldListings: [],
+};
+
+export function parseValuationSummary(summaryText: string): ValuationSummary {
+  if (!summaryText.trim()) {
+    return { ...FALLBACK_VALUATION };
   }
 
+  try {
+    // Strip markdown code fences if present
+    const jsonStr = summaryText.replace(/```json?\s*/g, "").replace(/```\s*/g, "").trim();
+    const parsed = JSON.parse(jsonStr) as Partial<ValuationSummary>;
+    return {
+      estimatedValue: parsed.estimatedValue ?? null,
+      confidence: Math.min(1, Math.max(0, parsed.confidence ?? 0.2)),
+      reasoning: parsed.reasoning ?? FALLBACK_VALUATION.reasoning,
+      soldListings: (parsed.soldListings ?? []).map((s) => ({
+        title: s.title ?? "",
+        price: s.price ?? null,
+        url: s.url ?? "",
+      })),
+    };
+  } catch {
+    return { ...FALLBACK_VALUATION, reasoning: summaryText };
+  }
+}
+
+async function searchForComps(
+  identification: IdentificationResult,
+  listing: Listing,
+  timestamp: () => string,
+): Promise<{ results: SearchResult[]; valuation: ValuationSummary }> {
   const query = `${identification.itemIdentification} sold`;
-  console.log(`[${timestamp()}]   Google CSE: Searching for "${query}"`);
+  console.log(`[${timestamp()}]   Vertex AI Search: Searching for "${query}"`);
 
   try {
-    const url = new URL("https://www.googleapis.com/customsearch/v1");
-    url.searchParams.set("key", apiKey);
-    url.searchParams.set("cx", cx);
-    url.searchParams.set("q", query);
-    url.searchParams.set("num", "10");
+    const client = await vertexAuth.getClient();
+    const token = await client.getAccessToken();
 
-    const response = await fetch(url.toString());
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.log(`[${timestamp()}]   ⚠ Google CSE error (${response.status}): ${errorText.slice(0, 200)}`);
-      return [];
-    }
+    const url = `https://discoveryengine.googleapis.com/v1/projects/${VERTEX_PROJECT_ID}/locations/global/collections/default_collection/engines/${VERTEX_ENGINE_ID}/servingConfigs/default_serving_config:search`;
 
-    const data = await response.json() as {
-      items?: Array<{
-        title: string;
-        link: string;
-        snippet: string;
-        pagemap?: { metatags?: Array<Record<string, string>> };
-      }>;
-    };
+    const preamble = `You are a vintage clothing pricing expert. The item being evaluated is: "${identification.itemIdentification}" (${identification.estimatedEra}). It is currently listed at $${listing.price}.
 
-    const results: SearchResult[] = (data.items ?? []).map((item) => {
-      const price = item.pagemap?.metatags?.[0]?.["product:price:amount"]
-        || item.pagemap?.metatags?.[0]?.["og:price:amount"];
-      return {
-        title: item.title,
-        link: item.link,
-        snippet: item.snippet,
-        ...(price ? { price } : {}),
-      };
+Analyze the search results and respond with ONLY a valid JSON object (no markdown, no code fences):
+{
+  "estimatedValue": <median sold price in USD as a number, or null if no prices found>,
+  "confidence": <0.0-1.0, high if multiple similar items with clear prices, low if few/weak comps>,
+  "reasoning": "<1-2 sentences explaining the valuation based on the comps found>",
+  "soldListings": [
+    {"title": "<item description>", "price": <price in USD or null>, "url": "<listing URL>"}
+  ]
+}
+
+Rules:
+- Only include listings that are genuinely comparable to the item being evaluated
+- Extract the actual sold/listed price from each result — look at snippets and page content
+- estimatedValue should be the median of comparable prices, NOT a guess
+- If no real prices are found, set estimatedValue to null and confidence below 0.3
+- Include the URL for each sold listing`;
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token.token}`,
+      },
+      body: JSON.stringify({
+        query,
+        pageSize: 10,
+        contentSearchSpec: {
+          snippetSpec: { returnSnippet: true },
+          summarySpec: {
+            summaryResultCount: 5,
+            includeCitations: true,
+            modelPromptSpec: { preamble },
+          },
+        },
+      }),
     });
 
-    console.log(`[${timestamp()}]   Google CSE: Found ${results.length} results`);
-    return results;
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.log(`[${timestamp()}]   ⚠ Vertex AI Search error (${response.status}): ${errorText.slice(0, 200)}`);
+      return { results: [], valuation: FALLBACK_VALUATION };
+    }
+
+    const data = await response.json() as VertexSearchResponse;
+
+    const results: SearchResult[] = (data.results ?? []).map((r) => {
+      const doc = r.document?.derivedStructData;
+      const price = doc?.pagemap?.metatags?.[0]?.["product:price:amount"]
+        || doc?.pagemap?.metatags?.[0]?.["og:price:amount"];
+      return {
+        title: doc?.title ?? "",
+        link: doc?.link ?? "",
+        snippet: doc?.snippets?.[0]?.snippet ?? "",
+        ...(price ? { price } : {}),
+      };
+    }).filter((r) => r.link);
+
+    console.log(`[${timestamp()}]   Vertex AI Search: Found ${results.length} results`);
+
+    // Parse the AI summary as structured valuation
+    const summaryText = data.summary?.summaryText ?? "";
+    console.log(`[${timestamp()}]   Vertex AI Search summary: ${summaryText.slice(0, 300)}`);
+
+    const valuation = parseValuationSummary(summaryText);
+    if (valuation.estimatedValue !== null) {
+      console.log(`[${timestamp()}]   Vertex AI valuation: $${valuation.estimatedValue}, confidence: ${valuation.confidence}`);
+    }
+
+    return { results, valuation };
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : "Unknown error";
-    console.log(`[${timestamp()}]   ⚠ Google CSE fetch error: ${errMsg}`);
-    return [];
+    console.log(`[${timestamp()}]   ⚠ Vertex AI Search error: ${errMsg}`);
+    return { results: [], valuation: FALLBACK_VALUATION };
   }
 }
 
@@ -212,26 +270,6 @@ function buildIdentificationPrompt(listing: Listing): string {
     .replace("{description}", listing.description);
 }
 
-function buildValuationPrompt(listing: Listing, identification: IdentificationResult, searchResults: SearchResult[]): string {
-  const formattedResults = searchResults.length > 0
-    ? searchResults.map((r, i) => {
-      let entry = `${i + 1}. "${r.title}"`;
-      if (r.price) entry += ` - $${r.price}`;
-      entry += `\n   ${r.link}`;
-      entry += `\n   Snippet: "${r.snippet}"`;
-      return entry;
-    }).join("\n\n")
-    : "(No comparable listings found from web search)";
-
-  return VALUATION_PROMPT
-    .replace("{itemIdentification}", identification.itemIdentification)
-    .replace("{estimatedEra}", identification.estimatedEra || "Unknown")
-    .replace("{identificationConfidence}", identification.identificationConfidence.toFixed(2))
-    .replace("{redFlags}", identification.redFlags.length > 0 ? identification.redFlags.join(", ") : "None")
-    .replace("{title}", listing.title)
-    .replace("{price}", listing.price.toString())
-    .replace("{searchResults}", formattedResults);
-}
 
 async function resolveRedirectUrl(url: string): Promise<string> {
   try {
@@ -354,29 +392,6 @@ const IDENTIFICATION_SCHEMA = {
   required: ["isAuthentic", "itemIdentification", "identificationConfidence", "estimatedEra", "redFlags"],
 };
 
-const VALUATION_SCHEMA = {
-  type: "object",
-  properties: {
-    soldListings: {
-      type: "array",
-      items: {
-        type: "object",
-        properties: {
-          title: { type: "string" },
-          price: { type: "number" },
-          url: { type: "string" },
-        },
-        required: ["title"],
-      },
-    },
-    estimatedValue: { type: "number" },
-    currentPrice: { type: "number" },
-    margin: { type: "number" },
-    confidence: { type: "number" },
-    reasoning: { type: "string" },
-  },
-  required: ["soldListings", "currentPrice", "confidence", "reasoning"],
-};
 
 export async function evaluateListing(listing: Listing): Promise<Evaluation> {
   if (USE_MOCK_DATA) return getMockEvaluation(listing);
@@ -398,34 +413,26 @@ export async function evaluateListing(listing: Listing): Promise<Evaluation> {
 
   console.log(`[${timestamp()}]   Identified as: ${identification.itemIdentification} (${(identification.identificationConfidence * 100).toFixed(0)}% confidence)`);
 
-  // Google Custom Search: find comparable listings
-  const searchResults = await searchForComps(identification, timestamp);
+  // Vertex AI Search: find comparable listings with AI-generated valuation
+  const { valuation } = await searchForComps(identification, listing, timestamp);
 
-  // Phase 2: Valuation (Gemini visits URLs via urlContext)
-  const valuationPrompt = buildValuationPrompt(listing, identification, searchResults);
-  const { result: valuation, references: refs2 } = await callGemini<ValuationResult>({
-    prompt: valuationPrompt,
-    imageParts,
-    schema: VALUATION_SCHEMA,
-    tools: [{ urlContext: {} }],
-    timestamp,
-    phaseLabel: "Phase 2: Valuation",
-  });
+  const margin = valuation.estimatedValue !== null
+    ? valuation.estimatedValue - listing.price
+    : null;
 
-  // Merge into single Evaluation
   const evaluation: Evaluation = {
     isAuthentic: identification.isAuthentic,
     itemIdentification: identification.itemIdentification,
     identificationConfidence: identification.identificationConfidence,
     estimatedEra: identification.estimatedEra,
     redFlags: identification.redFlags,
-    soldListings: valuation.soldListings ?? [],
-    estimatedValue: valuation.estimatedValue ?? null,
-    currentPrice: valuation.currentPrice,
-    margin: valuation.margin ?? null,
+    soldListings: valuation.soldListings,
+    estimatedValue: valuation.estimatedValue,
+    currentPrice: listing.price,
+    margin,
     confidence: valuation.confidence,
     reasoning: valuation.reasoning,
-    references: [...refs1, ...refs2],
+    references: refs1,
   };
 
   console.log(`[${timestamp()}]   ✓ Final: Era: ${evaluation.estimatedEra}, Margin: $${evaluation.margin ?? "N/A"}, Confidence: ${(evaluation.confidence * 100).toFixed(0)}%`);
