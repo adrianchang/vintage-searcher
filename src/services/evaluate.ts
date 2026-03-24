@@ -148,59 +148,79 @@ interface SearchResult {
   price?: string;
 }
 
+// Vertex AI Search (searchLite endpoint — basic web search, no domain verification needed)
+// NOTE: searchLite does not generate AI summaries. We rely on Gemini Phase 2 for valuation.
+const GCP_PROJECT_ID = process.env.GCP_PROJECT_ID || "vintage-searcher";
+const VERTEX_ENGINE_ID = process.env.VERTEX_ENGINE_ID;
+const VERTEX_API_KEY = process.env.VERTEX_API_KEY;
+
 async function searchForComps(
   identification: IdentificationResult,
   timestamp: () => string,
 ): Promise<SearchResult[]> {
-  const apiKey = process.env.GOOGLE_CSE_API_KEY;
-  const cx = process.env.GOOGLE_CSE_CX;
-  if (!apiKey || !cx) {
-    console.log(`[${timestamp()}]   ⚠ Google CSE not configured (missing GOOGLE_CSE_API_KEY or GOOGLE_CSE_CX)`);
+  if (!VERTEX_ENGINE_ID || !VERTEX_API_KEY) {
+    console.log(`[${timestamp()}]   ⚠ Vertex AI Search not configured (missing VERTEX_ENGINE_ID or VERTEX_API_KEY)`);
     return [];
   }
 
   const query = `${identification.itemIdentification} sold`;
-  console.log(`[${timestamp()}]   Google CSE: Searching for "${query}"`);
+  console.log(`[${timestamp()}]   Vertex AI Search: Searching for "${query}"`);
 
   try {
-    const url = new URL("https://www.googleapis.com/customsearch/v1");
-    url.searchParams.set("key", apiKey);
-    url.searchParams.set("cx", cx);
-    url.searchParams.set("q", query);
-    url.searchParams.set("num", "10");
+    const endpoint = `https://discoveryengine.googleapis.com/v1/projects/${GCP_PROJECT_ID}/locations/global/collections/default_collection/engines/${VERTEX_ENGINE_ID}/servingConfigs/default_search:searchLite?key=${VERTEX_API_KEY}`;
 
-    const response = await fetch(url.toString());
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        query,
+        pageSize: 10,
+        contentSearchSpec: {
+          snippetSpec: { returnSnippet: true },
+        },
+      }),
+    });
+
     if (!response.ok) {
       const errorText = await response.text();
-      console.log(`[${timestamp()}]   ⚠ Google CSE error (${response.status}): ${errorText.slice(0, 200)}`);
+      console.log(`[${timestamp()}]   ⚠ Vertex AI Search error (${response.status}): ${errorText.slice(0, 200)}`);
       return [];
     }
 
     const data = await response.json() as {
-      items?: Array<{
-        title: string;
-        link: string;
-        snippet: string;
-        pagemap?: { metatags?: Array<Record<string, string>> };
+      results?: Array<{
+        document?: {
+          derivedStructData?: {
+            title?: string;
+            link?: string;
+            snippets?: Array<{ snippet?: string }>;
+            pagemap?: { metatags?: Array<Record<string, string>> };
+          };
+        };
       }>;
     };
 
-    const results: SearchResult[] = (data.items ?? []).map((item) => {
-      const price = item.pagemap?.metatags?.[0]?.["product:price:amount"]
-        || item.pagemap?.metatags?.[0]?.["og:price:amount"];
+    // TODO: eBay doesn't expose prices in metatags (product:price:amount / og:price:amount),
+    // so the price field will always be empty for eBay results. Prices are extracted by
+    // Gemini Phase 2 visiting URLs via urlContext instead. If we add non-eBay sources that
+    // do include price metatags, this extraction will work for those.
+    const results: SearchResult[] = (data.results ?? []).map((r) => {
+      const doc = r.document?.derivedStructData;
+      const price = doc?.pagemap?.metatags?.[0]?.["product:price:amount"]
+        || doc?.pagemap?.metatags?.[0]?.["og:price:amount"];
       return {
-        title: item.title,
-        link: item.link,
-        snippet: item.snippet,
+        title: doc?.title ?? "",
+        link: doc?.link ?? "",
+        snippet: doc?.snippets?.[0]?.snippet ?? "",
         ...(price ? { price } : {}),
       };
-    });
+    }).filter((r) => r.link);
 
-    console.log(`[${timestamp()}]   Google CSE: Found ${results.length} results`);
+    console.log(`[${timestamp()}]   Vertex AI Search: Found ${results.length} results`);
     return results;
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : "Unknown error";
-    console.log(`[${timestamp()}]   ⚠ Google CSE fetch error: ${errMsg}`);
+    console.log(`[${timestamp()}]   ⚠ Vertex AI Search error: ${errMsg}`);
     return [];
   }
 }
