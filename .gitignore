@@ -12,3 +12,6 @@ dist/
 
 # Logs
 logs/
+
+# Service account credentials
+service-account.json

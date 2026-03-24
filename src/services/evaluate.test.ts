@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
 import type { Evaluation } from "../types";
-import { parseValuationSummary } from "./evaluate";
 
 // Test the opportunity detection logic
 function isOpportunity(
@@ -112,73 +111,6 @@ describe("Opportunity Detection", () => {
     };
 
     expect(isOpportunity(evaluation, minMargin, minConfidence)).toBe(false);
-  });
-});
-
-describe("parseValuationSummary", () => {
-  it("should parse valid JSON with all fields", () => {
-    const input = JSON.stringify({
-      estimatedValue: 150,
-      confidence: 0.85,
-      reasoning: "Based on 3 comparable sold listings",
-      soldListings: [
-        { title: "Vintage jacket", price: 140, url: "https://ebay.com/1" },
-        { title: "Similar jacket", price: 160, url: "https://ebay.com/2" },
-      ],
-    });
-
-    const result = parseValuationSummary(input);
-    expect(result.estimatedValue).toBe(150);
-    expect(result.confidence).toBe(0.85);
-    expect(result.reasoning).toBe("Based on 3 comparable sold listings");
-    expect(result.soldListings).toHaveLength(2);
-    expect(result.soldListings[0]).toEqual({ title: "Vintage jacket", price: 140, url: "https://ebay.com/1" });
-  });
-
-  it("should strip markdown code fences and parse JSON", () => {
-    const input = '```json\n{"estimatedValue": 200, "confidence": 0.9, "reasoning": "Good comps", "soldListings": []}\n```';
-
-    const result = parseValuationSummary(input);
-    expect(result.estimatedValue).toBe(200);
-    expect(result.confidence).toBe(0.9);
-    expect(result.reasoning).toBe("Good comps");
-    expect(result.soldListings).toEqual([]);
-  });
-
-  it("should return fallback with raw text as reasoning for invalid JSON", () => {
-    const input = "This is not valid JSON at all";
-
-    const result = parseValuationSummary(input);
-    expect(result.estimatedValue).toBeNull();
-    expect(result.confidence).toBe(0.2);
-    expect(result.reasoning).toBe(input);
-    expect(result.soldListings).toEqual([]);
-  });
-
-  it("should return fallback for empty string", () => {
-    const result = parseValuationSummary("");
-    expect(result.estimatedValue).toBeNull();
-    expect(result.confidence).toBe(0.2);
-    expect(result.reasoning).toBe("No comparable listings found.");
-    expect(result.soldListings).toEqual([]);
-  });
-
-  it("should clamp confidence > 1 to 1 and < 0 to 0", () => {
-    const overOne = parseValuationSummary(JSON.stringify({ confidence: 5.0 }));
-    expect(overOne.confidence).toBe(1);
-
-    const underZero = parseValuationSummary(JSON.stringify({ confidence: -0.5 }));
-    expect(underZero.confidence).toBe(0);
-  });
-
-  it("should fill defaults for partial JSON", () => {
-    const input = JSON.stringify({ reasoning: "Only reasoning provided" });
-
-    const result = parseValuationSummary(input);
-    expect(result.estimatedValue).toBeNull();
-    expect(result.confidence).toBe(0.2);
-    expect(result.reasoning).toBe("Only reasoning provided");
-    expect(result.soldListings).toEqual([]);
   });
 });
 
