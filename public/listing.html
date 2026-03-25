@@ -6,6 +6,7 @@
   <title>Listing Detail — Vintage Searcher</title>
   <link href="https://cdn.jsdelivr.net/npm/daisyui@4/dist/full.min.css" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/i18n.js"></script>
   <style>
     .images-scroll { scroll-snap-type: x mandatory; }
     .images-scroll img { scroll-snap-align: start; }
@@ -14,21 +15,32 @@
 </head>
 <body class="bg-base-300 min-h-screen">
   <div class="max-w-2xl mx-auto px-5 py-8">
-    <a href="/" class="btn btn-ghost btn-sm mb-6">← Back</a>
-    <div id="content"><div class="text-center py-10 text-base-content/50">Loading...</div></div>
+    <div class="flex items-center justify-between mb-6">
+      <a href="/" class="btn btn-ghost btn-sm" data-i18n="detail.back">← Back</a>
+      <div class="dropdown dropdown-end">
+        <label tabindex="0" class="btn btn-ghost btn-sm lang-label">EN</label>
+        <ul tabindex="0" class="dropdown-content menu p-2 shadow bg-base-100 rounded-box w-32 z-50">
+          <li><a onclick="i18n.setLanguage('en')">English</a></li>
+          <li><a onclick="i18n.setLanguage('zh')">中文</a></li>
+        </ul>
+      </div>
+    </div>
+    <div id="content"><div class="text-center py-10 text-base-content/50" data-i18n="detail.loading">Loading...</div></div>
   </div>
 
   <script>
     const listingId = new URLSearchParams(window.location.search).get('id');
     if (!listingId) { window.location.href = '/'; }
 
+    let currentListing = null;
+
     function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
     async function init() {
       const res = await fetch('/users/me/listings/' + listingId);
-      if (!res.ok) { document.getElementById('content').innerHTML = '<div class="text-center py-10 text-base-content/50">Listing not found</div>'; return; }
-      const listing = await res.json();
-      renderListing(listing);
+      if (!res.ok) { document.getElementById('content').innerHTML = '<div class="text-center py-10 text-base-content/50">' + i18n.t('detail.notFound') + '</div>'; return; }
+      currentListing = await res.json();
+      renderListing(currentListing);
       loadMessages();
     }
 
@@ -47,44 +59,44 @@
       html += '<h2 class="text-xl font-bold mb-2">' + esc(l.title) + '</h2>';
       html += '<p class="text-sm text-base-content/60"><span class="font-bold text-primary text-lg">$' + l.price.toFixed(2) + '</span> · ' + esc(l.platform) + '</p>';
       if (l.description) html += '<p class="text-sm text-base-content/50 mt-3 whitespace-pre-wrap leading-relaxed">' + esc(l.description) + '</p>';
-      html += '<a class="link link-primary text-sm mt-3 inline-block" href="' + esc(l.url) + '" target="_blank" rel="noopener">View original listing →</a>';
+      html += '<a class="link link-primary text-sm mt-3 inline-block" href="' + esc(l.url) + '" target="_blank" rel="noopener">' + i18n.t('detail.viewOriginal') + '</a>';
       html += '</div>';
 
       if (ev) {
         html += '<div class="glass-card rounded-2xl p-5 mb-5">';
-        html += '<h2 class="text-lg font-bold mb-4">Evaluation ';
-        if (ev.isOpportunity) html += '<span class="badge badge-success">Opportunity</span> ';
-        if (ev.isAuthentic) html += '<span class="badge badge-info">Authentic</span>';
+        html += '<h2 class="text-lg font-bold mb-4">' + i18n.t('detail.evaluation') + ' ';
+        if (ev.isOpportunity) html += '<span class="badge badge-success">' + i18n.t('detail.opportunity') + '</span> ';
+        if (ev.isAuthentic) html += '<span class="badge badge-info">' + i18n.t('detail.authentic') + '</span>';
         html += '</h2>';
         if (ev.itemIdentification) {
           html += '<p class="text-sm text-base-content/70 mb-4">' + esc(ev.itemIdentification);
-          if (ev.identificationConfidence != null) html += ' <span class="text-xs text-base-content/40">(' + (ev.identificationConfidence * 100).toFixed(0) + '% sure)</span>';
+          if (ev.identificationConfidence != null) html += ' <span class="text-xs text-base-content/40">(' + i18n.t('detail.confidencePercent', { value: (ev.identificationConfidence * 100).toFixed(0) }) + ')</span>';
           html += '</p>';
         }
         html += '<div class="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">';
-        html += '<span class="text-base-content/40 uppercase text-xs tracking-wider">Era</span><span class="font-semibold">' + esc(ev.estimatedEra || 'Unknown') + '</span>';
-        html += '<span class="text-base-content/40 uppercase text-xs tracking-wider">Est. Value</span><span class="font-semibold">' + (ev.estimatedValue != null ? '$' + ev.estimatedValue.toFixed(2) : 'Unknown') + '</span>';
-        html += '<span class="text-base-content/40 uppercase text-xs tracking-wider">Current Price</span><span class="font-semibold">$' + ev.currentPrice.toFixed(2) + '</span>';
-        html += '<span class="text-base-content/40 uppercase text-xs tracking-wider">Margin</span><span class="font-semibold">' + (ev.margin != null ? '$' + ev.margin.toFixed(2) : 'N/A') + '</span>';
-        html += '<span class="text-base-content/40 uppercase text-xs tracking-wider">Confidence</span><span class="font-semibold">' + (ev.confidence * 100).toFixed(0) + '%</span>';
+        html += '<span class="text-base-content/40 uppercase text-xs tracking-wider">' + i18n.t('detail.era') + '</span><span class="font-semibold">' + esc(ev.estimatedEra || i18n.t('detail.unknown')) + '</span>';
+        html += '<span class="text-base-content/40 uppercase text-xs tracking-wider">' + i18n.t('detail.estimatedValue') + '</span><span class="font-semibold">' + (ev.estimatedValue != null ? '$' + ev.estimatedValue.toFixed(2) : i18n.t('detail.unknown')) + '</span>';
+        html += '<span class="text-base-content/40 uppercase text-xs tracking-wider">' + i18n.t('detail.currentPrice') + '</span><span class="font-semibold">$' + ev.currentPrice.toFixed(2) + '</span>';
+        html += '<span class="text-base-content/40 uppercase text-xs tracking-wider">' + i18n.t('detail.margin') + '</span><span class="font-semibold">' + (ev.margin != null ? '$' + ev.margin.toFixed(2) : i18n.t('detail.na')) + '</span>';
+        html += '<span class="text-base-content/40 uppercase text-xs tracking-wider">' + i18n.t('detail.confidence') + '</span><span class="font-semibold">' + (ev.confidence * 100).toFixed(0) + '%</span>';
         html += '</div>';
         html += '<p class="text-sm text-base-content/50 leading-relaxed mt-4 pt-4 border-t border-base-content/10">' + esc(ev.reasoning) + '</p>';
 
         const flags = JSON.parse(ev.redFlags);
         if (flags.length) {
-          html += '<div class="mt-4"><p class="text-xs font-semibold uppercase tracking-wider text-error mb-1">Red Flags</p><ul class="list-disc list-inside text-sm text-error/80">';
+          html += '<div class="mt-4"><p class="text-xs font-semibold uppercase tracking-wider text-error mb-1">' + i18n.t('detail.redFlags') + '</p><ul class="list-disc list-inside text-sm text-error/80">';
           flags.forEach(f => html += '<li>' + esc(f) + '</li>');
           html += '</ul></div>';
         }
 
         const comps = typeof ev.soldListings === 'string' ? JSON.parse(ev.soldListings) : (ev.soldListings || []);
         if (comps.length) {
-          html += '<div class="mt-4"><p class="text-xs font-semibold uppercase tracking-wider text-base-content/40 mb-2">Comparable Sales</p>';
+          html += '<div class="mt-4"><p class="text-xs font-semibold uppercase tracking-wider text-base-content/40 mb-2">' + i18n.t('detail.comparableSales') + '</p>';
           html += '<div class="space-y-1">';
           comps.forEach(c => {
             html += '<div class="flex justify-between text-sm">';
             html += c.url ? '<a href="' + esc(c.url) + '" target="_blank" rel="noopener" class="link text-base-content/70 hover:text-primary">' + esc(c.title) + '</a>' : '<span class="text-base-content/70">' + esc(c.title) + '</span>';
-            html += '<span class="font-semibold text-success shrink-0 ml-2">' + (c.price != null ? '$' + c.price.toFixed(2) : 'N/A') + '</span>';
+            html += '<span class="font-semibold text-success shrink-0 ml-2">' + (c.price != null ? '$' + c.price.toFixed(2) : i18n.t('detail.na')) + '</span>';
             html += '</div>';
           });
           html += '</div></div>';
@@ -92,7 +104,7 @@
 
         const refs = typeof ev.references === 'string' ? JSON.parse(ev.references) : (ev.references || []);
         if (refs.length) {
-          html += '<div class="mt-4"><p class="text-xs font-semibold uppercase tracking-wider text-base-content/40 mb-1">References</p><ul class="list-disc list-inside text-sm text-primary/70 break-all">';
+          html += '<div class="mt-4"><p class="text-xs font-semibold uppercase tracking-wider text-base-content/40 mb-1">' + i18n.t('detail.references') + '</p><ul class="list-disc list-inside text-sm text-primary/70 break-all">';
           refs.forEach(r => {
             if (r.startsWith('http')) {
               html += '<li><a href="' + esc(r) + '" target="_blank" rel="noopener" class="link hover:text-primary">' + esc(r) + '</a></li>';
@@ -107,11 +119,11 @@
       }
 
       html += '<div class="glass-card rounded-2xl p-5">';
-      html += '<h2 class="text-lg font-bold mb-4">Chat</h2>';
-      html += '<div class="max-h-96 overflow-y-auto flex flex-col gap-2 mb-4" id="chatMessages"><p class="text-center text-base-content/30 text-sm py-8">Ask a question about this listing...</p></div>';
+      html += '<h2 class="text-lg font-bold mb-4">' + i18n.t('detail.chat') + '</h2>';
+      html += '<div class="max-h-96 overflow-y-auto flex flex-col gap-2 mb-4" id="chatMessages"><p class="text-center text-base-content/30 text-sm py-8">' + i18n.t('detail.chatEmpty') + '</p></div>';
       html += '<div class="join w-full shadow-lg">';
-      html += '<input type="text" id="chatInput" placeholder="Ask about this listing..." maxlength="1000" class="input input-bordered join-item flex-1 bg-base-100/50" onkeydown="if(event.key===\'Enter\')sendMessage()">';
-      html += '<button id="sendBtn" class="btn btn-primary join-item" onclick="sendMessage()">Send</button>';
+      html += '<input type="text" id="chatInput" placeholder="' + esc(i18n.t('detail.chatPlaceholder')) + '" maxlength="1000" class="input input-bordered join-item flex-1 bg-base-100/50" onkeydown="if(event.key===\'Enter\')sendMessage()">';
+      html += '<button id="sendBtn" class="btn btn-primary join-item" onclick="sendMessage()">' + i18n.t('detail.send') + '</button>';
       html += '</div></div>';
 
       document.getElementById('content').innerHTML = html;
@@ -145,11 +157,11 @@
       const container = document.getElementById('chatMessages');
       // Clear empty state
       const empty = container.querySelector('p');
-      if (empty && empty.textContent.includes('Ask a question')) empty.remove();
+      if (empty && empty.textContent.includes(i18n.t('detail.chatEmpty'))) empty.remove();
 
       // Optimistic user message
       container.innerHTML += '<div class="chat chat-end"><div class="chat-bubble chat-bubble-primary">' + esc(message) + '</div></div>';
-      container.innerHTML += '<div class="chat chat-start" id="thinkingMsg"><div class="chat-bubble opacity-50 italic">Thinking...</div></div>';
+      container.innerHTML += '<div class="chat chat-start" id="thinkingMsg"><div class="chat-bubble opacity-50 italic">' + i18n.t('detail.thinking') + '</div></div>';
       container.scrollTop = container.scrollHeight;
 
       try {
@@ -167,7 +179,7 @@
       } catch (e) {
         const thinking = document.getElementById('thinkingMsg');
         if (thinking) {
-          thinking.innerHTML = '<div class="chat-bubble chat-bubble-error">Failed to get a response. Please try again.</div>';
+          thinking.innerHTML = '<div class="chat-bubble chat-bubble-error">' + i18n.t('detail.chatError') + '</div>';
           thinking.id = '';
         }
       }
@@ -177,7 +189,11 @@
       container.scrollTop = container.scrollHeight;
     }
 
-    init();
+    window.addEventListener('languageChanged', () => {
+      if (currentListing) renderListing(currentListing);
+    });
+
+    i18n.init().then(() => init());
   </script>
 </body>
 </html>

@@ -1,0 +1,65 @@
+{
+  "app": {
+    "title": "复古搜索器",
+    "signIn": "使用 Google 登录",
+    "signOut": "退出登录"
+  },
+  "quota": {
+    "used": "已用：{used} / {limit}",
+    "unsavedChanges": "有未保存的更改",
+    "exceedError": "将超出配额（此查询最多 {max}）",
+    "exceedTotal": "总数超出配额（{used} / {limit}）"
+  },
+  "query": {
+    "placeholder": "搜索关键词...",
+    "addButton": "添加",
+    "saveButton": "保存更改",
+    "scanButton": "开始扫描",
+    "saving": "保存中...",
+    "changesSaved": "更改已保存"
+  },
+  "scan": {
+    "saveFirst": "扫描前请先保存更改",
+    "starting": "正在启动扫描...",
+    "fetching": "正在获取列表...",
+    "filtering": "正在筛选...",
+    "evaluating": "正在评估 {current}/{total}...",
+    "found": "发现 {count} 个机会！",
+    "connectionLost": "与扫描进度的连接已断开",
+    "failedToStart": "扫描启动失败：{error}"
+  },
+  "listings": {
+    "title": "发现的商品",
+    "flags": "{count} 个警告"
+  },
+  "detail": {
+    "back": "← 返回",
+    "loading": "加载中...",
+    "notFound": "未找到该商品",
+    "viewOriginal": "查看原始商品 →",
+    "evaluation": "评估",
+    "opportunity": "机会",
+    "authentic": "正品",
+    "confidencePercent": "{value}% 确定",
+    "era": "年代",
+    "estimatedValue": "估值",
+    "currentPrice": "当前价格",
+    "margin": "利润",
+    "confidence": "置信度",
+    "unknown": "未知",
+    "na": "不适用",
+    "redFlags": "警告标志",
+    "comparableSales": "可比销售",
+    "references": "参考资料",
+    "chat": "聊天",
+    "chatPlaceholder": "询问关于此商品的问题...",
+    "chatEmpty": "提问关于此商品的问题...",
+    "send": "发送",
+    "thinking": "思考中...",
+    "chatError": "获取回复失败，请重试。"
+  },
+  "time": {
+    "today": "今天",
+    "yesterday": "昨天"
+  }
+}

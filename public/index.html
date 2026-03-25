@@ -6,6 +6,7 @@
   <title>Vintage Searcher</title>
   <link href="https://cdn.jsdelivr.net/npm/daisyui@4/dist/full.min.css" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/i18n.js"></script>
   <style>
     .listing-card-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
     .glass-card { background: rgba(255,255,255,0.05); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.08); }
@@ -14,8 +15,15 @@
 <body class="bg-base-300 min-h-screen">
   <div class="max-w-2xl mx-auto px-5 py-8">
     <div class="flex items-center justify-between mb-8" id="authSection">
-      <h1 class="text-3xl font-extrabold tracking-tight">Vintage Searcher</h1>
+      <h1 class="text-3xl font-extrabold tracking-tight" data-i18n="app.title">Vintage Searcher</h1>
       <div class="flex items-center gap-3">
+        <div class="dropdown dropdown-end">
+          <label tabindex="0" class="btn btn-ghost btn-sm lang-label">EN</label>
+          <ul tabindex="0" class="dropdown-content menu p-2 shadow bg-base-100 rounded-box w-32 z-50">
+            <li><a onclick="i18n.setLanguage('en')">English</a></li>
+            <li><a onclick="i18n.setLanguage('zh')">中文</a></li>
+          </ul>
+        </div>
         <span id="authInfo" class="text-sm text-base-content/50"></span>
         <span id="authAction"></span>
       </div>
@@ -35,19 +43,19 @@
       <div class="text-warning text-sm mb-2 text-center" id="unsaved"></div>
 
       <div class="join w-full mb-5 shadow-lg">
-        <input type="text" id="newQuery" placeholder="Search query..." class="input input-bordered join-item flex-1 bg-base-100/50">
+        <input type="text" id="newQuery" data-i18n-placeholder="query.placeholder" placeholder="Search query..." class="input input-bordered join-item flex-1 bg-base-100/50">
         <input type="number" id="newCount" value="5" min="1" max="20" class="input input-bordered join-item w-20 text-center bg-base-100/50">
-        <button id="addBtn" class="btn btn-primary join-item" onclick="addQuery()">Add</button>
+        <button id="addBtn" class="btn btn-primary join-item" onclick="addQuery()" data-i18n="query.addButton">Add</button>
       </div>
 
       <div class="flex gap-3 mb-3">
-        <button class="btn btn-primary flex-1 shadow-md" id="saveBtn" onclick="saveAll()" disabled>Save Changes</button>
-        <button class="btn btn-neutral flex-1 shadow-md" id="scanBtn" onclick="runScan()">Run Scan</button>
+        <button class="btn btn-primary flex-1 shadow-md" id="saveBtn" onclick="saveAll()" disabled data-i18n="query.saveButton">Save Changes</button>
+        <button class="btn btn-neutral flex-1 shadow-md" id="scanBtn" onclick="runScan()" data-i18n="query.scanButton">Run Scan</button>
       </div>
       <div class="text-success text-sm text-center mt-2" id="status"></div>
 
       <div class="mt-10" id="listingsSection" style="display:none">
-        <h2 class="text-xl font-bold mb-5">Discovered Listings</h2>
+        <h2 class="text-xl font-bold mb-5" data-i18n="listings.title">Discovered Listings</h2>
         <div id="listingsContainer"></div>
       </div>
     </div>
@@ -68,13 +76,13 @@
 
       if (data.authenticated) {
         infoEl.textContent = data.user.name;
-        actionEl.innerHTML = '<button class="btn btn-ghost btn-xs" onclick="logout()">Log out</button>';
+        actionEl.innerHTML = '<button class="btn btn-ghost btn-xs" onclick="logout()" data-i18n="app.signOut">' + i18n.t('app.signOut') + '</button>';
         document.getElementById('appContent').style.display = 'block';
         await loadQueries();
         await loadListings();
       } else {
         infoEl.textContent = '';
-        actionEl.innerHTML = '<a href="/auth/google"><button class="btn btn-primary btn-xs">Sign in with Google</button></a>';
+        actionEl.innerHTML = '<a href="/auth/google"><button class="btn btn-primary btn-xs" data-i18n="app.signIn">' + i18n.t('app.signIn') + '</button></a>';
         document.getElementById('appContent').style.display = 'none';
       }
     }
@@ -114,7 +122,7 @@
       else if (pct <= 80) prog.classList.add('progress-warning');
       else prog.classList.add('progress-error');
 
-      document.getElementById('quotaLabel').textContent = `Used: ${used} / ${QUOTA_LIMIT}`;
+      document.getElementById('quotaLabel').textContent = i18n.t('quota.used', { used, limit: QUOTA_LIMIT });
 
       const list = document.getElementById('queryList');
       list.innerHTML = localQueries.map((q, i) => `
@@ -129,7 +137,7 @@
 
       const dirty = hasChanges();
       document.getElementById('saveBtn').disabled = !dirty;
-      document.getElementById('unsaved').textContent = dirty ? 'You have unsaved changes' : '';
+      document.getElementById('unsaved').textContent = dirty ? i18n.t('quota.unsavedChanges') : '';
 
       const remaining = QUOTA_LIMIT - used;
       const noQuota = remaining <= 0;
@@ -157,7 +165,7 @@
       const q = localQueries[index];
       const otherUsed = getUsed() - (q.enabled ? q.count : 0);
       if (q.enabled && otherUsed + count > QUOTA_LIMIT) {
-        document.getElementById('error').textContent = `Would exceed quota (max ${QUOTA_LIMIT - otherUsed} for this query)`;
+        document.getElementById('error').textContent = i18n.t('quota.exceedError', { max: QUOTA_LIMIT - otherUsed });
         render();
         return;
       }
@@ -171,7 +179,7 @@
       if (!q.enabled) {
         // Enabling — check quota
         if (getUsed() + q.count > QUOTA_LIMIT) {
-          document.getElementById('error').textContent = 'Would exceed quota';
+          document.getElementById('error').textContent = i18n.t('quota.exceedError', { max: 0 });
           return;
         }
       }
@@ -204,14 +212,14 @@
     async function saveAll() {
       const btn = document.getElementById('saveBtn');
       btn.disabled = true;
-      btn.textContent = 'Saving...';
+      btn.textContent = i18n.t('query.saving');
       document.getElementById('error').textContent = '';
 
       const used = getUsed();
       if (used > QUOTA_LIMIT) {
-        document.getElementById('error').textContent = `Total exceeds quota (${used} / ${QUOTA_LIMIT})`;
+        document.getElementById('error').textContent = i18n.t('quota.exceedTotal', { used, limit: QUOTA_LIMIT });
         btn.disabled = false;
-        btn.textContent = 'Save Changes';
+        btn.textContent = i18n.t('query.saveButton');
         return;
       }
 
@@ -229,25 +237,25 @@
         savedQueries = await res.json();
         localQueries = savedQueries.map(q => ({ ...q }));
         render();
-        document.getElementById('status').textContent = 'Changes saved';
+        document.getElementById('status').textContent = i18n.t('query.changesSaved');
         setTimeout(() => { document.getElementById('status').textContent = ''; }, 2000);
       } catch (err) {
         document.getElementById('error').textContent = 'Failed to save: ' + err.message;
       }
 
-      btn.textContent = 'Save Changes';
+      btn.textContent = i18n.t('query.saveButton');
     }
 
     async function runScan() {
       if (hasChanges()) {
-        document.getElementById('error').textContent = 'Save your changes before scanning';
+        document.getElementById('error').textContent = i18n.t('scan.saveFirst');
         return;
       }
 
       const btn = document.getElementById('scanBtn');
       const status = document.getElementById('status');
       btn.disabled = true;
-      btn.textContent = 'Starting scan...';
+      btn.textContent = i18n.t('scan.starting');
       status.textContent = '';
       document.getElementById('error').textContent = '';
 
@@ -260,8 +268,8 @@
         const data = await res.json();
         if (!data.scanId) {
           btn.disabled = false;
-          btn.textContent = 'Run Scan';
-          status.textContent = data.message || 'Scan started';
+          btn.textContent = i18n.t('query.scanButton');
+          status.textContent = data.message || '';
           return;
         }
 
@@ -270,27 +278,27 @@
           const progress = JSON.parse(event.data);
           switch (progress.stage) {
             case 'fetch':
-              btn.textContent = 'Fetching listings...';
+              btn.textContent = i18n.t('scan.fetching');
               status.textContent = progress.message;
               break;
             case 'filter':
-              btn.textContent = 'Filtering...';
+              btn.textContent = i18n.t('scan.filtering');
               status.textContent = progress.message;
               break;
             case 'evaluate':
-              btn.textContent = 'Evaluating ' + (progress.evaluated + 1) + '/' + progress.total + '...';
+              btn.textContent = i18n.t('scan.evaluating', { current: progress.evaluated + 1, total: progress.total });
               status.textContent = progress.message;
               break;
             case 'done':
               btn.disabled = false;
-              btn.textContent = 'Run Scan';
-              status.textContent = 'Found ' + (progress.opportunities || 0) + ' opportunities!';
+              btn.textContent = i18n.t('query.scanButton');
+              status.textContent = i18n.t('scan.found', { count: progress.opportunities || 0 });
               es.close();
               loadListings();
               break;
             case 'error':
               btn.disabled = false;
-              btn.textContent = 'Run Scan';
+              btn.textContent = i18n.t('query.scanButton');
               status.textContent = '';
               document.getElementById('error').textContent = progress.message;
               es.close();
@@ -299,14 +307,14 @@
         };
         es.onerror = function() {
           btn.disabled = false;
-          btn.textContent = 'Run Scan';
-          document.getElementById('error').textContent = 'Lost connection to scan progress';
+          btn.textContent = i18n.t('query.scanButton');
+          document.getElementById('error').textContent = i18n.t('scan.connectionLost');
           es.close();
         };
       } catch (err) {
         btn.disabled = false;
-        btn.textContent = 'Run Scan';
-        document.getElementById('error').textContent = 'Failed to start scan: ' + err.message;
+        btn.textContent = i18n.t('query.scanButton');
+        document.getElementById('error').textContent = i18n.t('scan.failedToStart', { error: err.message });
       }
     }
 
@@ -317,7 +325,7 @@
       let badges = '';
       if (ev) {
         const flags = JSON.parse(ev.redFlags);
-        if (flags.length) badges += '<span class="badge badge-error">' + flags.length + ' flag' + (flags.length > 1 ? 's' : '') + '</span>';
+        if (flags.length) badges += '<span class="badge badge-error">' + i18n.t('listings.flags', { count: flags.length }) + '</span>';
       }
       return '<div class="glass-card rounded-2xl overflow-hidden cursor-pointer hover:shadow-xl hover:scale-[1.02] transition-all duration-200" onclick="window.location.href=\'/listing.html?id=' + l.id + '\'">' +
         '<figure><img src="' + esc(imgSrc) + '" class="w-full aspect-[3/4] object-cover bg-base-100/20" onerror="this.src=\'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 1 1%22><rect fill=%22%23333%22 width=%221%22 height=%221%22/></svg>\'" alt=""></figure>' +
@@ -334,9 +342,10 @@
       const today = new Date();
       const yesterday = new Date();
       yesterday.setDate(yesterday.getDate() - 1);
-      if (date.toDateString() === today.toDateString()) return 'Today';
-      if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
-      return date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+      if (date.toDateString() === today.toDateString()) return i18n.t('time.today');
+      if (date.toDateString() === yesterday.toDateString()) return i18n.t('time.yesterday');
+      const locale = i18n.lang === 'zh' ? 'zh-CN' : undefined;
+      return date.toLocaleDateString(locale, { weekday: 'short', month: 'short', day: 'numeric' });
     }
 
     async function loadListings() {
@@ -371,7 +380,12 @@
       }
     }
 
-    checkAuth();
+    window.addEventListener('languageChanged', () => {
+      render();
+      loadListings();
+    });
+
+    i18n.init().then(() => checkAuth());
   </script>
 </body>
 </html>
