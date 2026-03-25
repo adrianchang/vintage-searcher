@@ -344,7 +344,7 @@
       yesterday.setDate(yesterday.getDate() - 1);
       if (date.toDateString() === today.toDateString()) return i18n.t('time.today');
       if (date.toDateString() === yesterday.toDateString()) return i18n.t('time.yesterday');
-      const locale = i18n.lang === 'zh' ? 'zh-CN' : undefined;
+      const locale = i18n.lang === 'zh' ? 'zh-TW' : undefined;
       return date.toLocaleDateString(locale, { weekday: 'short', month: 'short', day: 'numeric' });
     }
 

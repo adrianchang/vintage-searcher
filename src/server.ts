@@ -210,7 +210,7 @@ app.get("/users/me/listings/:listingId/messages", requireAuth, async (req, res) 
 
 // Send a chat message about a listing
 app.post("/users/me/listings/:listingId/chat", requireAuth, async (req, res) => {
-  const { message } = req.body as { message: string };
+  const { message, lang } = req.body as { message: string; lang?: string };
   if (!message || typeof message !== "string" || message.trim().length === 0) {
     res.status(400).json({ error: "message required" });
     return;
@@ -236,7 +236,7 @@ app.post("/users/me/listings/:listingId/chat", requireAuth, async (req, res) => 
   });
 
   try {
-    const reply = await chatWithListing(prisma, listing, message.trim());
+    const reply = await chatWithListing(prisma, listing, message.trim(), lang || "en");
 
     // Save assistant reply
     const assistantMsg = await prisma.chatMessage.create({
@@ -246,7 +246,9 @@ app.post("/users/me/listings/:listingId/chat", requireAuth, async (req, res) => 
     res.json(assistantMsg);
   } catch (error) {
     console.error("Chat error:", error);
-    const errorReply = "Sorry, I encountered an error processing your request. Please try again.";
+    const errorReply = lang === "zh"
+      ? "抱歉，處理您的請求時出錯了。請重試。"
+      : "Sorry, I encountered an error processing your request. Please try again.";
     const assistantMsg = await prisma.chatMessage.create({
       data: { listingId: listing.id, role: "assistant", content: errorReply },
     });

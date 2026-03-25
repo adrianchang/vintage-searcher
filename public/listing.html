@@ -168,7 +168,7 @@
         const res = await fetch('/users/me/listings/' + listingId + '/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message }),
+          body: JSON.stringify({ message, lang: i18n.lang }),
         });
         const reply = await res.json();
         const thinking = document.getElementById('thinkingMsg');

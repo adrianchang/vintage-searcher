@@ -34,10 +34,28 @@ async function fetchListingImages(imageUrls: string[]): Promise<ImagePart[]> {
   return imageParts;
 }
 
+const LANGUAGE_INSTRUCTIONS: Record<string, string> = {
+  en: "Answer the user's questions in English.",
+  zh: "用繁體中文回答使用者的問題。",
+};
+
+const MODEL_ACK: Record<string, string> = {
+  en: "I've reviewed the listing details, images, and evaluation. How can I help you with this item?",
+  zh: "我已查看了商品詳情、圖片和評估。關於這件商品有什麼我可以幫您的？",
+};
+
+const FALLBACK_ERROR: Record<string, string> = {
+  en: "I'm sorry, I couldn't generate a response.",
+  zh: "抱歉，我無法產生回覆。",
+};
+
 function buildSystemContext(
   listing: FilteredListing,
   evaluation: Evaluation | null,
+  lang: string,
 ): string {
+  const langInstruction = LANGUAGE_INSTRUCTIONS[lang] || LANGUAGE_INSTRUCTIONS.en;
+
   let context = `You are a helpful assistant specializing in vintage clothing. You are helping the user analyze a specific listing.
 
 Listing Details:
@@ -63,7 +81,7 @@ Evaluation:
 
   context += `
 
-The listing images are attached. Answer the user's questions about this listing. Use Google Search when needed to look up comparable items, pricing, or authentication details.`;
+The listing images are attached. ${langInstruction} Use Google Search when needed to look up comparable items, pricing, or authentication details.`;
 
   return context;
 }
@@ -72,6 +90,7 @@ export async function chatWithListing(
   prisma: PrismaClient,
   listing: FilteredListing & { evaluation: Evaluation | null },
   userMessage: string,
+  lang: string = "en",
 ): Promise<string> {
   // Cap message length
   const message = userMessage.slice(0, 1000);
@@ -87,7 +106,7 @@ export async function chatWithListing(
   const imageUrls: string[] = JSON.parse(listing.imageUrls);
   const imageParts = await fetchListingImages(imageUrls);
 
-  const systemContext = buildSystemContext(listing, listing.evaluation);
+  const systemContext = buildSystemContext(listing, listing.evaluation, lang);
 
   // Build message history for Gemini
   const contents: Array<{ role: string; parts: Array<{ text: string } | ImagePart> }> = [];
@@ -102,7 +121,7 @@ export async function chatWithListing(
   });
   contents.push({
     role: "model",
-    parts: [{ text: "I've reviewed the listing details, images, and evaluation. How can I help you with this item?" }],
+    parts: [{ text: MODEL_ACK[lang] || MODEL_ACK.en }],
   });
 
   // Add chat history
@@ -129,6 +148,6 @@ export async function chatWithListing(
     },
   });
 
-  const reply = response.text ?? "I'm sorry, I couldn't generate a response.";
+  const reply = response.text ?? (FALLBACK_ERROR[lang] || FALLBACK_ERROR.en);
   return reply;
 }
