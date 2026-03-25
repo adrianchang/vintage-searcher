@@ -122,7 +122,7 @@
       html += '<h2 class="text-lg font-bold mb-4">' + i18n.t('detail.chat') + '</h2>';
       html += '<div class="max-h-96 overflow-y-auto flex flex-col gap-2 mb-4" id="chatMessages"><p class="text-center text-base-content/30 text-sm py-8">' + i18n.t('detail.chatEmpty') + '</p></div>';
       html += '<div class="join w-full shadow-lg">';
-      html += '<input type="text" id="chatInput" placeholder="' + esc(i18n.t('detail.chatPlaceholder')) + '" maxlength="1000" class="input input-bordered join-item flex-1 bg-base-100/50" onkeydown="if(event.key===\'Enter\')sendMessage()">';
+      html += '<input type="text" id="chatInput" placeholder="' + esc(i18n.t('detail.chatPlaceholder')) + '" maxlength="1000" class="input input-bordered join-item flex-1 bg-base-100/50" onkeydown="if(event.key===\'Enter\'&&!event.isComposing)sendMessage()">';
       html += '<button id="sendBtn" class="btn btn-primary join-item" onclick="sendMessage()">' + i18n.t('detail.send') + '</button>';
       html += '</div></div>';
 
