@@ -81,7 +81,9 @@ Evaluation:
 
   context += `
 
-The listing images are attached. ${langInstruction} Use Google Search when needed to look up comparable items, pricing, or authentication details.`;
+The listing images are attached. Use Google Search when needed to look up comparable items, pricing, or authentication details.
+
+IMPORTANT: ${langInstruction}`;
 
   return context;
 }
@@ -141,7 +143,7 @@ export async function chatWithListing(
   await throttle();
 
   const response = await genAI.models.generateContent({
-    model: "gemini-2.5-flash-lite",
+    model: "gemini-2.5-flash",
     contents,
     config: {
       tools: [{ googleSearch: {} }],
