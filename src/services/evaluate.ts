@@ -321,11 +321,7 @@ async function callGemini<T>(config: CallGeminiConfig<T>): Promise<{ result: T; 
 
       const result = JSON.parse(text) as T;
 
-      const groundingMetadata = response.candidates?.[0]?.groundingMetadata;
-      console.log(`[${timestamp()}]   ${phaseLabel}: Grounding metadata:`, JSON.stringify(groundingMetadata, null, 2));
-
       const references = await extractGroundingReferences(response);
-      console.log(`[${timestamp()}]   ${phaseLabel}: Resolved references (${references.length}):`, references);
 
       console.log(`[${timestamp()}]   ✓ ${phaseLabel}: Completed in ${elapsed}ms`);
 
@@ -421,6 +417,10 @@ export async function evaluateListing(listing: Listing): Promise<Evaluation> {
   // Google Custom Search: find comparable listings
   const searchResults = await searchForComps(identification, timestamp);
 
+  // Log search results for debugging
+  console.log(`[${timestamp()}]   Search results for "${identification.itemIdentification}":`);
+  searchResults.forEach((r, i) => console.log(`[${timestamp()}]     ${i + 1}. ${r.title} — ${r.link}${r.price ? ` ($${r.price})` : ""}`));
+
   // Phase 2: Valuation (Gemini visits URLs via urlContext)
   const valuationPrompt = buildValuationPrompt(listing, identification, searchResults);
   const { result: valuation, references: refs2 } = await callGemini<ValuationResult>({
@@ -431,6 +431,10 @@ export async function evaluateListing(listing: Listing): Promise<Evaluation> {
     timestamp,
     phaseLabel: "Phase 2: Valuation",
   });
+
+  // Log soldListings returned by Phase 2
+  console.log(`[${timestamp()}]   soldListings (${valuation.soldListings?.length ?? 0}):`);
+  (valuation.soldListings ?? []).forEach((s, i) => console.log(`[${timestamp()}]     ${i + 1}. ${s.title} — ${s.price != null ? `$${s.price}` : "N/A"}${s.url ? ` — ${s.url}` : ""}`));
 
   // Merge into single Evaluation
   const evaluation: Evaluation = {
