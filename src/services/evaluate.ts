@@ -36,7 +36,9 @@ Set estimatedEra to the decade or range (e.g. "1970s", "1960s-1970s").
 Put authenticating details (tags, hardware, stitching, red flags) in the redFlags array and let identificationConfidence reflect your certainty.
 Set identificationConfidence (0-1): how sure are you about WHAT this item is? High if tags/labels are clear and construction details match. Low if you're guessing based on limited photos.`;
 
-const VALUATION_PROMPT = `You are a veteran vintage clothing collector evaluating comparable sales data.
+const VALUATION_PROMPT = `SPECIAL INSTRUCTION: Think silently if needed. THINK LONG AND HARD ABOUT THIS
+
+You are a veteran vintage clothing collector evaluating comparable sales data.
 
 ITEM IDENTIFIED IN PREVIOUS ANALYSIS:
 - Identification: {itemIdentification}
@@ -417,10 +419,6 @@ export async function evaluateListing(listing: Listing): Promise<Evaluation> {
   // Google Custom Search: find comparable listings
   const searchResults = await searchForComps(identification, timestamp);
 
-  // Log search results for debugging
-  console.log(`[${timestamp()}]   Search results for "${identification.itemIdentification}":`);
-  searchResults.forEach((r, i) => console.log(`[${timestamp()}]     ${i + 1}. ${r.title} — ${r.link}${r.price ? ` ($${r.price})` : ""}`));
-
   // Phase 2: Valuation (Gemini visits URLs via urlContext)
   const valuationPrompt = buildValuationPrompt(listing, identification, searchResults);
   const { result: valuation, references: refs2 } = await callGemini<ValuationResult>({
@@ -431,10 +429,6 @@ export async function evaluateListing(listing: Listing): Promise<Evaluation> {
     timestamp,
     phaseLabel: "Phase 2: Valuation",
   });
-
-  // Log soldListings returned by Phase 2
-  console.log(`[${timestamp()}]   soldListings (${valuation.soldListings?.length ?? 0}):`);
-  (valuation.soldListings ?? []).forEach((s, i) => console.log(`[${timestamp()}]     ${i + 1}. ${s.title} — ${s.price != null ? `$${s.price}` : "N/A"}${s.url ? ` — ${s.url}` : ""}`));
 
   // Merge into single Evaluation
   const evaluation: Evaluation = {

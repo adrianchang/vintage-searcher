@@ -1,6 +1,6 @@
 {
   "app": {
-    "title": "復古搜尋器",
+    "title": "古著獵人",
     "signIn": "使用 Google 登入",
     "signOut": "登出"
   },
@@ -29,7 +29,7 @@
     "failedToStart": "掃描啟動失敗：{error}"
   },
   "listings": {
-    "title": "發現的商品",
+    "title": "有機會的商品",
     "flags": "{count} 個警告"
   },
   "detail": {
