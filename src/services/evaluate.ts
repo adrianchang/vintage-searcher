@@ -32,6 +32,8 @@ Based on your visual inspection, record your identification in itemIdentificatio
 - Format: "Brand Model/Style, Era" — e.g. "Levi's Type III Trucker Jacket 70505, 1970s" or "Pendleton Board Shirt Loop Collar, 1960s"
 - Do NOT include lengthy descriptions, construction details, or explanations in this field.
 
+Also provide itemIdentificationJapanese: a Japanese translation of itemIdentification for searching Japanese marketplaces. Use the Japanese name for the brand if one exists (e.g. リーバイス for Levi's), and translate clothing terms naturally (e.g. "Trucker Jacket" → "トラッカージャケット", "1970s" → "1970年代"). Keep it concise — it will be used as a search query.
+
 Set estimatedEra to the decade or range (e.g. "1970s", "1960s-1970s").
 Put authenticating details (tags, hardware, stitching, red flags) in the redFlags array and let identificationConfidence reflect your certainty.
 Set identificationConfidence (0-1): how sure are you about WHAT this item is? High if tags/labels are clear and construction details match. Low if you're guessing based on limited photos.`;
@@ -129,6 +131,7 @@ async function fetchListingImages(
 interface IdentificationResult {
   isAuthentic: boolean;
   itemIdentification: string;
+  itemIdentificationJapanese: string;
   identificationConfidence: number;
   estimatedEra: string;
   redFlags: string[];
@@ -156,27 +159,20 @@ const GCP_PROJECT_ID = process.env.GCP_PROJECT_ID || "vintage-searcher";
 const VERTEX_ENGINE_ID = process.env.VERTEX_ENGINE_ID;
 const VERTEX_API_KEY = process.env.VERTEX_API_KEY;
 
-async function searchForComps(
-  identification: IdentificationResult,
+async function vertexSearch(
+  query: string,
+  pageSize: number,
   timestamp: () => string,
 ): Promise<SearchResult[]> {
-  if (!VERTEX_ENGINE_ID || !VERTEX_API_KEY) {
-    console.log(`[${timestamp()}]   ⚠ Vertex AI Search not configured (missing VERTEX_ENGINE_ID or VERTEX_API_KEY)`);
-    return [];
-  }
-
-  const query = `${identification.itemIdentification} sold`;
-  console.log(`[${timestamp()}]   Vertex AI Search: Searching for "${query}"`);
+  const endpoint = `https://discoveryengine.googleapis.com/v1/projects/${GCP_PROJECT_ID}/locations/global/collections/default_collection/engines/${VERTEX_ENGINE_ID}/servingConfigs/default_search:searchLite?key=${VERTEX_API_KEY}`;
 
   try {
-    const endpoint = `https://discoveryengine.googleapis.com/v1/projects/${GCP_PROJECT_ID}/locations/global/collections/default_collection/engines/${VERTEX_ENGINE_ID}/servingConfigs/default_search:searchLite?key=${VERTEX_API_KEY}`;
-
     const response = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         query,
-        pageSize: 10,
+        pageSize,
         contentSearchSpec: {
           snippetSpec: { returnSnippet: true },
         },
@@ -225,6 +221,29 @@ async function searchForComps(
     console.log(`[${timestamp()}]   ⚠ Vertex AI Search error: ${errMsg}`);
     return [];
   }
+}
+
+async function searchForComps(
+  identification: IdentificationResult,
+  timestamp: () => string,
+): Promise<SearchResult[]> {
+  if (!VERTEX_ENGINE_ID || !VERTEX_API_KEY) {
+    console.log(`[${timestamp()}]   ⚠ Vertex AI Search not configured (missing VERTEX_ENGINE_ID or VERTEX_API_KEY)`);
+    return [];
+  }
+
+  const englishQuery = `${identification.itemIdentification} sold`;
+  const japaneseQuery = `${identification.itemIdentificationJapanese} 落札`;
+
+  console.log(`[${timestamp()}]   Vertex AI Search: English "${englishQuery}" | Japanese "${japaneseQuery}"`);
+
+  const [englishResults, japaneseResults] = await Promise.all([
+    vertexSearch(englishQuery, 5, timestamp),
+    vertexSearch(japaneseQuery, 10, timestamp),
+  ]);
+
+  console.log(`[${timestamp()}]   Vertex AI Search: ${englishResults.length} English + ${japaneseResults.length} Japanese results`);
+  return [...englishResults, ...japaneseResults];
 }
 
 function buildIdentificationPrompt(listing: Listing): string {
@@ -365,11 +384,12 @@ const IDENTIFICATION_SCHEMA = {
   properties: {
     isAuthentic: { type: "boolean" },
     itemIdentification: { type: "string" },
+    itemIdentificationJapanese: { type: "string" },
     identificationConfidence: { type: "number" },
     estimatedEra: { type: "string" },
     redFlags: { type: "array", items: { type: "string" } },
   },
-  required: ["isAuthentic", "itemIdentification", "identificationConfidence", "estimatedEra", "redFlags"],
+  required: ["isAuthentic", "itemIdentification", "itemIdentificationJapanese", "identificationConfidence", "estimatedEra", "redFlags"],
 };
 
 const VALUATION_SCHEMA = {
