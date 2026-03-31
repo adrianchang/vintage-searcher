@@ -28,11 +28,11 @@ Examine the photos carefully. Do NOT trust the listing title/description blindly
   - Condition: wear patterns, fading, holes, stains, repairs, patina
 
 STEP 2 — ITEM IDENTIFICATION
-Based on your visual inspection, record your identification in itemIdentification as a SHORT label (under 15 words). This will be used as a search query, so keep it concise.
-- Format: "Brand Model/Style, Era" — e.g. "Levi's Type III Trucker Jacket 70505, 1970s" or "Pendleton Board Shirt Loop Collar, 1960s"
-- Do NOT include lengthy descriptions, construction details, or explanations in this field.
+Based on your visual inspection, record your identification in itemIdentification as a SHORT label. This will be used as a search query — be as concise as possible while keeping it specific enough to find comps.
+- Format: "Brand Model/Style Era" — e.g. "Levi's 501 Big E 60s" or "Pendleton Loop Collar Board Shirt 60s"
+- Include era in the label. Keep it tight — drop filler words, sizes, colors unless they define the item.
 
-Also provide itemIdentificationJapanese: a Japanese translation of itemIdentification for searching Japanese marketplaces. Use the Japanese name for the brand if one exists (e.g. リーバイス for Levi's), and translate clothing terms naturally (e.g. "Trucker Jacket" → "トラッカージャケット", "1970s" → "1970年代"). Keep it concise — it will be used as a search query.
+Also provide itemIdentificationJapanese: the Japanese equivalent search query for this item. Use Japanese brand names where they exist (e.g. リーバイス, ペンドルトン) and natural Japanese clothing terms. Same conciseness standard as itemIdentification.
 
 Set estimatedEra to the decade or range (e.g. "1970s", "1960s-1970s").
 Put authenticating details (tags, hardware, stitching, red flags) in the redFlags array and let identificationConfidence reflect your certainty.
@@ -226,24 +226,28 @@ async function vertexSearch(
 async function searchForComps(
   identification: IdentificationResult,
   timestamp: () => string,
-): Promise<SearchResult[]> {
+): Promise<{ englishSoldResults: SearchResult[]; englishActiveResults: SearchResult[]; japaneseSoldResults: SearchResult[]; japaneseActiveResults: SearchResult[] }> {
   if (!VERTEX_ENGINE_ID || !VERTEX_API_KEY) {
     console.log(`[${timestamp()}]   ⚠ Vertex AI Search not configured (missing VERTEX_ENGINE_ID or VERTEX_API_KEY)`);
-    return [];
+    return { englishSoldResults: [], englishActiveResults: [], japaneseSoldResults: [], japaneseActiveResults: [] };
   }
 
-  const englishQuery = `${identification.itemIdentification} sold`;
-  const japaneseQuery = `${identification.itemIdentificationJapanese} 落札`;
+  const englishSoldQuery = `${identification.itemIdentification} sold`;
+  const englishActiveQuery = identification.itemIdentification;
+  const japaneseSoldQuery = `${identification.itemIdentificationJapanese} 落札`;
+  const japaneseActiveQuery = identification.itemIdentificationJapanese;
 
-  console.log(`[${timestamp()}]   Vertex AI Search: English "${englishQuery}" | Japanese "${japaneseQuery}"`);
+  console.log(`[${timestamp()}]   Vertex AI Search: EN sold "${englishSoldQuery}" | EN active "${englishActiveQuery}" | JP sold "${japaneseSoldQuery}" | JP active "${japaneseActiveQuery}"`);
 
-  const [englishResults, japaneseResults] = await Promise.all([
-    vertexSearch(englishQuery, 5, timestamp),
-    vertexSearch(japaneseQuery, 10, timestamp),
+  const [englishSoldResults, englishActiveResults, japaneseSoldResults, japaneseActiveResults] = await Promise.all([
+    vertexSearch(englishSoldQuery, 1, timestamp),
+    vertexSearch(englishActiveQuery, 2, timestamp),
+    vertexSearch(japaneseSoldQuery, 2, timestamp),
+    vertexSearch(japaneseActiveQuery, 4, timestamp),
   ]);
 
-  console.log(`[${timestamp()}]   Vertex AI Search: ${englishResults.length} English + ${japaneseResults.length} Japanese results`);
-  return [...englishResults, ...japaneseResults];
+  console.log(`[${timestamp()}]   Vertex AI Search: ${englishSoldResults.length} EN sold + ${englishActiveResults.length} EN active + ${japaneseSoldResults.length} JP sold + ${japaneseActiveResults.length} JP active`);
+  return { englishSoldResults, englishActiveResults, japaneseSoldResults, japaneseActiveResults };
 }
 
 function buildIdentificationPrompt(listing: Listing): string {
@@ -253,16 +257,45 @@ function buildIdentificationPrompt(listing: Listing): string {
     .replace("{description}", listing.description);
 }
 
-function buildValuationPrompt(listing: Listing, identification: IdentificationResult, searchResults: SearchResult[]): string {
-  const formattedResults = searchResults.length > 0
-    ? searchResults.map((r, i) => {
-      let entry = `${i + 1}. "${r.title}"`;
+function buildValuationPrompt(
+  listing: Listing,
+  identification: IdentificationResult,
+  englishSoldResults: SearchResult[],
+  englishActiveResults: SearchResult[],
+  japaneseSoldResults: SearchResult[],
+  japaneseActiveResults: SearchResult[],
+): string {
+  const formatResults = (results: SearchResult[], offset = 0) =>
+    results.map((r, i) => {
+      let entry = `${offset + i + 1}. "${r.title}"`;
       if (r.price) entry += ` - $${r.price}`;
       entry += `\n   ${r.link}`;
       entry += `\n   Snippet: "${r.snippet}"`;
       return entry;
-    }).join("\n\n")
-    : "(No comparable listings found from web search)";
+    }).join("\n\n");
+
+  let formattedResults = "(No comparable listings found from web search)";
+  const allResults = [...englishSoldResults, ...englishActiveResults, ...japaneseSoldResults, ...japaneseActiveResults];
+  if (allResults.length > 0) {
+    const parts: string[] = [];
+    let offset = 0;
+    if (englishSoldResults.length > 0) {
+      parts.push(`English sold comps (visit URLs for pricing):\n${formatResults(englishSoldResults, offset)}`);
+      offset += englishSoldResults.length;
+    }
+    if (englishActiveResults.length > 0) {
+      parts.push(`English active listings (visit URLs for pricing):\n${formatResults(englishActiveResults, offset)}`);
+      offset += englishActiveResults.length;
+    }
+    if (japaneseSoldResults.length > 0) {
+      parts.push(`Japanese sold listings 落札 (prices in JPY — convert at ~150 JPY/USD):\n${formatResults(japaneseSoldResults, offset)}`);
+      offset += japaneseSoldResults.length;
+    }
+    if (japaneseActiveResults.length > 0) {
+      parts.push(`Japanese active listings (prices in JPY — convert at ~150 JPY/USD):\n${formatResults(japaneseActiveResults, offset)}`);
+    }
+    formattedResults = parts.join("\n\n");
+  }
 
   return VALUATION_PROMPT
     .replace("{itemIdentification}", identification.itemIdentification)
@@ -368,6 +401,12 @@ async function callGemini<T>(config: CallGeminiConfig<T>): Promise<{ result: T; 
         continue;
       }
 
+      // Extra logging for INVALID_ARGUMENT to help diagnose root cause
+      if (errorMsg.includes("INVALID_ARGUMENT") || errorMsg.includes("400")) {
+        console.error(`[${timestamp()}]   ✗ ${phaseLabel} INVALID_ARGUMENT — prompt length: ${prompt.length} chars, images: ${imageParts.length}, tools: ${JSON.stringify(tools)}`);
+        console.error(`[${timestamp()}]   ✗ ${phaseLabel} prompt preview (last 500 chars):`, prompt.slice(-500));
+      }
+
       // Log full error details before throwing
       console.error(`[${timestamp()}]   ✗ ${phaseLabel} Error:`, error);
       throw error;
@@ -437,14 +476,14 @@ export async function evaluateListing(listing: Listing): Promise<Evaluation> {
   console.log(`[${timestamp()}]   Identified as: ${identification.itemIdentification} (${(identification.identificationConfidence * 100).toFixed(0)}% confidence)`);
 
   // Google Custom Search: find comparable listings
-  const searchResults = await searchForComps(identification, timestamp);
+  const { englishSoldResults, englishActiveResults, japaneseSoldResults, japaneseActiveResults } = await searchForComps(identification, timestamp);
 
   // Log search results for debugging
   console.log(`[${timestamp()}]   Search results for "${identification.itemIdentification}":`);
-  searchResults.forEach((r, i) => console.log(`[${timestamp()}]     ${i + 1}. ${r.title} — ${r.link}${r.price ? ` ($${r.price})` : ""}`));
+  [...englishSoldResults, ...englishActiveResults, ...japaneseSoldResults, ...japaneseActiveResults].forEach((r, i) => console.log(`[${timestamp()}]     ${i + 1}. ${r.title} — ${r.link}${r.price ? ` ($${r.price})` : ""}`));
 
-  // Phase 2: Valuation (Gemini visits URLs via urlContext)
-  const valuationPrompt = buildValuationPrompt(listing, identification, searchResults);
+  // Phase 2: Valuation (Gemini visits English URLs via urlContext; Japanese results passed as text only)
+  const valuationPrompt = buildValuationPrompt(listing, identification, englishSoldResults, englishActiveResults, japaneseSoldResults, japaneseActiveResults);
   const { result: valuation, references: refs2 } = await callGemini<ValuationResult>({
     prompt: valuationPrompt,
     imageParts,
