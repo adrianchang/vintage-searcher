@@ -14,11 +14,11 @@ export interface ScanDeps {
   prisma: PrismaClient;
   fetchListings: (platform: Platform, limit: number, queries?: SearchQueryInput[]) => Promise<Listing[]>;
   filterListings: (listings: Listing[]) => Promise<Listing[]>;
-  evaluateListing: (listing: Listing) => Promise<Evaluation>;
+  evaluateListing: (listing: Listing, lang?: string) => Promise<Evaluation>;
   sendAlert: (opportunities: { listing: Listing; evaluation: Evaluation }[]) => Promise<void>;
 }
 
-export async function runScan(config: ScanConfig, deps: ScanDeps, userId?: string, onProgress?: (progress: ScanProgress) => void) {
+export async function runScan(config: ScanConfig, deps: ScanDeps, userId?: string, onProgress?: (progress: ScanProgress) => void, lang?: string) {
   const { prisma } = deps;
 
   console.log(`Starting vintage scan on ${config.platform}...`);
@@ -101,7 +101,7 @@ export async function runScan(config: ScanConfig, deps: ScanDeps, userId?: strin
     });
 
     try {
-      const evaluation = await deps.evaluateListing(listing);
+      const evaluation = await deps.evaluateListing(listing, lang);
       evaluatedCount++;
 
       const isOpportunity =

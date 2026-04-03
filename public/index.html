@@ -263,6 +263,7 @@
         const res = await fetch('/scan', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lang: i18n.lang }),
         });
 
         const data = await res.json();

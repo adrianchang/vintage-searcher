@@ -71,7 +71,9 @@ Then produce your valuation:
 - Calculate margin (estimatedValue - currentPrice)
 - Set confidence (0-1): high if you found strong, similar comps. Low if comps are weak or dissimilar.
 
-IMPORTANT: estimatedValue MUST come from the comps above, not guesses. If none of the URLs are useful, set confidence LOW.`;
+IMPORTANT: estimatedValue MUST come from the comps above, not guesses. If none of the URLs are useful, set confidence LOW.
+
+{languageInstruction}`;
 
 const MAX_RETRIES = 3; // Max retry attempts before giving up
 const INITIAL_RETRY_DELAY_MS = 10000; // 10 seconds (reduced for faster retries)
@@ -257,6 +259,10 @@ function buildIdentificationPrompt(listing: Listing): string {
     .replace("{description}", listing.description);
 }
 
+const LANGUAGE_INSTRUCTIONS: Record<string, string> = {
+  zh: "Write the reasoning field in Traditional Chinese (繁體中文).",
+};
+
 function buildValuationPrompt(
   listing: Listing,
   identification: IdentificationResult,
@@ -264,6 +270,7 @@ function buildValuationPrompt(
   englishActiveResults: SearchResult[],
   japaneseSoldResults: SearchResult[],
   japaneseActiveResults: SearchResult[],
+  lang?: string,
 ): string {
   const formatResults = (results: SearchResult[], offset = 0) =>
     results.map((r, i) => {
@@ -304,7 +311,8 @@ function buildValuationPrompt(
     .replace("{redFlags}", identification.redFlags.length > 0 ? identification.redFlags.join(", ") : "None")
     .replace("{title}", listing.title)
     .replace("{price}", listing.price.toString())
-    .replace("{searchResults}", formattedResults);
+    .replace("{searchResults}", formattedResults)
+    .replace("{languageInstruction}", LANGUAGE_INSTRUCTIONS[lang ?? ""] ?? "");
 }
 
 async function resolveRedirectUrl(url: string): Promise<string> {
@@ -455,7 +463,7 @@ const VALUATION_SCHEMA = {
   required: ["soldListings", "currentPrice", "confidence", "reasoning"],
 };
 
-export async function evaluateListing(listing: Listing): Promise<Evaluation> {
+export async function evaluateListing(listing: Listing, lang?: string): Promise<Evaluation> {
   if (USE_MOCK_DATA) return getMockEvaluation(listing);
   const timestamp = () => new Date().toISOString();
   console.log(`[${timestamp()}] Evaluating: ${listing.title.slice(0, 50)}...`);
@@ -483,7 +491,7 @@ export async function evaluateListing(listing: Listing): Promise<Evaluation> {
   [...englishSoldResults, ...englishActiveResults, ...japaneseSoldResults, ...japaneseActiveResults].forEach((r, i) => console.log(`[${timestamp()}]     ${i + 1}. ${r.title} — ${r.link}${r.price ? ` ($${r.price})` : ""}`));
 
   // Phase 2: Valuation (Gemini visits English URLs via urlContext; Japanese results passed as text only)
-  const valuationPrompt = buildValuationPrompt(listing, identification, englishSoldResults, englishActiveResults, japaneseSoldResults, japaneseActiveResults);
+  const valuationPrompt = buildValuationPrompt(listing, identification, englishSoldResults, englishActiveResults, japaneseSoldResults, japaneseActiveResults, lang);
   const { result: valuation, references: refs2 } = await callGemini<ValuationResult>({
     prompt: valuationPrompt,
     imageParts,

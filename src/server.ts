@@ -270,6 +270,7 @@ app.post("/scan", (req, res) => {
   }
 
   const userId = req.user?.id; // undefined for cron — falls back to Adrian in runScan
+  const lang = (req.body as { lang?: string })?.lang;
   const scanId = crypto.randomUUID();
   const emitter = new EventEmitter();
   scanEmitters.set(scanId, emitter);
@@ -290,7 +291,7 @@ app.post("/scan", (req, res) => {
     filterListings,
     evaluateListing,
     sendAlert,
-  }, userId, onProgress).catch((error) => {
+  }, userId, onProgress, lang).catch((error) => {
     console.error("Scan failed:", error);
     emitter.emit("progress", { stage: "error", message: `Scan failed: ${error instanceof Error ? error.message : error}` });
   });
