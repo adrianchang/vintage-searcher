@@ -92,6 +92,31 @@ app.post("/auth/logout", (req, res) => {
   });
 });
 
+// --- Public signup ---
+
+app.post("/subscribe", async (req, res) => {
+  const { email, language } = req.body as { email?: string; language?: string };
+
+  if (!email || !email.includes("@")) {
+    res.status(400).json({ error: "Valid email required" });
+    return;
+  }
+
+  const lang = language === "zh" ? "zh" : "en";
+
+  try {
+    await prisma.user.upsert({
+      where: { email },
+      update: { language: lang },
+      create: { name: email, email, language: lang },
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Subscribe error:", err);
+    res.status(500).json({ error: "Failed to subscribe. Please try again." });
+  }
+});
+
 // --- eBay webhooks (no auth required) ---
 
 app.get("/ebay/webhook", (req, res) => {

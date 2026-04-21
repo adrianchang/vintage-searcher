@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Daily Edit — Vintage Finds</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #f5f0eb;
+      font-family: Georgia, 'Times New Roman', serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 32px 16px;
+    }
+
+    .container {
+      max-width: 520px;
+      width: 100%;
+    }
+
+    .eyebrow {
+      font-family: Helvetica, Arial, sans-serif;
+      font-size: 11px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: #999;
+      margin-bottom: 12px;
+    }
+
+    h1 {
+      font-size: 42px;
+      font-weight: normal;
+      color: #1a1a1a;
+      line-height: 1.15;
+      letter-spacing: -1px;
+      margin-bottom: 20px;
+    }
+
+    .tagline {
+      font-size: 17px;
+      line-height: 1.75;
+      color: #555;
+      font-style: italic;
+      margin-bottom: 40px;
+      padding-bottom: 40px;
+      border-bottom: 1px solid #ddd;
+    }
+
+    .form-label {
+      font-family: Helvetica, Arial, sans-serif;
+      font-size: 11px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: #888;
+      display: block;
+      margin-bottom: 8px;
+    }
+
+    input[type="email"] {
+      width: 100%;
+      padding: 14px 16px;
+      font-size: 16px;
+      font-family: Georgia, serif;
+      border: 1.5px solid #ccc;
+      border-radius: 3px;
+      background: #fff;
+      color: #1a1a1a;
+      outline: none;
+      transition: border-color 0.15s;
+      margin-bottom: 20px;
+    }
+
+    input[type="email"]:focus {
+      border-color: #2c2c2c;
+    }
+
+    .lang-row {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 28px;
+    }
+
+    .lang-btn {
+      flex: 1;
+      padding: 12px;
+      border: 1.5px solid #ccc;
+      border-radius: 3px;
+      background: #fff;
+      font-family: Helvetica, Arial, sans-serif;
+      font-size: 13px;
+      cursor: pointer;
+      color: #555;
+      transition: all 0.15s;
+      text-align: center;
+    }
+
+    .lang-btn.active {
+      border-color: #2c2c2c;
+      background: #2c2c2c;
+      color: #fff;
+    }
+
+    .lang-btn:not(.active):hover {
+      border-color: #888;
+    }
+
+    .submit-btn {
+      width: 100%;
+      padding: 16px;
+      background: #2c2c2c;
+      color: #fff;
+      border: none;
+      border-radius: 3px;
+      font-family: Helvetica, Arial, sans-serif;
+      font-size: 13px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .submit-btn:hover:not(:disabled) {
+      background: #1a1a1a;
+    }
+
+    .submit-btn:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
+
+    .error {
+      font-family: Helvetica, Arial, sans-serif;
+      font-size: 13px;
+      color: #c0392b;
+      margin-top: 12px;
+      display: none;
+    }
+
+    .success {
+      text-align: center;
+      display: none;
+    }
+
+    .success .check {
+      font-size: 40px;
+      margin-bottom: 20px;
+    }
+
+    .success h2 {
+      font-size: 28px;
+      font-weight: normal;
+      color: #1a1a1a;
+      margin-bottom: 12px;
+    }
+
+    .success p {
+      font-size: 16px;
+      color: #666;
+      font-style: italic;
+      line-height: 1.7;
+    }
+
+    .sample {
+      margin-top: 56px;
+      padding-top: 40px;
+      border-top: 1px solid #ddd;
+    }
+
+    .sample-label {
+      font-family: Helvetica, Arial, sans-serif;
+      font-size: 11px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: #bbb;
+      margin-bottom: 20px;
+    }
+
+    .sample-item {
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+      margin-bottom: 24px;
+    }
+
+    .sample-era {
+      font-family: Helvetica, Arial, sans-serif;
+      font-size: 10px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: #c8a96e;
+      background: #2c2c2c;
+      padding: 3px 8px;
+      border-radius: 2px;
+      white-space: nowrap;
+      margin-top: 3px;
+    }
+
+    .sample-text {}
+
+    .sample-hook {
+      font-size: 15px;
+      font-style: italic;
+      color: #1a1a1a;
+      line-height: 1.55;
+      margin-bottom: 4px;
+    }
+
+    .sample-meta {
+      font-family: Helvetica, Arial, sans-serif;
+      font-size: 12px;
+      color: #aaa;
+    }
+
+    .footer {
+      margin-top: 48px;
+      font-family: Helvetica, Arial, sans-serif;
+      font-size: 11px;
+      color: #bbb;
+      line-height: 1.8;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <div id="formSection">
+      <p class="eyebrow">The Daily Edit</p>
+      <h1>Vintage finds worth knowing about.</h1>
+      <p class="tagline">Every morning, we scan thousands of listings and surface the ones with a real story — underpriced grails, authenticated workwear, pieces with cultural weight. One email. No noise.</p>
+
+      <div id="formInner">
+        <label class="form-label" for="emailInput">Your email</label>
+        <input type="email" id="emailInput" placeholder="you@example.com" autocomplete="email">
+
+        <label class="form-label">Language</label>
+        <div class="lang-row">
+          <button class="lang-btn active" data-lang="en" onclick="selectLang('en')">English</button>
+          <button class="lang-btn" data-lang="zh" onclick="selectLang('zh')">中文</button>
+        </div>
+
+        <button class="submit-btn" id="submitBtn" onclick="subscribe()">Subscribe — It's Free</button>
+        <p class="error" id="errorMsg"></p>
+      </div>
+    </div>
+
+    <div class="success" id="successSection">
+      <div class="check">✓</div>
+      <h2 id="successHeading">You're in.</h2>
+      <p id="successBody">First issue lands tomorrow morning. Keep an eye on your inbox.</p>
+    </div>
+
+    <div class="sample">
+      <p class="sample-label">Recent finds</p>
+
+      <div class="sample-item">
+        <span class="sample-era">1960s</span>
+        <div class="sample-text">
+          <p class="sample-hook">"The loop collar disappeared from Pendleton's lineup in 1963. This one has it."</p>
+          <p class="sample-meta">Listed $45 · Est. value $120</p>
+        </div>
+      </div>
+
+      <div class="sample-item">
+        <span class="sample-era">1950s</span>
+        <div class="sample-text">
+          <p class="sample-hook">"Joe's Auto Shop closed decades ago. The shirt survived."</p>
+          <p class="sample-meta">Listed $35 · Est. value $180</p>
+        </div>
+      </div>
+
+      <div class="sample-item">
+        <span class="sample-era">1960s</span>
+        <div class="sample-text">
+          <p class="sample-hook">"Levi's changed the red tab from uppercase to lowercase in 1971. Everything before that date is a different animal entirely."</p>
+          <p class="sample-meta">Listed $150 · Est. value $400</p>
+        </div>
+      </div>
+    </div>
+
+    <p class="footer">Unsubscribe any time. No spam, ever.</p>
+  </div>
+
+  <script>
+    let selectedLang = 'en';
+
+    function selectLang(lang) {
+      selectedLang = lang;
+      document.querySelectorAll('.lang-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.lang === lang);
+      });
+    }
+
+    async function subscribe() {
+      const email = document.getElementById('emailInput').value.trim();
+      const errorEl = document.getElementById('errorMsg');
+      const btn = document.getElementById('submitBtn');
+
+      errorEl.style.display = 'none';
+
+      if (!email || !email.includes('@')) {
+        errorEl.textContent = 'Please enter a valid email address.';
+        errorEl.style.display = 'block';
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Subscribing...';
+
+      try {
+        const res = await fetch('/subscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, language: selectedLang }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          errorEl.textContent = data.error || 'Something went wrong. Please try again.';
+          errorEl.style.display = 'block';
+          btn.disabled = false;
+          btn.textContent = 'Subscribe — It\'s Free';
+          return;
+        }
+
+        document.getElementById('formSection').style.display = 'none';
+        const success = document.getElementById('successSection');
+        success.style.display = 'block';
+
+        if (selectedLang === 'zh') {
+          document.getElementById('successHeading').textContent = '訂閱成功。';
+          document.getElementById('successBody').textContent = '明天早上第一封信就會送到你的信箱。';
+        }
+
+      } catch (err) {
+        errorEl.textContent = 'Network error. Please try again.';
+        errorEl.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'Subscribe — It\'s Free';
+      }
+    }
+
+    document.getElementById('emailInput').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') subscribe();
+    });
+  </script>
+</body>
+</html>
