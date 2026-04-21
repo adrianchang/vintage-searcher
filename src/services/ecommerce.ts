@@ -64,14 +64,15 @@ async function fetchEbay(limit: number, queries: SearchQueryInput[]): Promise<Li
         for (const item of response.itemSummaries) {
           if (listings.length >= limit) break;
 
-          // Collect all image URLs
+          // Collect all image URLs — upgrade eBay thumbnails to full resolution
+          const toFullRes = (url: string) => url.replace(/s-l\d+\.jpg/, "s-l1600.jpg");
           const imageUrls: string[] = [];
           if (item.image?.imageUrl) {
-            imageUrls.push(item.image.imageUrl);
+            imageUrls.push(toFullRes(item.image.imageUrl));
           }
           if (item.additionalImages) {
             for (const img of item.additionalImages) {
-              if (img.imageUrl) imageUrls.push(img.imageUrl);
+              if (img.imageUrl) imageUrls.push(toFullRes(img.imageUrl));
             }
           }
 

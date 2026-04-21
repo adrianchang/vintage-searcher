@@ -16,6 +16,7 @@ model User {
   name      String             @unique
   googleId  String?            @unique
   email     String?            @unique
+  language  String             @default("en")
   createdAt DateTime           @default(now())
   queries   SearchQuery[]
   listings  FilteredListing[]
@@ -74,8 +75,31 @@ model Evaluation {
   references     String   // JSON array
   soldListings   String   @default("[]")  // JSON array
 
-  isOpportunity  Boolean  // margin > threshold && confidence > threshold
+  isOpportunity  Boolean
   createdAt      DateTime @default(now())
+
+  stories        Story[]
+}
+
+model Story {
+  id                   String      @id @default(cuid())
+  evaluationId         String
+  evaluation           Evaluation  @relation(fields: [evaluationId], references: [id])
+  language             String      @default("en")
+
+  hook                 String
+  brandStory           String
+  itemStory            String
+  historicalContext    String
+  marketContext        String
+
+  storyScore           Float
+  storyScoreReasoning  String
+  combinedScore        Float
+
+  createdAt            DateTime    @default(now())
+
+  @@unique([evaluationId, language])
 }
 
 // Managed by connect-pg-simple (express-session), not by Prisma

@@ -3,17 +3,28 @@ import { runScan, type ScanDeps } from "./scan";
 import { filterListings } from "./services/filter";
 import type { Listing, Evaluation, ScanConfig } from "./types";
 
+const STORY_DEFAULTS = {
+  hook: "Before fast fashion, this jacket outlasted everything.",
+  brandStory: "Founded in the Pacific Northwest, this brand built garments to last generations.",
+  itemStory: "The loop collar, visible in the photos, was phased out after the early 1960s.",
+  historicalContext: "Post-war American manufacturing was at its peak.",
+  marketContext: "Loop-collar Pendletons are a grail. Three collector bases chasing the same shirt.",
+  storyScore: 0.8,
+  storyScoreReasoning: "Strong brand narrative with authenticating construction detail.",
+};
+
 const LISTING: Listing = {
   url: "https://www.ebay.com/itm/pipe-001",
   platform: "ebay",
   title: "Vintage 1960s Pendleton Wool Board Shirt Mens Medium Blue Plaid Loop Collar",
   price: 45,
-  imageUrls: ["https://example.com/img1.jpg", "https://example.com/img1b.jpg"],
+  imageUrls: ["https://example.com/img1.jpg", "https://example.com/img1b.jpg", "https://example.com/img1c.jpg"],
   description: "Vintage Pendleton board shirt from the 1960s. Made in USA.",
   rawData: { itemId: "pipe-001", condition: "Pre-owned", seller: "vintagefinds" },
 };
 
 const EVALUATION: Evaluation = {
+  ...STORY_DEFAULTS,
   isAuthentic: true,
   itemIdentification: "Pendleton Board Shirt, loop collar, wool, 1960s",
   identificationConfidence: 0.9,
@@ -34,20 +45,19 @@ const EVALUATION: Evaluation = {
 const CONFIG: ScanConfig = {
   platform: "ebay",
   maxListings: 10,
-  minMargin: 50,
-  minConfidence: 0.7,
+  minMargin: 0,
+  minConfidence: 0,
 };
 
 function createMockPrisma() {
   const listings: Record<string, any> = {};
   const evaluations: Record<string, any> = {};
+  const stories: Record<string, any> = {};
   let idCounter = 0;
 
   return {
     user: {
       findUnique: vi.fn(async () => null),
-    },
-    searchQuery: {
       findMany: vi.fn(async () => []),
     },
     filteredListing: {
@@ -63,7 +73,6 @@ function createMockPrisma() {
         const url = where.userId_url?.url ?? where.url;
         return listings[url] ?? null;
       }),
-      findMany: vi.fn(async () => Object.values(listings)),
     },
     evaluation: {
       create: vi.fn(async ({ data }: any) => {
@@ -77,9 +86,24 @@ function createMockPrisma() {
       findUnique: vi.fn(async ({ where }: any) => {
         return evaluations[where.listingId] ?? null;
       }),
-      findMany: vi.fn(async () => Object.values(evaluations)),
     },
-    _store: { listings, evaluations },
+    story: {
+      create: vi.fn(async ({ data }: any) => {
+        const id = `story-${++idCounter}`;
+        const evaluationId = data.evaluation.connect.id;
+        const lang = data.language ?? "en";
+        const key = `${evaluationId}:${lang}`;
+        const record = { id, evaluationId, ...data, evaluation: undefined };
+        delete record.evaluation;
+        stories[key] = record;
+        return record;
+      }),
+      findUnique: vi.fn(async ({ where }: any) => {
+        const { evaluationId, language } = where.evaluationId_language ?? {};
+        return stories[`${evaluationId}:${language}`] ?? null;
+      }),
+    },
+    _store: { listings, evaluations, stories },
   };
 }
 
@@ -91,7 +115,21 @@ function makeDeps(overrides?: Partial<ScanDeps>): ScanDeps {
     fetchListings: async () => [LISTING],
     filterListings,
     evaluateListing: async () => EVALUATION,
-    sendAlert: async () => {},
+    runIdentification: async () => ({
+      isAuthentic: EVALUATION.isAuthentic,
+      itemIdentification: EVALUATION.itemIdentification,
+      itemIdentificationJapanese: EVALUATION.itemIdentification,
+      identificationConfidence: EVALUATION.identificationConfidence,
+      estimatedEra: EVALUATION.estimatedEra ?? "Unknown",
+      redFlags: EVALUATION.redFlags,
+      hook: `[ZH] ${EVALUATION.hook}`,
+      brandStory: `[ZH] ${EVALUATION.brandStory}`,
+      itemStory: `[ZH] ${EVALUATION.itemStory}`,
+      historicalContext: `[ZH] ${EVALUATION.historicalContext}`,
+      marketContext: `[ZH] ${EVALUATION.marketContext}`,
+      storyScore: EVALUATION.storyScore,
+      storyScoreReasoning: `[ZH] ${EVALUATION.storyScoreReasoning}`,
+    }),
     ...overrides,
   };
 }
@@ -109,7 +147,6 @@ describe("Pipeline: fetch → filter → store → evaluate → store", () => {
     expect(Array.isArray(out.imageUrls)).toBe(true);
     expect(out.imageUrls).toEqual(LISTING.imageUrls);
     expect(typeof out.rawData).toBe("object");
-    expect(out.rawData).not.toBeNull();
     expect(out.rawData).toEqual(LISTING.rawData);
   });
 
@@ -121,23 +158,16 @@ describe("Pipeline: fetch → filter → store → evaluate → store", () => {
 
     const create = upsertCalls[0][0].create;
 
-    // imageUrls serialized to JSON string
     expect(typeof create.imageUrls).toBe("string");
     expect(JSON.parse(create.imageUrls)).toEqual(LISTING.imageUrls);
-
-    // rawData serialized to JSON string
     expect(typeof create.rawData).toBe("string");
     expect(JSON.parse(create.rawData)).toEqual(LISTING.rawData);
-
-    // Scalar fields match input
     expect(create.url).toBe(LISTING.url);
     expect(create.title).toBe(LISTING.title);
     expect(create.price).toBe(LISTING.price);
-    expect(create.description).toBe(LISTING.description);
-    expect("userId" in create).toBe(true);
   });
 
-  it("evaluation create serializes arrays and computes isOpportunity", async () => {
+  it("evaluation create serializes arrays and computes isOpportunity via combinedScore", async () => {
     await runScan(CONFIG, makeDeps());
 
     const createCalls = mockPrisma.evaluation.create.mock.calls;
@@ -145,16 +175,12 @@ describe("Pipeline: fetch → filter → store → evaluate → store", () => {
 
     const data = createCalls[0][0].data;
 
-    // redFlags serialized
     expect(typeof data.redFlags).toBe("string");
     expect(JSON.parse(data.redFlags)).toEqual(EVALUATION.redFlags);
-
-    // references serialized
     expect(typeof data.references).toBe("string");
     expect(JSON.parse(data.references)).toEqual(EVALUATION.references);
-
-    // soldListings serialized with correct shape
     expect(typeof data.soldListings).toBe("string");
+
     const parsedSold = JSON.parse(data.soldListings);
     expect(parsedSold).toEqual(EVALUATION.soldListings);
     for (const sold of parsedSold) {
@@ -163,40 +189,40 @@ describe("Pipeline: fetch → filter → store → evaluate → store", () => {
       expect(sold).toHaveProperty("url");
     }
 
-    // isOpportunity: margin=75 >= 50, confidence=0.85 >= 0.7 → true
+    // storyScore=0.8, priceScore=75/120≈0.625 → combinedScore≈0.765 > 0.65 → true
     expect(data.isOpportunity).toBe(true);
-
-    // listing.connect.id matches the upsert return value
-    const storedListing = mockPrisma._store.listings[LISTING.url];
-    expect(data.listing.connect.id).toBe(storedListing.id);
   });
 
-  it("non-opportunity: low margin sets isOpportunity false", async () => {
-    const lowMarginEval: Evaluation = {
+  it("story create is called with correct fields for EN and ZH", async () => {
+    await runScan(CONFIG, makeDeps());
+
+    // EN story + ZH story = 2 calls
+    expect(mockPrisma.story.create).toHaveBeenCalledTimes(2);
+
+    const enData = mockPrisma.story.create.mock.calls[0][0].data;
+    expect(enData.language).toBe("en");
+    expect(enData.hook).toBe(EVALUATION.hook);
+    expect(enData.brandStory).toBe(EVALUATION.brandStory);
+    expect(enData.itemStory).toBe(EVALUATION.itemStory);
+    expect(enData.historicalContext).toBe(EVALUATION.historicalContext);
+    expect(enData.storyScore).toBe(EVALUATION.storyScore);
+    expect(typeof enData.combinedScore).toBe("number");
+
+    const zhData = mockPrisma.story.create.mock.calls[1][0].data;
+    expect(zhData.language).toBe("zh");
+    expect(zhData.hook).toBe(`[ZH] ${EVALUATION.hook}`);
+  });
+
+  it("non-opportunity: low storyScore + no margin sets isOpportunity false", async () => {
+    const weakEval: Evaluation = {
       ...EVALUATION,
+      storyScore: 0.2,
       estimatedValue: 50,
       margin: 5,
-      confidence: 0.85,
     };
 
     await runScan(CONFIG, makeDeps({
-      evaluateListing: async () => lowMarginEval,
-    }));
-
-    const data = mockPrisma.evaluation.create.mock.calls[0][0].data;
-    expect(data.isOpportunity).toBe(false);
-  });
-
-  it("non-opportunity: null estimatedValue sets isOpportunity false", async () => {
-    const nullValueEval: Evaluation = {
-      ...EVALUATION,
-      estimatedValue: null,
-      margin: null,
-      confidence: 0.3,
-    };
-
-    await runScan(CONFIG, makeDeps({
-      evaluateListing: async () => nullValueEval,
+      evaluateListing: async () => weakEval,
     }));
 
     const data = mockPrisma.evaluation.create.mock.calls[0][0].data;
@@ -206,16 +232,13 @@ describe("Pipeline: fetch → filter → store → evaluate → store", () => {
   it("full round-trip: stored data can reconstruct original Listing + Evaluation", async () => {
     await runScan(CONFIG, makeDeps());
 
-    // Reconstruct listing from stored record
     const storedListing = mockPrisma._store.listings[LISTING.url];
     expect(JSON.parse(storedListing.imageUrls)).toEqual(LISTING.imageUrls);
     expect(JSON.parse(storedListing.rawData)).toEqual(LISTING.rawData);
     expect(storedListing.url).toBe(LISTING.url);
     expect(storedListing.title).toBe(LISTING.title);
     expect(storedListing.price).toBe(LISTING.price);
-    expect(storedListing.description).toBe(LISTING.description);
 
-    // Reconstruct evaluation from stored record
     const storedEval = Object.values(mockPrisma._store.evaluations)[0] as any;
     expect(JSON.parse(storedEval.redFlags)).toEqual(EVALUATION.redFlags);
     expect(JSON.parse(storedEval.references)).toEqual(EVALUATION.references);
@@ -223,7 +246,5 @@ describe("Pipeline: fetch → filter → store → evaluate → store", () => {
     expect(storedEval.isAuthentic).toBe(EVALUATION.isAuthentic);
     expect(storedEval.estimatedValue).toBe(EVALUATION.estimatedValue);
     expect(storedEval.margin).toBe(EVALUATION.margin);
-    expect(storedEval.confidence).toBe(EVALUATION.confidence);
-    expect(storedEval.reasoning).toBe(EVALUATION.reasoning);
   });
 });

@@ -12,17 +12,25 @@ export interface Listing {
 // LLM evaluation output
 export interface Evaluation {
   isAuthentic: boolean;
-  itemIdentification: string;        // What the agent thinks the item actually is
-  identificationConfidence: number;  // How confident the agent is in its identification (0-1)
-  estimatedEra: string | null;    // Null if can't determine era (non-vintage items)
-  estimatedValue: number | null;  // Null if can't estimate (non-vintage items)
+  itemIdentification: string;
+  identificationConfidence: number;
+  estimatedEra: string | null;
+  estimatedValue: number | null;
   currentPrice: number;
-  margin: number | null;          // Null if estimatedValue is null
-  confidence: number;             // Confidence in the valuation/pricing (0-1)
+  margin: number | null;
+  confidence: number;
   reasoning: string;
   redFlags: string[];
   references: string[];
   soldListings: { title: string; price: number | null; url: string | null }[];
+  // Story fields
+  hook: string;
+  brandStory: string;
+  itemStory: string;
+  historicalContext: string;
+  marketContext: string;
+  storyScore: number;
+  storyScoreReasoning: string;
 }
 
 // Config for the scanner

@@ -6,7 +6,7 @@ const USE_MOCK_DATA = process.env.USE_MOCK_DATA === "true";
 
 const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "not-set" });
 
-const IDENTIFICATION_PROMPT = `You are a veteran vintage clothing collector evaluating an eBay listing. You MUST use Google Search to verify brand/model/era details.
+const IDENTIFICATION_PROMPT = `You are a veteran vintage clothing collector and storyteller evaluating an eBay listing. You MUST use Google Search to verify brand/model/era details.
 
 Listing Title: {title}
 Listed Price: ${"{price}"}
@@ -36,7 +36,31 @@ Also provide itemIdentificationJapanese: the Japanese equivalent search query fo
 
 Set estimatedEra to the decade or range (e.g. "1970s", "1960s-1970s").
 Put authenticating details (tags, hardware, stitching, red flags) in the redFlags array and let identificationConfidence reflect your certainty.
-Set identificationConfidence (0-1): how sure are you about WHAT this item is? High if tags/labels are clear and construction details match. Low if you're guessing based on limited photos.`;
+Set identificationConfidence (0-1): how sure are you about WHAT this item is? High if tags/labels are clear and construction details match. Low if you're guessing based on limited photos.
+
+STEP 3 — TELL THE STORY
+Write the editorial story for this item. You are a GQ senior editor who also happens to know vintage better than anyone on the floor at Grailed. Your voice is confident, opinionated, and insider — you don't explain things to people, you share them with people who already get it. Short punchy sentences. Present tense. No passive voice. No hedging. Write like you'd text a friend who collects.
+
+hook: One sentence that makes someone stop mid-scroll. Set the scene — place, era, culture. Don't start with the brand name. Don't be academic. Be cinematic. Make them feel it.
+Example: "The loop collar disappeared from Pendleton's lineup in 1963. This one has it."
+
+brandStory: 2–3 sentences on the brand. Not a Wikipedia summary — the angle that makes this brand matter to someone who cares about clothes. Founding story, who wore it, what it meant. Use Google Search. Be specific and sharp.
+
+itemStory: 2–3 sentences on THIS specific piece. The construction details that authenticate it. What the hardware, stitching, or label is actually telling you. What makes this example stand out — or not.
+
+historicalContext: 1–2 sentences. What was happening culturally when this was made? Connect the garment to its moment in a way that feels alive, not like a history textbook.
+
+marketContext: 1–2 sentences on where this sits in today's market. Is this a grail? Say it and say why — specific reasons, not vibes. Is it a sleeper that real heads know about but the algorithm hasn't caught up to yet? Is it the kind of piece that moves fast on Grailed or sits in a Tokyo shop window at triple the price? Be specific about collector demand, who's chasing it, and why.
+
+storyScore (0–1): How strong is the story, cultural weight, and collector desirability of this item?
+- 0.85–1.0: Grail territory. Iconic, authenticated, culturally loaded. Real collectors would clear their watchlist for this.
+- 0.65–0.85: Solid. Known quantity in the right circles. Good story, real demand.
+- 0.45–0.65: Interesting but niche or thin on provenance. Someone specific wants this, but not many.
+- Below 0.45: Generic. The story isn't there.
+
+storyScoreReasoning: One sentence — what pushed the score where it landed.
+
+{storyLanguageInstruction}`;
 
 const VALUATION_PROMPT = `SPECIAL INSTRUCTION: Think silently if needed. THINK LONG AND HARD ABOUT THIS
 
@@ -137,6 +161,14 @@ interface IdentificationResult {
   identificationConfidence: number;
   estimatedEra: string;
   redFlags: string[];
+  // Story fields
+  hook: string;
+  brandStory: string;
+  itemStory: string;
+  historicalContext: string;
+  marketContext: string;
+  storyScore: number;
+  storyScoreReasoning: string;
 }
 
 interface ValuationResult {
@@ -252,11 +284,16 @@ async function searchForComps(
   return { englishSoldResults, englishActiveResults, japaneseSoldResults, japaneseActiveResults };
 }
 
-function buildIdentificationPrompt(listing: Listing): string {
+const STORY_LANGUAGE_INSTRUCTIONS: Record<string, string> = {
+  zh: "Write ALL story fields (hook, brandStory, itemStory, historicalContext, marketContext, storyScoreReasoning) in Traditional Chinese (繁體中文). Keep the tone casual, cool, and insider — like a GQ editor texting a friend who collects vintage. Short punchy sentences.",
+};
+
+function buildIdentificationPrompt(listing: Listing, lang?: string): string {
   return IDENTIFICATION_PROMPT
     .replace("{title}", listing.title)
     .replace("{price}", listing.price.toString())
-    .replace("{description}", listing.description);
+    .replace("{description}", listing.description)
+    .replace("{storyLanguageInstruction}", STORY_LANGUAGE_INSTRUCTIONS[lang ?? ""] ?? "");
 }
 
 const LANGUAGE_INSTRUCTIONS: Record<string, string> = {
@@ -435,8 +472,20 @@ const IDENTIFICATION_SCHEMA = {
     identificationConfidence: { type: "number" },
     estimatedEra: { type: "string" },
     redFlags: { type: "array", items: { type: "string" } },
+    hook: { type: "string" },
+    brandStory: { type: "string" },
+    itemStory: { type: "string" },
+    historicalContext: { type: "string" },
+    marketContext: { type: "string" },
+    storyScore: { type: "number" },
+    storyScoreReasoning: { type: "string" },
   },
-  required: ["isAuthentic", "itemIdentification", "itemIdentificationJapanese", "identificationConfidence", "estimatedEra", "redFlags"],
+  required: [
+    "isAuthentic", "itemIdentification", "itemIdentificationJapanese",
+    "identificationConfidence", "estimatedEra", "redFlags",
+    "hook", "brandStory", "itemStory", "historicalContext", "marketContext",
+    "storyScore", "storyScoreReasoning",
+  ],
 };
 
 const VALUATION_SCHEMA = {
@@ -463,6 +512,22 @@ const VALUATION_SCHEMA = {
   required: ["soldListings", "currentPrice", "confidence", "reasoning"],
 };
 
+export async function runIdentification(listing: Listing, lang?: string): Promise<IdentificationResult> {
+  const timestamp = () => new Date().toISOString();
+  const imageParts = await fetchListingImages(listing, timestamp);
+  const identificationPrompt = buildIdentificationPrompt(listing, lang);
+  const { result: identification } = await callGemini<IdentificationResult>({
+    prompt: identificationPrompt,
+    imageParts,
+    schema: IDENTIFICATION_SCHEMA,
+    tools: [{ googleSearch: {} }],
+    timestamp,
+    phaseLabel: `Phase 1: Identification (${lang ?? "en"})`,
+  });
+  console.log(`[${timestamp()}]   Identified as: ${identification.itemIdentification} (${(identification.identificationConfidence * 100).toFixed(0)}% confidence)`);
+  return identification;
+}
+
 export async function evaluateListing(listing: Listing, lang?: string): Promise<Evaluation> {
   if (USE_MOCK_DATA) return getMockEvaluation(listing);
   const timestamp = () => new Date().toISOString();
@@ -471,7 +536,7 @@ export async function evaluateListing(listing: Listing, lang?: string): Promise<
   const imageParts = await fetchListingImages(listing, timestamp);
 
   // Phase 1: Identification (with images + Google Search for verification)
-  const identificationPrompt = buildIdentificationPrompt(listing);
+  const identificationPrompt = buildIdentificationPrompt(listing, lang);
   const { result: identification, references: refs1 } = await callGemini<IdentificationResult>({
     prompt: identificationPrompt,
     imageParts,
@@ -519,12 +584,29 @@ export async function evaluateListing(listing: Listing, lang?: string): Promise<
     confidence: valuation.confidence,
     reasoning: valuation.reasoning,
     references: [...refs1, ...refs2],
+    hook: identification.hook,
+    brandStory: identification.brandStory,
+    itemStory: identification.itemStory,
+    historicalContext: identification.historicalContext,
+    marketContext: identification.marketContext,
+    storyScore: identification.storyScore,
+    storyScoreReasoning: identification.storyScoreReasoning,
   };
 
-  console.log(`[${timestamp()}]   ✓ Final: Era: ${evaluation.estimatedEra}, Margin: $${evaluation.margin ?? "N/A"}, Confidence: ${(evaluation.confidence * 100).toFixed(0)}%`);
+  console.log(`[${timestamp()}]   ✓ Final: Era: ${evaluation.estimatedEra}, Story: ${(evaluation.storyScore * 100).toFixed(0)}%, Margin: $${evaluation.margin ?? "N/A"}, Confidence: ${(evaluation.confidence * 100).toFixed(0)}%`);
 
   return evaluation;
 }
+
+const MOCK_STORY_DEFAULTS = {
+  hook: "American mills stopped making them like this fifty years ago. That's the whole story.",
+  brandStory: "Founded when clothing was considered an investment, not a disposable good. Workers wore this brand because it lasted — not because it was marketed to them.",
+  itemStory: "The construction details are doing all the talking here. The stitching, the hardware, the label — everything points to an era when quality wasn't a premium tier, it was the baseline.",
+  historicalContext: "Post-war American manufacturing at its absolute peak. The garment industry was producing things that nobody expected to still exist seventy years later.",
+  marketContext: "Solid piece with a growing collector base. Not a grail, but the kind of thing that moves fast when it's priced right. Real heads know.",
+  storyScore: 0.72,
+  storyScoreReasoning: "Solid vintage piece with authenticating details, good narrative potential.",
+};
 
 // Mock evaluations based on listing URL (matches mock listings in ecommerce.ts)
 function getMockEvaluation(listing: Listing): Evaluation {
@@ -538,29 +620,20 @@ function getMockEvaluation(listing: Listing): Evaluation {
       currentPrice: 45,
       margin: 75,
       confidence: 0.85,
-      reasoning: "Pendleton board shirts with loop collars are highly collectible. The loop collar indicates pre-1960s manufacture. Made in USA Pendleton wool shirts from this era typically sell for $100-150.",
+      reasoning: "Pendleton board shirts with loop collars are highly collectible.",
       redFlags: ["Condition not fully visible in photos"],
-      references: ["Similar Pendleton loop collar sold for $135 on eBay 2024", "Vintage Pendleton price guide"],
+      references: ["Similar Pendleton loop collar sold for $135 on eBay 2024"],
       soldListings: [
         { title: "Pendleton loop collar board shirt sz M", price: 135, url: null },
         { title: "Pendleton wool board shirt 1960s blue plaid", price: 110, url: null },
       ],
-    },
-    "https://www.ebay.com/itm/123456789002": {
-      isAuthentic: true,
-      itemIdentification: "Mixed lot of women's dresses, likely 1950s-1960s, brands unverifiable from photos",
-      identificationConfidence: 0.35,
-      estimatedEra: "1950s-1960s",
-      estimatedValue: 200,
-      currentPrice: 89,
-      margin: 111,
-      confidence: 0.6,
-      reasoning: "Estate sale lots often contain hidden gems. The description mentions 50s/60s dresses. If even 2-3 pieces are authentic vintage in good condition, the lot could be worth significantly more.",
-      redFlags: ["Mixed lot - quality varies", "Cannot verify individual pieces", "As-is condition"],
-      references: ["Vintage dress lots typically yield 2-3x return for experienced resellers"],
-      soldListings: [
-        { title: "Lot of 5 1950s vintage dresses mixed sizes", price: 175, url: null },
-      ],
+      hook: "The loop collar disappeared from Pendleton's lineup in 1963. This one has it.",
+      brandStory: "Pendleton Woolen Mills, 1909, Pendleton Oregon. Started weaving blankets for Native American trade, ended up dressing surfers in Malibu and executives in Portland at the same time. That's not a brand strategy — that's just a great shirt.",
+      itemStory: "Loop collar is a hard authentication marker — Pendleton cut it after the early '60s, full stop. The wool flannel has that dense, slightly scratchy hand that every modern reproduction misses. This is the real thing.",
+      historicalContext: "Early '60s America, peak casual. The moment before the counterculture fractured everything — when the same wool shirt worked at a beach bonfire and a Sunday service and nobody thought twice about it.",
+      marketContext: "Loop-collar Pendletons are a legitimate grail. Surf collectors want them because of the Malibu connection. Workwear guys want them because of the construction. Ivy heads want them because of the silhouette. Three separate collector bases chasing the same shirt — that's why prices keep moving up. This one is priced like the seller doesn't know what they have.",
+      storyScore: 0.88,
+      storyScoreReasoning: "Iconic brand at its most collectible era, hard authentication detail in the loop collar, and three distinct collector communities actively chasing this specific variant.",
     },
     "https://www.ebay.com/itm/123456789003": {
       isAuthentic: true,
@@ -571,28 +644,20 @@ function getMockEvaluation(listing: Listing): Evaluation {
       currentPrice: 150,
       margin: 250,
       confidence: 0.9,
-      reasoning: "Big E Levi's 501s with redline selvedge are highly valuable. The single stitch construction confirms pre-1971 manufacture. Size 32x30 is desirable. Seller appears knowledgeable but price is still below market.",
+      reasoning: "Big E Levi's 501s with redline selvedge are highly valuable. Single stitch construction confirms pre-1971 manufacture.",
       redFlags: ["Seller may know value - could be auction bait"],
-      references: ["Big E 501s sold for $300-600 on eBay in 2024", "Levi's vintage dating guide confirms Big E = pre-1971"],
+      references: ["Big E 501s sold for $300-600 on eBay in 2024"],
       soldListings: [
         { title: "Levi's 501 Big E redline selvedge 33x30", price: 450, url: null },
         { title: "Levi's 501 Big E single stitch 1960s 31x32", price: 380, url: null },
-        { title: "Vintage Levi's 501 Big E selvedge denim", price: 520, url: null },
       ],
-    },
-    "https://www.ebay.com/itm/123456789004": {
-      isAuthentic: true,
-      itemIdentification: "Unknown brand wool overcoat, possibly 1950s, no visible labels",
-      identificationConfidence: 0.3,
-      estimatedEra: "1950s",
-      estimatedValue: 85,
-      currentPrice: 25,
-      margin: 60,
-      confidence: 0.5,
-      reasoning: "Description suggests casual seller clearing estate. 'Grandmas coat' language indicates potential true vintage. Wool coats from 1950s can be valuable if from quality makers.",
-      redFlags: ["Moth holes mentioned", "No label visible", "Only one photo", "Low confidence without more details"],
-      references: ["1950s wool coats range $50-200 depending on maker and condition"],
-      soldListings: [],
+      hook: "Levi's changed the red tab from uppercase to lowercase in 1971. Everything before that date is a different animal entirely.",
+      brandStory: "Levi Strauss & Co. patented the riveted pant in 1873. The 501 became a cultural object in the '50s when James Dean wore it on screen. By the '60s it was the uniform — students, workers, musicians, none of them thinking about posterity. They were just getting dressed.",
+      itemStory: "Big E red tab. Redline selvedge visible at the outseam. Single-needle stitching throughout. That's the authentication trinity and this pair has all three. The selvedge denim was woven on shuttle looms Levi's retired when they modernized — you literally cannot replicate this fabric with current production methods.",
+      historicalContext: "Late '60s San Francisco, union workers, shuttle looms running their last years. The exact moment American manufacturing was about to change forever. These jeans were made at the end of something.",
+      marketContext: "This is not a sleeper. Big E 501s with redline selvedge are the most documented, most sought-after piece of American vintage denim — full stop. Japanese collectors have been driving prices for two decades. A clean pair in this size regularly clears $400-600 on Grailed, more in Tokyo. This listing is priced by someone who doesn't know what the red tab means.",
+      storyScore: 0.97,
+      storyScoreReasoning: "The canonical American garment. Ironclad authentication markers. Global collector demand with a decades-long track record. As close to a perfect vintage find as exists.",
     },
     "https://www.ebay.com/itm/123456789005": {
       isAuthentic: true,
@@ -603,45 +668,20 @@ function getMockEvaluation(listing: Listing): Evaluation {
       currentPrice: 35,
       margin: 145,
       confidence: 0.88,
-      reasoning: "1950s bowling shirts with chain stitch embroidery are highly collectible. The two-tone design and custom embroidery ('Joes Auto Shop') add significant value. This is a prime example of underpriced vintage.",
+      reasoning: "1950s bowling shirts with chain stitch embroidery are highly collectible.",
       redFlags: [],
-      references: ["Chain stitch bowling shirts sold $150-300 on vintage marketplaces", "Rockabilly collectors pay premium for authentic 50s pieces"],
+      references: ["Chain stitch bowling shirts sold $150-300 on vintage marketplaces"],
       soldListings: [
         { title: "1950s chain stitch bowling shirt two-tone rayon", price: 225, url: null },
         { title: "Vintage 50s bowling shirt embroidered 'Al's Garage'", price: 180, url: null },
       ],
-    },
-    "https://www.ebay.com/itm/123456789007": {
-      isAuthentic: true,
-      itemIdentification: "Landlubber high-waist bell bottom jeans, deadstock with original tags, sz 26",
-      identificationConfidence: 0.88,
-      estimatedEra: "1970s",
-      estimatedValue: 150,
-      currentPrice: 55,
-      margin: 95,
-      confidence: 0.82,
-      reasoning: "Deadstock 1970s Landlubber jeans are collectible. High waist bell bottoms are currently trending. Original tags add significant value. Size 26 waist is desirable for the vintage market.",
-      redFlags: ["Verify deadstock claim - check for storage wear"],
-      references: ["Deadstock 70s jeans typically sell $100-200", "Landlubber was popular 70s brand"],
-      soldListings: [
-        { title: "Landlubber bell bottom jeans 1970s deadstock sz 28", price: 160, url: null },
-      ],
-    },
-    "https://www.ebay.com/itm/123456789008": {
-      isAuthentic: true,
-      itemIdentification: "Unbranded blanket-lined denim chore coat, workwear, heavily worn",
-      identificationConfidence: 0.5,
-      estimatedEra: "1960s-1970s",
-      estimatedValue: 120,
-      currentPrice: 40,
-      margin: 80,
-      confidence: 0.7,
-      reasoning: "Blanket-lined denim chore coats are sought after in workwear market. 'Well worn with character' is desirable for this aesthetic. No brand tag suggests possible vintage work coat.",
-      redFlags: ["No brand identification", "Heavy wear may limit value"],
-      references: ["Vintage chore coats sell $80-200 depending on condition and brand"],
-      soldListings: [
-        { title: "Vintage blanket-lined denim chore coat workwear", price: 130, url: null },
-      ],
+      hook: "Joe's Auto Shop closed decades ago. The shirt survived.",
+      brandStory: "Chain stitch bowling shirts were the branded merch before branded merch existed. Regional sportswear houses — King Louie, Swingster, Tri-Mountain — made them by the thousands for bowling leagues, auto shops, diners. Every one was a custom order. Every one is one of a kind.",
+      itemStory: "Chain stitch embroidery loops back on itself — structurally different from modern machine embroidery, creates a raised, almost three-dimensional surface you can feel with your thumb. Two-tone rayon: smooth, cool, slightly shiny in a way synthetic fabrics never replicated. The 'Joes Auto Shop' script on the back turns this from a shirt into a primary source.",
+      historicalContext: "Bowling was the number one participation sport in 1950s America. The league shirt was the uniform — the garment that put the factory worker and the shop owner in matching fits on a Tuesday night. Pure postwar American egalitarianism, sewn in rayon.",
+      marketContext: "Custom chain stitch bowling shirts are a grail for the workwear and Americana crowd — and this one has the rare trifecta: two-tone rayon, chain stitch embroidery, and a named employer on the back. Named shirts command serious premiums. Rockabilly collectors, Japanese vintage buyers, and the Grailed streetwear crowd all want this shirt for different reasons. At $35 it's not even a decision.",
+      storyScore: 0.91,
+      storyScoreReasoning: "Named custom embroidery on an authenticated chain stitch rayon bowling shirt — the kind of piece that ends up on the Instagram of every serious Americana collector within a week of listing.",
     },
     "https://www.ebay.com/itm/123456789009": {
       isAuthentic: true,
@@ -652,39 +692,30 @@ function getMockEvaluation(listing: Listing): Evaluation {
       currentPrice: 48,
       margin: 127,
       confidence: 0.92,
-      reasoning: "ILGWU union label definitively dates this to 1960s. Sequin evening gowns from this era are highly collectible. The label provides authentication that most sellers overlook.",
+      reasoning: "ILGWU union label definitively dates this to 1960s.",
       redFlags: ["Minor sequin loss mentioned"],
-      references: ["ILGWU labels date pieces to 1900-1995, style suggests 1960s", "60s sequin gowns sell $150-300"],
+      references: ["60s sequin gowns sell $150-300"],
       soldListings: [
         { title: "1960s ILGWU sequin evening gown full length", price: 195, url: null },
         { title: "Vintage 60s sequin formal dress gold", price: 165, url: null },
       ],
-    },
-    "https://www.ebay.com/itm/123456789010": {
-      isAuthentic: true,
-      itemIdentification: "Carhartt Detroit Jacket, Made in USA, blanket-lined, 1990s production",
-      identificationConfidence: 0.85,
-      estimatedEra: "1990s",
-      estimatedValue: 95,
-      currentPrice: 75,
-      margin: 20,
-      confidence: 0.75,
-      reasoning: "Made in USA Carhartt Detroit jackets are collectible but this appears to be 1990s production rather than true vintage. Still has value but margin is slim.",
-      redFlags: ["Likely 1990s not pre-1980s", "Common item - many available"],
-      references: ["90s Carhartt Detroit jackets sell $80-120"],
-      soldListings: [
-        { title: "Carhartt Detroit jacket Made in USA blanket lined", price: 95, url: null },
-      ],
+      hook: "The ILGWU label is a small red rectangle. It's also a timestamp, a union card, and the reason this dress is the real thing.",
+      brandStory: "The International Ladies' Garment Workers' Union fought for fair wages and safe conditions from 1900 until their merger in 1995. Their label — sewn into millions of American-made garments — became the authentication marker nobody talks about enough. If it has the ILGWU tag, it was made here, by skilled workers, before the industry left.",
+      itemStory: "Hand-applied sequin work, dense and heavy in the way early '60s formal wear was. Modern sequined pieces use iron-on or machine techniques — the weight alone tells you this is different. Silhouette is early-to-mid '60s: fitted waist, floor-length, the kind of construction that took a real seamstress two days to execute.",
+      historicalContext: "Early '60s America, last golden era of domestic formal wear. Before synthetics took over. Before everything moved offshore. When getting dressed for the evening meant putting on something that was actually made for you.",
+      marketContext: "ILGWU-labeled eveningwear is having a serious moment with vintage fashion collectors who care about provenance and labor history — which is increasingly everyone who matters in that space. This specific combination (union label, hand-sequin, '60s silhouette) moves fast on Vestiaire and 1stDibs when priced right. At $48 this is dramatically under what it should be.",
+      storyScore: 0.85,
+      storyScoreReasoning: "ILGWU authentication gives this dress documentary weight beyond fashion — it sits at the intersection of labor history and collectible formal wear, which is a collector sweet spot right now.",
     },
   };
 
+  const mockStory = MOCK_STORY_DEFAULTS;
   const evaluation = mockEvaluations[listing.url];
   if (evaluation) {
     console.log(`[MOCK] Evaluated: ${listing.title.slice(0, 50)}...`);
     return evaluation;
   }
 
-  // Default evaluation for unknown listings
   return {
     isAuthentic: false,
     itemIdentification: "Unknown item",
@@ -698,5 +729,6 @@ function getMockEvaluation(listing: Listing): Evaluation {
     redFlags: ["Insufficient data for evaluation"],
     references: [],
     soldListings: [],
+    ...mockStory,
   };
 }

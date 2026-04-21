@@ -1,131 +1,115 @@
 import { describe, it, expect } from "vitest";
 import type { Evaluation } from "../types";
+import { priceScore, combinedScore, isGoodFind } from "./score";
 
-// Test the opportunity detection logic
-function isOpportunity(
-  evaluation: Evaluation,
-  minMargin: number,
-  minConfidence: number
-): boolean {
-  return (
-    evaluation.margin != null &&
-    evaluation.margin >= minMargin &&
-    evaluation.confidence >= minConfidence
-  );
-}
+const STORY_DEFAULTS = {
+  hook: "A garment from another era.",
+  brandStory: "A brand with history.",
+  itemStory: "A piece with details.",
+  historicalContext: "A moment in time.",
+  marketContext: "Real heads know this one.",
+  storyScore: 0.8,
+  storyScoreReasoning: "Strong narrative.",
+};
 
-describe("Opportunity Detection", () => {
-  const minMargin = 50;
-  const minConfidence = 0.7;
-
-  it("should detect a valid opportunity", () => {
-    const evaluation: Evaluation = {
+describe("Scoring logic", () => {
+  it("priceScore returns 0 for margin below $20", () => {
+    const ev: Evaluation = {
+      ...STORY_DEFAULTS,
       isAuthentic: true,
-      itemIdentification: "Vintage 1960s item",
+      itemIdentification: "Item",
+      identificationConfidence: 0.9,
+      estimatedEra: "1960s",
+      estimatedValue: 120,
+      currentPrice: 110,
+      margin: 10,
+      confidence: 0.85,
+      reasoning: "",
+      redFlags: [],
+      references: [],
+      soldListings: [],
+    };
+    expect(priceScore(ev)).toBe(0);
+  });
+
+  it("priceScore normalizes margin/estimatedValue, capped at 1", () => {
+    const ev: Evaluation = {
+      ...STORY_DEFAULTS,
+      isAuthentic: true,
+      itemIdentification: "Item",
+      identificationConfidence: 0.9,
+      estimatedEra: "1960s",
+      estimatedValue: 120,
+      currentPrice: 45,
+      margin: 75,
+      confidence: 0.85,
+      reasoning: "",
+      redFlags: [],
+      references: [],
+      soldListings: [],
+    };
+    expect(priceScore(ev)).toBeCloseTo(75 / 120);
+  });
+
+  it("combinedScore weights story 80% and price 20%", () => {
+    const ev: Evaluation = {
+      ...STORY_DEFAULTS,
+      storyScore: 0.9,
+      isAuthentic: true,
+      itemIdentification: "Item",
       identificationConfidence: 0.9,
       estimatedEra: "1960s",
       estimatedValue: 200,
-      currentPrice: 100,
-      margin: 100,
+      currentPrice: 50,
+      margin: 150,
       confidence: 0.85,
-      reasoning: "Authentic vintage item",
+      reasoning: "",
       redFlags: [],
       references: [],
       soldListings: [],
     };
-
-    expect(isOpportunity(evaluation, minMargin, minConfidence)).toBe(true);
+    const pScore = priceScore(ev); // 150/200 = 0.75
+    const expected = 0.9 * 0.8 + pScore * 0.2;
+    expect(combinedScore(ev)).toBeCloseTo(expected);
   });
 
-  it("should reject when margin is below threshold", () => {
-    const evaluation: Evaluation = {
-      isAuthentic: true,
-      itemIdentification: "1970s item",
-      identificationConfidence: 0.8,
-      estimatedEra: "1970s",
-      estimatedValue: 120,
-      currentPrice: 100,
-      margin: 20, // Below minMargin of 50
-      confidence: 0.85,
-      reasoning: "Low margin item",
-      redFlags: [],
-      references: [],
-      soldListings: [],
-    };
-
-    expect(isOpportunity(evaluation, minMargin, minConfidence)).toBe(false);
-  });
-
-  it("should reject when confidence is below threshold", () => {
-    const evaluation: Evaluation = {
-      isAuthentic: true,
-      itemIdentification: "Possibly 1960s item",
-      identificationConfidence: 0.5,
-      estimatedEra: "1960s",
-      estimatedValue: 200,
-      currentPrice: 100,
-      margin: 100,
-      confidence: 0.5, // Below minConfidence of 0.7
-      reasoning: "Uncertain authenticity",
-      redFlags: ["Cannot verify label"],
-      references: [],
-      soldListings: [],
-    };
-
-    expect(isOpportunity(evaluation, minMargin, minConfidence)).toBe(false);
-  });
-
-  it("should reject when margin is null (non-vintage item)", () => {
-    const evaluation: Evaluation = {
+  it("isGoodFind returns false when storyScore is low and no price upside", () => {
+    const ev: Evaluation = {
+      ...STORY_DEFAULTS,
+      storyScore: 0.3,
       isAuthentic: false,
-      itemIdentification: "Modern production dress",
-      identificationConfidence: 0.95,
-      estimatedEra: "N/A (Modern Production)",
-      estimatedValue: null,
-      currentPrice: 59.4,
-      margin: null,
-      confidence: 1,
-      reasoning: "This is a modern item, not vintage",
-      redFlags: ["Item is modern, not vintage"],
-      references: [],
-      soldListings: [],
-    };
-
-    expect(isOpportunity(evaluation, minMargin, minConfidence)).toBe(false);
-  });
-
-  it("should reject when estimatedValue is null but margin is calculated as 0", () => {
-    const evaluation: Evaluation = {
-      isAuthentic: false,
-      itemIdentification: "Unknown item",
+      itemIdentification: "Unknown",
       identificationConfidence: 0.1,
       estimatedEra: "Unknown",
       estimatedValue: null,
       currentPrice: 50,
       margin: null,
       confidence: 0.3,
-      reasoning: "Unable to determine value",
-      redFlags: ["Insufficient data"],
+      reasoning: "",
+      redFlags: [],
       references: [],
       soldListings: [],
     };
-
-    expect(isOpportunity(evaluation, minMargin, minConfidence)).toBe(false);
-  });
-});
-
-describe("Margin calculation", () => {
-  it("should compute margin as estimatedValue - price", () => {
-    const estimatedValue = 200;
-    const price = 75;
-    const margin = estimatedValue !== null ? estimatedValue - price : null;
-    expect(margin).toBe(125);
+    expect(isGoodFind(ev)).toBe(false);
   });
 
-  it("should return null margin when estimatedValue is null", () => {
-    const estimatedValue: number | null = null;
-    const price = 75;
-    const margin = estimatedValue !== null ? estimatedValue - price : null;
-    expect(margin).toBeNull();
+  it("isGoodFind returns true for high story score even with modest price upside", () => {
+    const ev: Evaluation = {
+      ...STORY_DEFAULTS,
+      storyScore: 0.85,
+      isAuthentic: true,
+      itemIdentification: "Iconic piece",
+      identificationConfidence: 0.95,
+      estimatedEra: "1960s",
+      estimatedValue: 150,
+      currentPrice: 80,
+      margin: 70,
+      confidence: 0.9,
+      reasoning: "",
+      redFlags: [],
+      references: [],
+      soldListings: [],
+    };
+    expect(isGoodFind(ev)).toBe(true);
   });
 });

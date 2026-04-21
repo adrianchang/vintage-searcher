@@ -11,11 +11,9 @@ import { PrismaClient } from "./generated/prisma/client";
 import { fetchListings } from "./services/ecommerce";
 import { filterListings } from "./services/filter";
 import { evaluateListing } from "./services/evaluate";
-import { sendAlert } from "./services/notify";
 import { runScan, type ScanProgress } from "./scan";
 import { configurePassport } from "./auth";
 import { requireAuth } from "./middleware/requireAuth";
-import { chatWithListing } from "./services/chat";
 import type { ScanConfig } from "./types";
 
 const app = express();
@@ -209,53 +207,6 @@ app.get("/users/me/listings/:listingId/messages", requireAuth, async (req, res) 
 });
 
 // Send a chat message about a listing
-app.post("/users/me/listings/:listingId/chat", requireAuth, async (req, res) => {
-  const { message, lang } = req.body as { message: string; lang?: string };
-  if (!message || typeof message !== "string" || message.trim().length === 0) {
-    res.status(400).json({ error: "message required" });
-    return;
-  }
-  if (message.length > 1000) {
-    res.status(400).json({ error: "message too long (max 1000 chars)" });
-    return;
-  }
-
-  const listingId = req.params.listingId as string;
-  const listing = await prisma.filteredListing.findUnique({
-    where: { id: listingId },
-    include: { evaluation: true },
-  });
-  if (!listing || listing.userId !== req.user!.id) {
-    res.status(404).json({ error: "Listing not found" });
-    return;
-  }
-
-  // Save user message
-  await prisma.chatMessage.create({
-    data: { listingId: listing.id, role: "user", content: message.trim() },
-  });
-
-  try {
-    const reply = await chatWithListing(prisma, listing, message.trim(), lang || "en");
-
-    // Save assistant reply
-    const assistantMsg = await prisma.chatMessage.create({
-      data: { listingId: listing.id, role: "assistant", content: reply },
-    });
-
-    res.json(assistantMsg);
-  } catch (error) {
-    console.error("Chat error:", error);
-    const errorReply = lang === "zh"
-      ? "抱歉，處理您的請求時出錯了。請重試。"
-      : "Sorry, I encountered an error processing your request. Please try again.";
-    const assistantMsg = await prisma.chatMessage.create({
-      data: { listingId: listing.id, role: "assistant", content: errorReply },
-    });
-    res.json(assistantMsg);
-  }
-});
-
 // Trigger a scan — authenticated user or cron with API key
 app.post("/scan", (req, res) => {
   const cronKey = req.headers["x-api-key"];
@@ -269,8 +220,7 @@ app.post("/scan", (req, res) => {
     return;
   }
 
-  const userId = req.user?.id; // undefined for cron — falls back to Adrian in runScan
-  const lang = (req.body as { lang?: string })?.lang;
+  const userId = req.user?.id;
   const scanId = crypto.randomUUID();
   const emitter = new EventEmitter();
   scanEmitters.set(scanId, emitter);
@@ -290,8 +240,7 @@ app.post("/scan", (req, res) => {
     fetchListings,
     filterListings,
     evaluateListing,
-    sendAlert,
-  }, userId, onProgress, lang).catch((error) => {
+  }, userId, onProgress).catch((error) => {
     console.error("Scan failed:", error);
     emitter.emit("progress", { stage: "error", message: `Scan failed: ${error instanceof Error ? error.message : error}` });
   });
