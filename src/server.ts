@@ -249,6 +249,7 @@ app.post("/scan", (req, res) => {
   const testRecipients = isTest
     ? ["adrian.aa.chang.aa@gmail.com", "adrian.aa.chang@gmail.com"]
     : undefined;
+  const activeScanConfig = isTest ? { ...scanConfig, maxListings: 10 } : scanConfig;
 
   const userId = req.user?.id;
   const scanId = crypto.randomUUID();
@@ -265,7 +266,7 @@ app.post("/scan", (req, res) => {
   console.log(`Scan triggered via API${userId ? ` for user ${userId}` : " (cron)"}${isTest ? " [TEST MODE]" : ""} [${scanId}]`);
   res.json({ status: "ok", message: "Scan started", scanId });
 
-  runScan(scanConfig, {
+  runScan(activeScanConfig, {
     prisma,
     fetchListings,
     filterListings,
