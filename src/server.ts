@@ -245,6 +245,11 @@ app.post("/scan", (req, res) => {
     return;
   }
 
+  const isTest = req.query.test === "true";
+  const testRecipients = isTest
+    ? ["adrian.aa.chang.aa@gmail.com", "adrian.aa.chang@gmail.com"]
+    : undefined;
+
   const userId = req.user?.id;
   const scanId = crypto.randomUUID();
   const emitter = new EventEmitter();
@@ -257,7 +262,7 @@ app.post("/scan", (req, res) => {
     emitter.emit("progress", progress);
   };
 
-  console.log(`Scan triggered via API${userId ? ` for user ${userId}` : " (cron)"} [${scanId}]`);
+  console.log(`Scan triggered via API${userId ? ` for user ${userId}` : " (cron)"}${isTest ? " [TEST MODE]" : ""} [${scanId}]`);
   res.json({ status: "ok", message: "Scan started", scanId });
 
   runScan(scanConfig, {
@@ -265,7 +270,7 @@ app.post("/scan", (req, res) => {
     fetchListings,
     filterListings,
     evaluateListing,
-  }, userId, onProgress).catch((error) => {
+  }, userId, onProgress, testRecipients).catch((error) => {
     console.error("Scan failed:", error);
     emitter.emit("progress", { stage: "error", message: `Scan failed: ${error instanceof Error ? error.message : error}` });
   });

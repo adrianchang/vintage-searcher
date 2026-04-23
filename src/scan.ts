@@ -29,6 +29,7 @@ export async function runScan(
   deps: ScanDeps,
   userId?: string,
   onProgress?: (progress: ScanProgress) => void,
+  testRecipients?: string[],
 ) {
   const { prisma } = deps;
   console.log(`Starting vintage scan on ${config.platform}...`);
@@ -237,16 +238,29 @@ export async function runScan(
   console.log(`Evaluation complete: ${evaluatedCount} evaluated, ${skippedCount} skipped, ${errorCount} errors`);
 
   // 6. Send language-specific digest emails
-  const users = await prisma.user.findMany({
-    where: { email: { not: null } },
-    select: { email: true, language: true },
-  });
+  let recipientsByLang: Record<string, string[]> = {};
 
-  const recipientsByLang: Record<string, string[]> = {};
-  for (const user of users) {
-    const lang = user.language || "en";
-    if (!recipientsByLang[lang]) recipientsByLang[lang] = [];
-    recipientsByLang[lang].push(user.email!);
+  if (testRecipients) {
+    // Test mode: look up languages for the test recipients only
+    const testUsers = await prisma.user.findMany({
+      where: { email: { in: testRecipients } },
+      select: { email: true, language: true },
+    });
+    for (const user of testUsers) {
+      const lang = user.language || "en";
+      if (!recipientsByLang[lang]) recipientsByLang[lang] = [];
+      recipientsByLang[lang].push(user.email!);
+    }
+  } else {
+    const users = await prisma.user.findMany({
+      where: { email: { not: null } },
+      select: { email: true, language: true },
+    });
+    for (const user of users) {
+      const lang = user.language || "en";
+      if (!recipientsByLang[lang]) recipientsByLang[lang] = [];
+      recipientsByLang[lang].push(user.email!);
+    }
   }
 
   for (const lang of SUPPORTED_LANGUAGES) {
