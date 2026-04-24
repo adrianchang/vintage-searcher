@@ -286,14 +286,9 @@ function buildItemHtml(item: DigestItem, index: number, total: number, L: Record
         ${redFlagsHtml}
       </table>
 
-      <!-- Score + CTA -->
+      <!-- CTA -->
       <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:24px;">
         <tr>
-          <td style="vertical-align:middle;">
-            <p style="margin:0;font-size:12px;color:#aaa;font-family:Helvetica,Arial,sans-serif;">
-              ${L.storyScore} <strong style="color:#c8a96e;">${(evaluation.storyScore * 100).toFixed(0)}</strong> · ${L.combined} <strong style="color:#c8a96e;">${(cScore * 100).toFixed(0)}</strong>
-            </p>
-          </td>
           <td align="right">
             <a href="${listing.url}" style="display:inline-block;padding:12px 28px;background:#2c2c2c;color:#fff;text-decoration:none;font-size:13px;letter-spacing:1px;font-family:Helvetica,Arial,sans-serif;border-radius:2px;">
               ${L.viewOnEbay}
