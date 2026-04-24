@@ -53,14 +53,14 @@ export const DIGEST_CONFIGS: DigestConfig[] = [
     id: "zh-contemporary",
     language: "zh",
     searchKeywords: CONTEMPORARY_KEYWORDS,
-    recipients: ["ad841108@gmail.com"],
+    recipients: ["ad841108@gmail.com", "adrian.aa.chang.aa@gmail.com"],
     isDefault: false,
   },
   {
     id: "en-souvenir",
     language: "en",
     searchKeywords: SOUVENIR_KEYWORDS,
-    recipients: ["samlin001@gmail.com"],
+    recipients: ["samlin001@gmail.com", "adrian.aa.chang.aa@gmail.com"],
     isDefault: false,
   },
 ];
