@@ -289,12 +289,14 @@ const STORY_LANGUAGE_INSTRUCTIONS: Record<string, string> = {
   zh: "Write ALL story fields (hook, brandStory, itemStory, historicalContext, marketContext, storyScoreReasoning) in Traditional Chinese (繁體中文). Keep the tone casual, cool, and insider — like a GQ editor texting a friend who collects vintage. Short punchy sentences.",
 };
 
-function buildIdentificationPrompt(listing: Listing, lang?: string): string {
+function buildIdentificationPrompt(listing: Listing, lang?: string, promptAppend?: string): string {
+  const langInstruction = STORY_LANGUAGE_INSTRUCTIONS[lang ?? ""] ?? "";
+  const append = [langInstruction, promptAppend].filter(Boolean).join("\n\n");
   return IDENTIFICATION_PROMPT
     .replace("{title}", listing.title)
     .replace("{price}", listing.price.toString())
     .replace("{description}", listing.description)
-    .replace("{storyLanguageInstruction}", STORY_LANGUAGE_INSTRUCTIONS[lang ?? ""] ?? "");
+    .replace("{storyLanguageInstruction}", append);
 }
 
 const LANGUAGE_INSTRUCTIONS: Record<string, string> = {
@@ -513,10 +515,10 @@ const VALUATION_SCHEMA = {
   required: ["soldListings", "currentPrice", "confidence", "reasoning"],
 };
 
-export async function runIdentification(listing: Listing, lang?: string): Promise<IdentificationResult> {
+export async function runIdentification(listing: Listing, lang?: string, promptAppend?: string): Promise<IdentificationResult> {
   const timestamp = () => new Date().toISOString();
   const imageParts = await fetchListingImages(listing, timestamp);
-  const identificationPrompt = buildIdentificationPrompt(listing, lang);
+  const identificationPrompt = buildIdentificationPrompt(listing, lang, promptAppend);
   const { result: identification } = await callGemini<IdentificationResult>({
     prompt: identificationPrompt,
     imageParts,
@@ -529,7 +531,7 @@ export async function runIdentification(listing: Listing, lang?: string): Promis
   return identification;
 }
 
-export async function evaluateListing(listing: Listing, lang?: string): Promise<Evaluation> {
+export async function evaluateListing(listing: Listing, lang?: string, promptAppend?: string): Promise<Evaluation> {
   if (USE_MOCK_DATA) return getMockEvaluation(listing);
   const timestamp = () => new Date().toISOString();
   console.log(`[${timestamp()}] Evaluating: ${listing.title.slice(0, 50)}...`);
@@ -537,7 +539,7 @@ export async function evaluateListing(listing: Listing, lang?: string): Promise<
   const imageParts = await fetchListingImages(listing, timestamp);
 
   // Phase 1: Identification (with images + Google Search for verification)
-  const identificationPrompt = buildIdentificationPrompt(listing, lang);
+  const identificationPrompt = buildIdentificationPrompt(listing, lang, promptAppend);
   const { result: identification, references: refs1 } = await callGemini<IdentificationResult>({
     prompt: identificationPrompt,
     imageParts,

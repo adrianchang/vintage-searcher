@@ -1,8 +1,10 @@
 import { PrismaClient } from "./generated/prisma/client";
 import { type Platform } from "./services/ecommerce";
+import { type FilterOptions } from "./services/filter";
 import { sendDigestEmail, type DigestItem } from "./services/email";
-import { combinedScore, isGoodFind, priceScore } from "./services/score";
+import { combinedScore, isGoodFind } from "./services/score";
 import { runIdentification as defaultRunIdentification } from "./services/evaluate";
+import { DIGEST_CONFIGS, type DigestConfig } from "./configs/digests";
 import type { Listing, Evaluation, ScanConfig } from "./types";
 
 export type ScanProgress = {
@@ -15,14 +17,12 @@ export type ScanProgress = {
 
 export interface ScanDeps {
   prisma: PrismaClient;
-  fetchListings: (platform: Platform, limit: number) => Promise<Listing[]>;
-  filterListings: (listings: Listing[]) => Promise<Listing[]>;
-  evaluateListing: (listing: Listing, lang?: string) => Promise<Evaluation>;
+  fetchListings: (platform: Platform, limit: number, queries?: { query: string; count: number }[]) => Promise<Listing[]>;
+  filterListings: (listings: Listing[], options?: FilterOptions) => Promise<Listing[]>;
+  evaluateListing: (listing: Listing, lang?: string, promptAppend?: string) => Promise<Evaluation>;
   runIdentification?: typeof defaultRunIdentification;
+  configs?: DigestConfig[];
 }
-
-const SUPPORTED_LANGUAGES = ["en", "zh"] as const;
-type SupportedLanguage = typeof SUPPORTED_LANGUAGES[number];
 
 export async function runScan(
   config: ScanConfig,
@@ -34,17 +34,52 @@ export async function runScan(
   const { prisma } = deps;
   console.log(`Starting vintage scan on ${config.platform}...`);
 
+  const configs = deps.configs ?? DIGEST_CONFIGS;
+  let totalOpportunities = 0;
+
+  for (const digestConfig of configs) {
+    if (digestConfig.recipients.length === 0) continue;
+
+    const recipients = testRecipients
+      ? testRecipients.filter(r => digestConfig.recipients.includes(r))
+      : digestConfig.recipients;
+
+    if (recipients.length === 0) continue;
+
+    console.log(`\n--- Config: ${digestConfig.id} (${digestConfig.language}) → ${recipients.join(", ")} ---`);
+
+    await runConfigScan(config, deps, digestConfig, recipients, onProgress);
+    totalOpportunities++;
+  }
+
+  onProgress?.({
+    stage: 'done',
+    message: `Scan complete`,
+    opportunities: totalOpportunities,
+  });
+}
+
+async function runConfigScan(
+  config: ScanConfig,
+  deps: ScanDeps,
+  digestConfig: DigestConfig,
+  recipients: string[],
+  onProgress?: (progress: ScanProgress) => void,
+) {
+  const { prisma } = deps;
+  const { language, searchKeywords, filter: filterOptions, promptAppend, id: configId } = digestConfig;
+
   // 1. Fetch
-  const listings = await deps.fetchListings(config.platform, config.maxListings);
+  const listings = await deps.fetchListings(config.platform, config.maxListings, searchKeywords);
   console.log(`Fetched ${listings.length} listings`);
-  onProgress?.({ stage: 'fetch', message: `Fetched ${listings.length} listings` });
+  onProgress?.({ stage: 'fetch', message: `[${configId}] Fetched ${listings.length} listings` });
 
   // 2. Filter
-  const filtered = await deps.filterListings(listings);
+  const filtered = await deps.filterListings(listings, filterOptions);
   console.log(`${filtered.length} listings passed filter`);
-  onProgress?.({ stage: 'filter', message: `${filtered.length} passed filter` });
+  onProgress?.({ stage: 'filter', message: `[${configId}] ${filtered.length} passed filter` });
 
-  // 3. Store filtered listings
+  // 3. Store filtered listings (global — deduped by URL)
   for (const listing of filtered) {
     await prisma.filteredListing.upsert({
       where: { url: listing.url },
@@ -61,143 +96,99 @@ export async function runScan(
     });
   }
 
-  // 4. Evaluate listings (EN pass — runs both Phase 1 + Phase 2)
-  // Builds evaluation records and EN stories. Collects per-language good finds.
-  const goodFindsByLang: Record<SupportedLanguage, DigestItem[]> = { en: [], zh: [] };
+  // 4. Evaluate + story per listing
+  const goodFinds: DigestItem[] = [];
   let evaluatedCount = 0;
   let skippedCount = 0;
   let errorCount = 0;
 
   for (const listing of filtered) {
-    const dbListing = await prisma.filteredListing.findUnique({
-      where: { url: listing.url },
-    });
+    const dbListing = await prisma.filteredListing.findUnique({ where: { url: listing.url } });
     if (!dbListing) continue;
 
     onProgress?.({
       stage: 'evaluate',
-      message: `Evaluating: ${listing.title.slice(0, 50)}...`,
+      message: `[${configId}] Evaluating: ${listing.title.slice(0, 50)}...`,
       evaluated: evaluatedCount + skippedCount,
       total: filtered.length,
     });
 
     try {
-      // Check if Evaluation already exists
-      let dbEvaluation = await prisma.evaluation.findUnique({
-        where: { listingId: dbListing.id },
-      });
-
-      let enEvaluation: Evaluation | null = null;
+      // Get or create Evaluation (shared across configs — price data is config-agnostic)
+      let dbEvaluation = await prisma.evaluation.findUnique({ where: { listingId: dbListing.id } });
+      let baseEvaluation: Evaluation | null = null;
 
       if (!dbEvaluation) {
-        // Run full evaluation (EN): Phase 1 (identification + EN story) + Phase 2 (valuation)
-        enEvaluation = await deps.evaluateListing(listing, "en");
+        baseEvaluation = await deps.evaluateListing(listing, language, promptAppend);
         evaluatedCount++;
 
-        const score = combinedScore(enEvaluation);
-        const qualifies = isGoodFind(enEvaluation);
+        const score = combinedScore(baseEvaluation);
+        const qualifies = isGoodFind(baseEvaluation);
 
         dbEvaluation = await prisma.evaluation.create({
           data: {
             listing: { connect: { id: dbListing.id } },
-            isAuthentic: enEvaluation.isAuthentic,
-            itemIdentification: enEvaluation.itemIdentification,
-            identificationConfidence: enEvaluation.identificationConfidence,
-            estimatedEra: enEvaluation.estimatedEra,
-            estimatedValue: enEvaluation.estimatedValue,
-            currentPrice: enEvaluation.currentPrice,
-            margin: enEvaluation.margin,
-            confidence: enEvaluation.confidence,
-            reasoning: enEvaluation.reasoning,
-            redFlags: JSON.stringify(enEvaluation.redFlags),
-            references: JSON.stringify(enEvaluation.references),
-            soldListings: JSON.stringify(enEvaluation.soldListings),
+            isAuthentic: baseEvaluation.isAuthentic,
+            itemIdentification: baseEvaluation.itemIdentification,
+            identificationConfidence: baseEvaluation.identificationConfidence,
+            estimatedEra: baseEvaluation.estimatedEra,
+            estimatedValue: baseEvaluation.estimatedValue,
+            currentPrice: baseEvaluation.currentPrice,
+            margin: baseEvaluation.margin,
+            confidence: baseEvaluation.confidence,
+            reasoning: baseEvaluation.reasoning,
+            redFlags: JSON.stringify(baseEvaluation.redFlags),
+            references: JSON.stringify(baseEvaluation.references),
+            soldListings: JSON.stringify(baseEvaluation.soldListings),
             isOpportunity: qualifies,
           },
         });
-
-        // Persist EN story
-        await prisma.story.create({
-          data: {
-            evaluation: { connect: { id: dbEvaluation.id } },
-            language: "en",
-            hook: enEvaluation.hook,
-            brandStory: enEvaluation.brandStory,
-            itemStory: enEvaluation.itemStory,
-            historicalContext: enEvaluation.historicalContext,
-            marketContext: enEvaluation.marketContext,
-            storyScore: enEvaluation.storyScore,
-            storyScoreReasoning: enEvaluation.storyScoreReasoning,
-            combinedScore: score,
-          },
-        });
-
-        if (qualifies) {
-          goodFindsByLang.en.push({ listing, evaluation: enEvaluation, score });
-          console.log(`  ✓ EN good find (score ${(score * 100).toFixed(0)}%): ${listing.title.slice(0, 60)}`);
-        } else {
-          console.log(`  ✗ Scored ${(score * 100).toFixed(0)}% — below threshold: ${listing.title.slice(0, 60)}`);
-        }
       } else {
         skippedCount++;
       }
 
-      // 5. Generate ZH story (Phase 1 only — reuses existing valuation)
-      const existingZhStory = await prisma.story.findUnique({
-        where: { evaluationId_language: { evaluationId: dbEvaluation.id, language: "zh" } },
+      // Get or create Story for this (evaluation, language, config)
+      const existingStory = await prisma.story.findUnique({
+        where: { evaluationId_language_configId: { evaluationId: dbEvaluation.id, language, configId } },
       });
 
-      if (!existingZhStory) {
+      let storyEvaluation: Evaluation;
+
+      if (!existingStory) {
         const identify = deps.runIdentification ?? defaultRunIdentification;
-        const zhIdentification = await identify(listing, "zh");
-        const enStory = await prisma.story.findUnique({
-          where: { evaluationId_language: { evaluationId: dbEvaluation.id, language: "en" } },
+        const identification = await identify(listing, language, promptAppend);
+        const score = combinedScore({
+          ...identification,
+          estimatedValue: dbEvaluation.estimatedValue,
+          margin: dbEvaluation.margin,
+          currentPrice: dbEvaluation.currentPrice,
+          isAuthentic: dbEvaluation.isAuthentic,
+          identificationConfidence: dbEvaluation.identificationConfidence,
+          estimatedEra: dbEvaluation.estimatedEra,
+          confidence: dbEvaluation.confidence,
+          reasoning: dbEvaluation.reasoning,
+          redFlags: JSON.parse(dbEvaluation.redFlags),
+          references: JSON.parse(dbEvaluation.references),
+          soldListings: JSON.parse(dbEvaluation.soldListings),
         });
-        const zhCombinedScore = enStory?.combinedScore ?? 0;
 
         await prisma.story.create({
           data: {
             evaluation: { connect: { id: dbEvaluation.id } },
-            language: "zh",
-            hook: zhIdentification.hook,
-            brandStory: zhIdentification.brandStory,
-            itemStory: zhIdentification.itemStory,
-            historicalContext: zhIdentification.historicalContext,
-            marketContext: zhIdentification.marketContext,
-            storyScore: zhIdentification.storyScore,
-            storyScoreReasoning: zhIdentification.storyScoreReasoning,
-            combinedScore: zhCombinedScore,
+            language,
+            configId,
+            hook: identification.hook,
+            brandStory: identification.brandStory,
+            itemStory: identification.itemStory,
+            historicalContext: identification.historicalContext,
+            marketContext: identification.marketContext,
+            storyScore: identification.storyScore,
+            storyScoreReasoning: identification.storyScoreReasoning,
+            combinedScore: score,
           },
         });
 
-        // Build ZH DigestItem from evaluation data if it qualifies
-        if (dbEvaluation.isOpportunity) {
-          const zhEvaluation: Evaluation = {
-            isAuthentic: dbEvaluation.isAuthentic,
-            itemIdentification: dbEvaluation.itemIdentification,
-            identificationConfidence: dbEvaluation.identificationConfidence,
-            estimatedEra: dbEvaluation.estimatedEra,
-            estimatedValue: dbEvaluation.estimatedValue,
-            currentPrice: dbEvaluation.currentPrice,
-            margin: dbEvaluation.margin,
-            confidence: dbEvaluation.confidence,
-            reasoning: dbEvaluation.reasoning,
-            redFlags: JSON.parse(dbEvaluation.redFlags),
-            references: JSON.parse(dbEvaluation.references),
-            soldListings: JSON.parse(dbEvaluation.soldListings),
-            hook: zhIdentification.hook,
-            brandStory: zhIdentification.brandStory,
-            itemStory: zhIdentification.itemStory,
-            historicalContext: zhIdentification.historicalContext,
-            marketContext: zhIdentification.marketContext,
-            storyScore: zhIdentification.storyScore,
-            storyScoreReasoning: zhIdentification.storyScoreReasoning,
-          };
-          goodFindsByLang.zh.push({ listing, evaluation: zhEvaluation, score: zhCombinedScore });
-        }
-      } else if (dbEvaluation.isOpportunity && enEvaluation === null) {
-        // Re-run already had EN eval skipped — still need ZH good finds for email
-        const zhEvaluation: Evaluation = {
+        storyEvaluation = {
           isAuthentic: dbEvaluation.isAuthentic,
           itemIdentification: dbEvaluation.itemIdentification,
           identificationConfidence: dbEvaluation.identificationConfidence,
@@ -210,15 +201,45 @@ export async function runScan(
           redFlags: JSON.parse(dbEvaluation.redFlags),
           references: JSON.parse(dbEvaluation.references),
           soldListings: JSON.parse(dbEvaluation.soldListings),
-          hook: existingZhStory.hook,
-          brandStory: existingZhStory.brandStory,
-          itemStory: existingZhStory.itemStory,
-          historicalContext: existingZhStory.historicalContext,
-          marketContext: existingZhStory.marketContext,
-          storyScore: existingZhStory.storyScore,
-          storyScoreReasoning: existingZhStory.storyScoreReasoning,
+          hook: identification.hook,
+          brandStory: identification.brandStory,
+          itemStory: identification.itemStory,
+          historicalContext: identification.historicalContext,
+          marketContext: identification.marketContext,
+          storyScore: identification.storyScore,
+          storyScoreReasoning: identification.storyScoreReasoning,
         };
-        goodFindsByLang.zh.push({ listing, evaluation: zhEvaluation, score: existingZhStory.combinedScore });
+
+        if (dbEvaluation.isOpportunity) {
+          goodFinds.push({ listing, evaluation: storyEvaluation, score });
+          console.log(`  ✓ Good find (score ${(score * 100).toFixed(0)}%): ${listing.title.slice(0, 60)}`);
+        } else {
+          console.log(`  ✗ Scored ${(combinedScore(storyEvaluation) * 100).toFixed(0)}% — below threshold`);
+        }
+      } else if (dbEvaluation.isOpportunity) {
+        // Story already exists — use it for email
+        storyEvaluation = {
+          isAuthentic: dbEvaluation.isAuthentic,
+          itemIdentification: dbEvaluation.itemIdentification,
+          identificationConfidence: dbEvaluation.identificationConfidence,
+          estimatedEra: dbEvaluation.estimatedEra,
+          estimatedValue: dbEvaluation.estimatedValue,
+          currentPrice: dbEvaluation.currentPrice,
+          margin: dbEvaluation.margin,
+          confidence: dbEvaluation.confidence,
+          reasoning: dbEvaluation.reasoning,
+          redFlags: JSON.parse(dbEvaluation.redFlags),
+          references: JSON.parse(dbEvaluation.references),
+          soldListings: JSON.parse(dbEvaluation.soldListings),
+          hook: existingStory.hook,
+          brandStory: existingStory.brandStory,
+          itemStory: existingStory.itemStory,
+          historicalContext: existingStory.historicalContext,
+          marketContext: existingStory.marketContext,
+          storyScore: existingStory.storyScore,
+          storyScoreReasoning: existingStory.storyScoreReasoning,
+        };
+        goodFinds.push({ listing, evaluation: storyEvaluation, score: existingStory.combinedScore });
       }
 
     } catch (error) {
@@ -228,48 +249,14 @@ export async function runScan(
     }
   }
 
-  console.log(`Evaluation complete: ${evaluatedCount} evaluated, ${skippedCount} skipped, ${errorCount} errors`);
+  console.log(`[${configId}] Evaluation complete: ${evaluatedCount} evaluated, ${skippedCount} skipped, ${errorCount} errors`);
+  console.log(`[${configId}] Good finds: ${goodFinds.length}`);
 
-  // 6. Send language-specific digest emails
-  let recipientsByLang: Record<string, string[]> = {};
-
-  if (testRecipients) {
-    // Test mode: look up languages for the test recipients only
-    const testUsers = await prisma.user.findMany({
-      where: { email: { in: testRecipients } },
-      select: { email: true, language: true },
-    });
-    for (const user of testUsers) {
-      const lang = user.language || "en";
-      if (!recipientsByLang[lang]) recipientsByLang[lang] = [];
-      recipientsByLang[lang].push(user.email!);
-    }
+  // 5. Send digest email
+  if (goodFinds.length > 0) {
+    goodFinds.sort((a, b) => b.score - a.score);
+    await sendDigestEmail(goodFinds, recipients, language);
   } else {
-    const users = await prisma.user.findMany({
-      where: { email: { not: null } },
-      select: { email: true, language: true },
-    });
-    for (const user of users) {
-      const lang = user.language || "en";
-      if (!recipientsByLang[lang]) recipientsByLang[lang] = [];
-      recipientsByLang[lang].push(user.email!);
-    }
+    console.log(`[${configId}] No good finds — no email sent`);
   }
-
-  for (const lang of SUPPORTED_LANGUAGES) {
-    const finds = goodFindsByLang[lang];
-    const recipients = recipientsByLang[lang] ?? [];
-    if (finds.length === 0) {
-      console.log(`No good finds for ${lang} — skipping email`);
-      continue;
-    }
-    finds.sort((a, b) => b.score - a.score);
-    await sendDigestEmail(finds, recipients, lang);
-  }
-
-  onProgress?.({
-    stage: 'done',
-    message: `Found ${goodFindsByLang.en.length} good finds`,
-    opportunities: goodFindsByLang.en.length,
-  });
 }

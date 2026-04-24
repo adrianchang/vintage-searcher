@@ -91,15 +91,16 @@ function createMockPrisma() {
         const id = `story-${++idCounter}`;
         const evaluationId = data.evaluation.connect.id;
         const lang = data.language ?? "en";
-        const key = `${evaluationId}:${lang}`;
+        const configId = data.configId ?? "en-default";
+        const key = `${evaluationId}:${lang}:${configId}`;
         const record = { id, evaluationId, ...data, evaluation: undefined };
         delete record.evaluation;
         stories[key] = record;
         return record;
       }),
       findUnique: vi.fn(async ({ where }: any) => {
-        const { evaluationId, language } = where.evaluationId_language ?? {};
-        return stories[`${evaluationId}:${language}`] ?? null;
+        const { evaluationId, language, configId } = where.evaluationId_language_configId ?? {};
+        return stories[`${evaluationId}:${language}:${configId}`] ?? null;
       }),
     },
     _store: { listings, evaluations, stories },
@@ -108,26 +109,42 @@ function createMockPrisma() {
 
 let mockPrisma: ReturnType<typeof createMockPrisma>;
 
+const TEST_CONFIG = [
+  {
+    id: "en-default",
+    language: "en" as const,
+    searchKeywords: [{ query: "vintage", count: 10 }],
+    recipients: ["test@example.com"],
+  },
+  {
+    id: "zh-default",
+    language: "zh" as const,
+    searchKeywords: [{ query: "vintage", count: 10 }],
+    recipients: ["test-zh@example.com"],
+  },
+];
+
 function makeDeps(overrides?: Partial<ScanDeps>): ScanDeps {
   return {
     prisma: mockPrisma as any,
     fetchListings: async () => [LISTING],
     filterListings,
+    configs: TEST_CONFIG,
     evaluateListing: async () => EVALUATION,
-    runIdentification: async () => ({
+    runIdentification: async (_listing, lang) => ({
       isAuthentic: EVALUATION.isAuthentic,
       itemIdentification: EVALUATION.itemIdentification,
       itemIdentificationJapanese: EVALUATION.itemIdentification,
       identificationConfidence: EVALUATION.identificationConfidence,
       estimatedEra: EVALUATION.estimatedEra ?? "Unknown",
       redFlags: EVALUATION.redFlags,
-      hook: `[ZH] ${EVALUATION.hook}`,
-      brandStory: `[ZH] ${EVALUATION.brandStory}`,
-      itemStory: `[ZH] ${EVALUATION.itemStory}`,
-      historicalContext: `[ZH] ${EVALUATION.historicalContext}`,
-      marketContext: `[ZH] ${EVALUATION.marketContext}`,
+      hook: lang === "zh" ? `[ZH] ${EVALUATION.hook}` : EVALUATION.hook,
+      brandStory: lang === "zh" ? `[ZH] ${EVALUATION.brandStory}` : EVALUATION.brandStory,
+      itemStory: lang === "zh" ? `[ZH] ${EVALUATION.itemStory}` : EVALUATION.itemStory,
+      historicalContext: lang === "zh" ? `[ZH] ${EVALUATION.historicalContext}` : EVALUATION.historicalContext,
+      marketContext: lang === "zh" ? `[ZH] ${EVALUATION.marketContext}` : EVALUATION.marketContext,
       storyScore: EVALUATION.storyScore,
-      storyScoreReasoning: `[ZH] ${EVALUATION.storyScoreReasoning}`,
+      storyScoreReasoning: lang === "zh" ? `[ZH] ${EVALUATION.storyScoreReasoning}` : EVALUATION.storyScoreReasoning,
     }),
     ...overrides,
   };
@@ -153,7 +170,8 @@ describe("Pipeline: fetch → filter → store → evaluate → store", () => {
     await runScan(CONFIG, makeDeps());
 
     const upsertCalls = mockPrisma.filteredListing.upsert.mock.calls;
-    expect(upsertCalls).toHaveLength(1);
+    // 1 listing × 2 configs = 2 upsert calls (deduped in DB by URL)
+    expect(upsertCalls).toHaveLength(2);
 
     const create = upsertCalls[0][0].create;
 

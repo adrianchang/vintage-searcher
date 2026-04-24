@@ -66,6 +66,7 @@ model Story {
   evaluationId         String
   evaluation           Evaluation  @relation(fields: [evaluationId], references: [id])
   language             String      @default("en")
+  configId             String      @default("en-default")
 
   hook                 String
   brandStory           String
@@ -79,7 +80,7 @@ model Story {
 
   createdAt            DateTime    @default(now())
 
-  @@unique([evaluationId, language])
+  @@unique([evaluationId, language, configId])
 }
 
 // Managed by connect-pg-simple (express-session), not by Prisma

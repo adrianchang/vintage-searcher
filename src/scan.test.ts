@@ -126,15 +126,16 @@ function createMockPrisma() {
         const id = `story-${++idCounter}`;
         const evaluationId = data.evaluation.connect.id;
         const lang = data.language ?? "en";
-        const key = `${evaluationId}:${lang}`;
+        const configId = data.configId ?? "en-default";
+        const key = `${evaluationId}:${lang}:${configId}`;
         const record = { id, evaluationId, ...data, evaluation: undefined };
         delete record.evaluation;
         stories[key] = record;
         return record;
       }),
       findUnique: vi.fn(async ({ where }: any) => {
-        const { evaluationId, language } = where.evaluationId_language ?? {};
-        return stories[`${evaluationId}:${language}`] ?? null;
+        const { evaluationId, language, configId } = where.evaluationId_language_configId ?? {};
+        return stories[`${evaluationId}:${language}:${configId}`] ?? null;
       }),
     },
     _store: { listings, evaluations, stories },
@@ -143,19 +144,36 @@ function createMockPrisma() {
 
 let mockPrisma: ReturnType<typeof createMockPrisma>;
 
+const TEST_CONFIG = [
+  {
+    id: "en-default",
+    language: "en" as const,
+    searchKeywords: [{ query: "vintage", count: 10 }],
+    recipients: ["test@example.com"],
+  },
+  {
+    id: "zh-default",
+    language: "zh" as const,
+    searchKeywords: [{ query: "vintage", count: 10 }],
+    recipients: ["test-zh@example.com"],
+  },
+];
+
 function makeDeps(overrides?: Partial<ScanDeps>): ScanDeps {
   return {
     prisma: mockPrisma as any,
     fetchListings: async () => MOCK_LISTINGS,
     filterListings,
+    configs: TEST_CONFIG,
     evaluateListing: async (listing: Listing) => {
       const evaluation = MOCK_EVALUATIONS[listing.url];
       if (!evaluation) throw new Error(`No mock evaluation for ${listing.url}`);
       return evaluation;
     },
-    runIdentification: async (listing: Listing) => {
+    runIdentification: async (listing: Listing, lang?: string) => {
       const evaluation = MOCK_EVALUATIONS[listing.url];
       if (!evaluation) throw new Error(`No mock evaluation for ${listing.url}`);
+      const prefix = lang === "zh" ? "[ZH] " : "";
       return {
         isAuthentic: evaluation.isAuthentic,
         itemIdentification: evaluation.itemIdentification,
@@ -163,13 +181,13 @@ function makeDeps(overrides?: Partial<ScanDeps>): ScanDeps {
         identificationConfidence: evaluation.identificationConfidence,
         estimatedEra: evaluation.estimatedEra ?? "Unknown",
         redFlags: evaluation.redFlags,
-        hook: `[ZH] ${evaluation.hook}`,
-        brandStory: `[ZH] ${evaluation.brandStory}`,
-        itemStory: `[ZH] ${evaluation.itemStory}`,
-        historicalContext: `[ZH] ${evaluation.historicalContext}`,
-        marketContext: `[ZH] ${evaluation.marketContext}`,
+        hook: `${prefix}${evaluation.hook}`,
+        brandStory: `${prefix}${evaluation.brandStory}`,
+        itemStory: `${prefix}${evaluation.itemStory}`,
+        historicalContext: `${prefix}${evaluation.historicalContext}`,
+        marketContext: `${prefix}${evaluation.marketContext}`,
         storyScore: evaluation.storyScore,
-        storyScoreReasoning: `[ZH] ${evaluation.storyScoreReasoning}`,
+        storyScoreReasoning: `${prefix}${evaluation.storyScoreReasoning}`,
       };
     },
     ...overrides,
@@ -184,8 +202,8 @@ describe("runScan", () => {
   it("should store filtered listings (reproduction filtered out)", async () => {
     await runScan(config, makeDeps());
 
-    // 3 listings in, but "reproduction" gets filtered → 2 upserts
-    expect(mockPrisma.filteredListing.upsert).toHaveBeenCalledTimes(2);
+    // 2 filtered listings × 2 configs = 4 upsert calls (deduped in DB by URL)
+    expect(mockPrisma.filteredListing.upsert).toHaveBeenCalledTimes(4);
 
     const storedUrls = Object.keys(mockPrisma._store.listings).sort();
     expect(storedUrls).toEqual([
@@ -249,7 +267,9 @@ describe("runScan", () => {
       },
     }));
 
-    expect(callCount).toBe(2);
+    // EN config: test-001 errors (no eval), test-002 succeeds → 2 calls
+    // ZH config: test-001 still has no eval → retried → 3rd call; test-002 has eval → skip
+    expect(callCount).toBe(3);
     expect(mockPrisma.evaluation.create).toHaveBeenCalledTimes(1);
   });
 
