@@ -10,6 +10,7 @@ export interface DigestConfig {
   };
   promptAppend?: string;
   recipients: string[];
+  isDefault?: boolean; // if true, also sends to all DB users with matching language
 }
 
 const DEFAULT_KEYWORDS: SearchQueryInput[] = [
@@ -25,12 +26,14 @@ export const DIGEST_CONFIGS: DigestConfig[] = [
     language: "en",
     searchKeywords: DEFAULT_KEYWORDS,
     recipients: ["adrian.aa.chang.aa@gmail.com", "weihsiu@gmail.com"],
+    isDefault: true,
   },
   {
     id: "zh-default",
     language: "zh",
     searchKeywords: DEFAULT_KEYWORDS,
     recipients: ["adrian.aa.chang@gmail.com"],
+    isDefault: true,
   },
   // Config 3 — TBD
   // Config 4 — TBD

@@ -37,12 +37,29 @@ export async function runScan(
   const configs = deps.configs ?? DIGEST_CONFIGS;
   let totalOpportunities = 0;
 
+  // Collect all emails claimed by special (non-default) configs to avoid duplicates
+  const specialRecipients = new Set(
+    configs.filter(c => !c.isDefault).flatMap(c => c.recipients)
+  );
+
   for (const digestConfig of configs) {
-    if (digestConfig.recipients.length === 0) continue;
+    // For default configs, merge in all DB users with matching language
+    let baseRecipients = [...digestConfig.recipients];
+    if (digestConfig.isDefault && !testRecipients) {
+      const dbUsers = await prisma.user.findMany({ where: { language: digestConfig.language } });
+      for (const user of dbUsers) {
+        if (!user.email) continue;
+        if (!specialRecipients.has(user.email) && !baseRecipients.includes(user.email)) {
+          baseRecipients.push(user.email);
+        }
+      }
+    }
+
+    if (baseRecipients.length === 0) continue;
 
     const recipients = testRecipients
-      ? testRecipients.filter(r => digestConfig.recipients.includes(r))
-      : digestConfig.recipients;
+      ? testRecipients.filter(r => baseRecipients.includes(r))
+      : baseRecipients;
 
     if (recipients.length === 0) continue;
 
