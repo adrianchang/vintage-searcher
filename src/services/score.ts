@@ -15,7 +15,6 @@ function eraPenalty(era: string | null | undefined): number {
   if (!match) return 1;
   const year = parseInt(match[1]);
   if (year >= 2010) return 0.7;
-  if (year >= 2000) return 0.85;
   return 1;
 }
 
