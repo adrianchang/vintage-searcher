@@ -12,26 +12,14 @@ datasource db {
 }
 
 model User {
-  id        String             @id @default(cuid())
-  name      String             @unique
-  googleId  String?            @unique
-  email     String?            @unique
-  language  String             @default("en")
-  createdAt DateTime           @default(now())
-  queries   SearchQuery[]
-}
-
-model SearchQuery {
   id        String   @id @default(cuid())
-  query     String
-  count     Int
-  enabled   Boolean  @default(true)
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
+  name      String   @unique
+  googleId  String?  @unique
+  email     String?  @unique
+  language  String   @default("en")
   createdAt DateTime @default(now())
-
-  @@unique([userId, query])
 }
+
 
 // Listings that passed the first filter (for iteration on filter rules)
 model FilteredListing {
@@ -46,7 +34,6 @@ model FilteredListing {
   createdAt   DateTime @default(now())
 
   evaluation   Evaluation?
-  chatMessages ChatMessage[]
 }
 
 // Full LLM evaluation results
@@ -104,11 +91,3 @@ model session {
   @@index([expire])
 }
 
-model ChatMessage {
-  id        String          @id @default(cuid())
-  listingId String
-  listing   FilteredListing @relation(fields: [listingId], references: [id])
-  role      String          // "user" or "assistant"
-  content   String
-  createdAt DateTime        @default(now())
-}

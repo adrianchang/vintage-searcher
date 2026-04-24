@@ -61,6 +61,10 @@ app.use(passport.session());
 
 app.use(express.static(path.join(import.meta.dirname, "..", "public")));
 
+app.get("/", (_req, res) => {
+  res.sendFile(path.join(import.meta.dirname, "..", "public", "signup.html"));
+});
+
 // --- Auth routes ---
 
 app.get("/auth/google", passport.authenticate("google", { scope: ["profile", "email"] }));
@@ -153,40 +157,6 @@ app.get("/ebay/auth/callback", (req, res) => {
 
 // --- Protected API routes ---
 
-// Get queries for the logged-in user
-app.get("/users/me/queries", requireAuth, async (req, res) => {
-  const queries = await prisma.searchQuery.findMany({
-    where: { userId: req.user!.id },
-    orderBy: { createdAt: "asc" },
-  });
-  res.json(queries);
-});
-
-// Replace all queries for the logged-in user
-app.put("/users/me/queries", requireAuth, async (req, res) => {
-  const { queries } = req.body as { queries: { query: string; count: number; enabled: boolean }[] };
-  if (!Array.isArray(queries)) {
-    res.status(400).json({ error: "queries array required" });
-    return;
-  }
-
-  const userId = req.user!.id;
-  await prisma.$transaction([
-    prisma.searchQuery.deleteMany({ where: { userId } }),
-    ...queries.map((q) =>
-      prisma.searchQuery.create({
-        data: { query: q.query, count: q.count, enabled: q.enabled, userId },
-      }),
-    ),
-  ]);
-
-  const updated = await prisma.searchQuery.findMany({
-    where: { userId },
-    orderBy: { createdAt: "asc" },
-  });
-  res.json(updated);
-});
-
 // Get opportunity listings (global — same for all users)
 app.get("/users/me/listings", requireAuth, async (_req, res) => {
   const listings = await prisma.filteredListing.findMany({
@@ -210,21 +180,6 @@ app.get("/users/me/listings/:listingId", requireAuth, async (req, res) => {
   res.json(listing);
 });
 
-// Get chat messages for a listing
-app.get("/users/me/listings/:listingId/messages", requireAuth, async (req, res) => {
-  const listing = await prisma.filteredListing.findUnique({
-    where: { id: req.params.listingId as string },
-  });
-  if (!listing) {
-    res.status(404).json({ error: "Listing not found" });
-    return;
-  }
-  const messages = await prisma.chatMessage.findMany({
-    where: { listingId: listing.id },
-    orderBy: { createdAt: "asc" },
-  });
-  res.json(messages);
-});
 
 // Send a chat message about a listing
 // Trigger a scan — authenticated user or cron with API key
