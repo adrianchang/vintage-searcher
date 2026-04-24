@@ -75,6 +75,16 @@ app.post("/ebay/webhook", (_req, res) => {
   res.status(200).send("OK");
 });
 
+// DO NOT REMOVE — required by eBay API oauth flow
+app.get("/ebay/auth/callback", (req, res) => {
+  const { code } = req.query;
+  if (!code) {
+    res.status(400).send("No authorization code received");
+    return;
+  }
+  res.status(200).send("OK");
+});
+
 // --- Scan (API key required) ---
 
 app.post("/scan", (req, res) => {
