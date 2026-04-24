@@ -27,18 +27,12 @@ type SupportedLanguage = typeof SUPPORTED_LANGUAGES[number];
 export async function runScan(
   config: ScanConfig,
   deps: ScanDeps,
-  userId?: string,
+  _userId?: string,
   onProgress?: (progress: ScanProgress) => void,
   testRecipients?: string[],
 ) {
   const { prisma } = deps;
   console.log(`Starting vintage scan on ${config.platform}...`);
-
-  // Resolve userId — fall back to default user (Adrian) for cron runs
-  if (!userId) {
-    const defaultUser = await prisma.user.findUnique({ where: { email: "adrian.aa.chang.aa@gmail.com" } });
-    if (defaultUser) userId = defaultUser.id;
-  }
 
   // 1. Fetch
   const listings = await deps.fetchListings(config.platform, config.maxListings);
@@ -53,7 +47,7 @@ export async function runScan(
   // 3. Store filtered listings
   for (const listing of filtered) {
     await prisma.filteredListing.upsert({
-      where: { userId_url: { userId: userId!, url: listing.url } },
+      where: { url: listing.url },
       update: {},
       create: {
         url: listing.url,
@@ -63,7 +57,6 @@ export async function runScan(
         imageUrls: JSON.stringify(listing.imageUrls),
         description: listing.description,
         rawData: JSON.stringify(listing.rawData),
-        userId: userId!,
       },
     });
   }
@@ -77,7 +70,7 @@ export async function runScan(
 
   for (const listing of filtered) {
     const dbListing = await prisma.filteredListing.findUnique({
-      where: { userId_url: { userId: userId!, url: listing.url } },
+      where: { url: listing.url },
     });
     if (!dbListing) continue;
 

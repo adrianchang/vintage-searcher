@@ -19,7 +19,6 @@ model User {
   language  String             @default("en")
   createdAt DateTime           @default(now())
   queries   SearchQuery[]
-  listings  FilteredListing[]
 }
 
 model SearchQuery {
@@ -37,23 +36,17 @@ model SearchQuery {
 // Listings that passed the first filter (for iteration on filter rules)
 model FilteredListing {
   id          String   @id @default(cuid())
-  url         String
-  platform    String   // ebay, shopgoodwill, etc.
+  url         String   @unique
+  platform    String
   title       String
   price       Float
   imageUrls   String   // JSON array of image URLs
   description String
-  rawData     String   // Full raw listing data as JSON
+  rawData     String   // JSON
   createdAt   DateTime @default(now())
 
-  userId      String
-  user        User     @relation(fields: [userId], references: [id])
-
-  // Evaluation result (null if not yet evaluated)
-  evaluation  Evaluation?
+  evaluation   Evaluation?
   chatMessages ChatMessage[]
-
-  @@unique([userId, url])
 }
 
 // Full LLM evaluation results

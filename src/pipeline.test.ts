@@ -62,7 +62,7 @@ function createMockPrisma() {
     },
     filteredListing: {
       upsert: vi.fn(async ({ where, create }: any) => {
-        const url = where.userId_url?.url ?? where.url;
+        const url = where.url;
         if (!listings[url]) {
           const id = `cuid-${++idCounter}`;
           listings[url] = { id, ...create };
@@ -70,8 +70,7 @@ function createMockPrisma() {
         return listings[url];
       }),
       findUnique: vi.fn(async ({ where }: any) => {
-        const url = where.userId_url?.url ?? where.url;
-        return listings[url] ?? null;
+        return listings[where.url] ?? null;
       }),
     },
     evaluation: {

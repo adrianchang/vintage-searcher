@@ -187,27 +187,23 @@ app.put("/users/me/queries", requireAuth, async (req, res) => {
   res.json(updated);
 });
 
-// Get opportunity listings for the logged-in user
-app.get("/users/me/listings", requireAuth, async (req, res) => {
+// Get opportunity listings (global — same for all users)
+app.get("/users/me/listings", requireAuth, async (_req, res) => {
   const listings = await prisma.filteredListing.findMany({
-    where: {
-      userId: req.user!.id,
-      evaluation: { isOpportunity: true },
-    },
+    where: { evaluation: { isOpportunity: true } },
     include: { evaluation: true },
     orderBy: { createdAt: "desc" },
   });
   res.json(listings);
 });
 
-// Get a single listing by ID (verify ownership)
+// Get a single listing by ID
 app.get("/users/me/listings/:listingId", requireAuth, async (req, res) => {
-  const listingId = req.params.listingId as string;
   const listing = await prisma.filteredListing.findUnique({
-    where: { id: listingId },
+    where: { id: req.params.listingId as string },
     include: { evaluation: true },
   });
-  if (!listing || listing.userId !== req.user!.id) {
+  if (!listing) {
     res.status(404).json({ error: "Listing not found" });
     return;
   }
@@ -216,11 +212,10 @@ app.get("/users/me/listings/:listingId", requireAuth, async (req, res) => {
 
 // Get chat messages for a listing
 app.get("/users/me/listings/:listingId/messages", requireAuth, async (req, res) => {
-  const listingId = req.params.listingId as string;
   const listing = await prisma.filteredListing.findUnique({
-    where: { id: listingId },
+    where: { id: req.params.listingId as string },
   });
-  if (!listing || listing.userId !== req.user!.id) {
+  if (!listing) {
     res.status(404).json({ error: "Listing not found" });
     return;
   }
@@ -251,7 +246,6 @@ app.post("/scan", (req, res) => {
     : undefined;
   const activeScanConfig = isTest ? { ...scanConfig, maxListings: 10 } : scanConfig;
 
-  const userId = req.user?.id;
   const scanId = crypto.randomUUID();
   const emitter = new EventEmitter();
   scanEmitters.set(scanId, emitter);
@@ -263,7 +257,7 @@ app.post("/scan", (req, res) => {
     emitter.emit("progress", progress);
   };
 
-  console.log(`Scan triggered via API${userId ? ` for user ${userId}` : " (cron)"}${isTest ? " [TEST MODE]" : ""} [${scanId}]`);
+  console.log(`Scan triggered via API${isTest ? " [TEST MODE]" : ""} [${scanId}]`);
   res.json({ status: "ok", message: "Scan started", scanId });
 
   runScan(activeScanConfig, {
@@ -271,7 +265,7 @@ app.post("/scan", (req, res) => {
     fetchListings,
     filterListings,
     evaluateListing,
-  }, userId, onProgress, testRecipients).catch((error) => {
+  }, undefined, onProgress, testRecipients).catch((error) => {
     console.error("Scan failed:", error);
     emitter.emit("progress", { stage: "error", message: `Scan failed: ${error instanceof Error ? error.message : error}` });
   });
