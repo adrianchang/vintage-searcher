@@ -254,8 +254,11 @@ function buildItemHtml(item: DigestItem, index: number, total: number, L: Record
         "${escapeHtml(evaluation.hook)}"
       </h2>
 
+      <!-- Price block -->
+      ${priceHtml}
+
       <!-- Brand Story -->
-      <h3 style="margin:0 0 8px;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#888;font-family:Helvetica,Arial,sans-serif;">${L.theBrand}</h3>
+      <h3 style="margin:24px 0 8px;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#888;font-family:Helvetica,Arial,sans-serif;">${L.theBrand}</h3>
       <p style="margin:0 0 24px;font-size:15px;line-height:1.8;color:#333;">
         ${escapeHtml(evaluation.brandStory)}
       </p>
@@ -277,9 +280,6 @@ function buildItemHtml(item: DigestItem, index: number, total: number, L: Record
       <p style="margin:0 0 24px;font-size:15px;line-height:1.8;color:#333;">
         ${escapeHtml(evaluation.marketContext)}
       </p>
-
-      <!-- Price block -->
-      ${priceHtml}
 
       <!-- Red flags -->
       <table width="100%" cellpadding="0" cellspacing="0">
