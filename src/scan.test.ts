@@ -120,6 +120,11 @@ function createMockPrisma() {
       findUnique: vi.fn(async ({ where }: any) => {
         return evaluations[where.listingId] ?? null;
       }),
+      update: vi.fn(async ({ where, data }: any) => {
+        const record = Object.values(evaluations).find((e: any) => e.id === where.id) as any;
+        if (record) Object.assign(record, data);
+        return record;
+      }),
     },
     story: {
       create: vi.fn(async ({ data }: any) => {

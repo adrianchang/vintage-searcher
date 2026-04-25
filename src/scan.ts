@@ -2,7 +2,7 @@ import { PrismaClient } from "./generated/prisma/client";
 import { type Platform } from "./services/ecommerce";
 import { type FilterOptions } from "./services/filter";
 import { sendDigestEmail, type DigestItem } from "./services/email";
-import { combinedScore, isGoodFind } from "./services/score";
+import { combinedScore, isGoodFind, COMBINED_SCORE_THRESHOLD } from "./services/score";
 import { runIdentification as defaultRunIdentification } from "./services/evaluate";
 import { DIGEST_CONFIGS, type DigestConfig } from "./configs/digests";
 import type { Listing, Evaluation, ScanConfig } from "./types";
@@ -189,6 +189,13 @@ async function runConfigScan(
           soldListings: JSON.parse(dbEvaluation.soldListings),
         });
 
+        // Update isOpportunity based on Phase 1 score — overrides Phase 2's preliminary value
+        const isOpportunity = score >= COMBINED_SCORE_THRESHOLD;
+        await prisma.evaluation.update({
+          where: { id: dbEvaluation.id },
+          data: { isOpportunity },
+        });
+
         await prisma.story.create({
           data: {
             evaluation: { connect: { id: dbEvaluation.id } },
@@ -227,11 +234,11 @@ async function runConfigScan(
           storyScoreReasoning: identification.storyScoreReasoning,
         };
 
-        if (dbEvaluation.isOpportunity) {
+        if (isOpportunity) {
           goodFinds.push({ listing, evaluation: storyEvaluation, score });
           console.log(`  ✓ Good find (score ${(score * 100).toFixed(0)}%): ${listing.title.slice(0, 60)}`);
         } else {
-          console.log(`  ✗ Scored ${(combinedScore(storyEvaluation) * 100).toFixed(0)}% — below threshold`);
+          console.log(`  ✗ Scored ${(score * 100).toFixed(0)}% — below threshold`);
         }
       } else if (dbEvaluation.isOpportunity) {
         // Story already exists — use it for email
