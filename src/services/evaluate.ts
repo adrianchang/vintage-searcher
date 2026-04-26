@@ -95,12 +95,12 @@ STRICT RULES — follow these exactly:
 - Only include a soldListing if you can read a clear, specific price from that URL. No estimates, no averages, no inferences.
 - If a URL is a category page, browse page, or search results page with multiple items, you MAY include individual listings you can see on that page — but only if each one has a clear visible price and is actually similar to the item being valued.
 - Do NOT fabricate prices. Do NOT assign the same URL to multiple soldListings unless each one genuinely links to a different item.
-- If you cannot find at least 2 real comparable prices, set estimatedValue to null, margin to null, and confidence below 0.4.
+- If you cannot find at least 1 real comparable price, set estimatedValue to null, margin to null, and confidence below 0.4.
 
 Then produce your valuation:
 - Set estimatedValue based ONLY on the real prices you found
 - Calculate margin (estimatedValue - currentPrice), or null if estimatedValue is null
-- Set confidence (0-1): high if you found strong, similar comps. Low if comps are weak, dissimilar, or fewer than 2.
+- Set confidence (0-1): high if you found strong, similar comps. Low if comps are weak, dissimilar, or fewer than 1.
 
 {languageInstruction}`;
 
