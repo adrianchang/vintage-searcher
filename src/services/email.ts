@@ -103,12 +103,12 @@ export async function sendDigestEmail(
 function buildSubject(items: DigestItem[], lang = "en"): string {
   if (lang === "zh") {
     const date = new Date().toLocaleDateString("zh-TW", { month: "long", day: "numeric" });
-    if (items.length === 1) return `今日好物 — ${items[0].evaluation.itemIdentification} · ${date}`;
-    return `${items.length} 件好物等你來看 · ${date}`;
+    if (items.length === 1) return `🏷️ 今日好物 — ${items[0].evaluation.itemIdentification} · ${date}`;
+    return `🏷️ ${items.length} 件好物等你來看 · ${date}`;
   }
   const date = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric" });
-  if (items.length === 1) return `Today's Find — ${items[0].evaluation.itemIdentification} · ${date}`;
-  return `${items.length} Finds Worth Your Attention · ${date}`;
+  if (items.length === 1) return `🏷️ TODAY'S FIND — ${items[0].evaluation.itemIdentification.toUpperCase()} · ${date.toUpperCase()}`;
+  return `🏷️ ${items.length} FINDS WORTH YOUR ATTENTION · ${date.toUpperCase()}`;
 }
 
 function buildEmailHtml(items: DigestItem[], lang = "en"): string {
