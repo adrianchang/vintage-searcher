@@ -1,6 +1,6 @@
 import type { Evaluation } from "../types";
 
-export const COMBINED_SCORE_THRESHOLD = 0.65;
+export const COMBINED_SCORE_THRESHOLD = 0.7;
 
 export function priceScore(evaluation: Evaluation): number {
   if (evaluation.priceScore != null) return evaluation.priceScore;

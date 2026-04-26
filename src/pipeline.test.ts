@@ -211,7 +211,7 @@ describe("Pipeline: fetch → filter → store → evaluate → store", () => {
       expect(sold).toHaveProperty("url");
     }
 
-    // storyScore=0.8, priceScore=75/120≈0.625 → combinedScore≈0.765 > 0.65 → true
+    // storyScore=0.8, priceScore=75/120≈0.625 → combinedScore≈0.765 > 0.7 → true
     expect(data.isOpportunity).toBe(true);
   });
 
