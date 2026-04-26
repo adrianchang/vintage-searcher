@@ -3,6 +3,7 @@ import type { Evaluation } from "../types";
 export const COMBINED_SCORE_THRESHOLD = 0.65;
 
 export function priceScore(evaluation: Evaluation): number {
+  if (evaluation.priceScore != null) return evaluation.priceScore;
   const { margin, estimatedValue } = evaluation;
   if (margin == null || estimatedValue == null || estimatedValue <= 0 || margin < 20) return 0;
   return Math.min(margin / estimatedValue, 1);

@@ -54,6 +54,7 @@ model Evaluation {
   redFlags       String   // JSON array
   references     String   // JSON array
   soldListings   String   @default("[]")  // JSON array
+  priceScore     Float?
 
   isOpportunity  Boolean
   createdAt      DateTime @default(now())

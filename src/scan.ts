@@ -157,6 +157,7 @@ async function runConfigScan(
             redFlags: JSON.stringify(baseEvaluation.redFlags),
             references: JSON.stringify(baseEvaluation.references),
             soldListings: JSON.stringify(baseEvaluation.soldListings),
+            priceScore: baseEvaluation.priceScore ?? null,
             isOpportunity: qualifies,
           },
         });

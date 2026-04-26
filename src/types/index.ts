@@ -31,6 +31,7 @@ export interface Evaluation {
   marketContext: string;
   storyScore: number;
   storyScoreReasoning: string;
+  priceScore?: number;
 }
 
 // Config for the scanner

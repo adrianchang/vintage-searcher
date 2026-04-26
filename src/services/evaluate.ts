@@ -100,6 +100,12 @@ STRICT RULES — follow these exactly:
 Then produce your valuation:
 - Set estimatedValue based ONLY on the real prices you found
 - Calculate margin (estimatedValue - currentPrice), or null if estimatedValue is null
+- Set priceScore (0-1): how good a deal is this listing price compared to what it's actually worth?
+  - Focus purely on value: is this underpriced relative to comparable sold items?
+  - 0.8–1.0: significantly underpriced with strong comps supporting a much higher value
+  - 0.5–0.8: moderately underpriced with decent comps
+  - 0.2–0.5: priced close to market value, thin margin
+  - Below 0.2: priced at or above market, or comps are too weak/few to assess
 - Set confidence (0-1): high if you found strong, similar comps. Low if comps are weak, dissimilar, or fewer than 1.
 
 {languageInstruction}`;
@@ -181,6 +187,7 @@ interface ValuationResult {
   estimatedValue: number | null;
   currentPrice: number;
   margin: number | null;
+  priceScore: number;
   confidence: number;
   reasoning: string;
 }
@@ -513,10 +520,11 @@ const VALUATION_SCHEMA = {
     estimatedValue: { type: "number" },
     currentPrice: { type: "number" },
     margin: { type: "number" },
+    priceScore: { type: "number" },
     confidence: { type: "number" },
     reasoning: { type: "string" },
   },
-  required: ["soldListings", "currentPrice", "confidence", "reasoning"],
+  required: ["soldListings", "currentPrice", "priceScore", "confidence", "reasoning"],
 };
 
 export async function runIdentification(listing: Listing, lang?: string, promptAppend?: string): Promise<IdentificationResult> {
@@ -588,6 +596,7 @@ export async function evaluateListing(listing: Listing, lang?: string, promptApp
     estimatedValue: valuation.estimatedValue ?? null,
     currentPrice: valuation.currentPrice,
     margin: valuation.margin ?? null,
+    priceScore: valuation.priceScore ?? 0,
     confidence: valuation.confidence,
     reasoning: valuation.reasoning,
     references: [...refs1, ...refs2],
