@@ -235,7 +235,7 @@ describe("Pipeline: fetch → filter → store → evaluate → store", () => {
     expect(zhData.hook).toBe(`[ZH] ${EVALUATION.hook}`);
   });
 
-  it("non-opportunity: low storyScore + no margin sets isOpportunity false", async () => {
+  it("low storyScore items are still evaluated and ranked", async () => {
     const weakEval: Evaluation = {
       ...EVALUATION,
       storyScore: 0.2,
@@ -247,8 +247,8 @@ describe("Pipeline: fetch → filter → store → evaluate → store", () => {
       evaluateListing: async () => weakEval,
     }));
 
-    const data = mockPrisma.evaluation.create.mock.calls[0][0].data;
-    expect(data.isOpportunity).toBe(false);
+    // Item is still evaluated — ranking replaces threshold filtering
+    expect(mockPrisma.evaluation.create).toHaveBeenCalledTimes(1);
   });
 
   it("full round-trip: stored data can reconstruct original Listing + Evaluation", async () => {

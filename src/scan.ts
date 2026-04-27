@@ -2,7 +2,7 @@ import { PrismaClient } from "./generated/prisma/client";
 import { type Platform } from "./services/ecommerce";
 import { type FilterOptions } from "./services/filter";
 import { sendDigestEmail, type DigestItem } from "./services/email";
-import { combinedScore, isGoodFind, COMBINED_SCORE_THRESHOLD } from "./services/score";
+import { combinedScore } from "./services/score";
 import { runIdentification as defaultRunIdentification } from "./services/evaluate";
 import { DIGEST_CONFIGS, type DigestConfig } from "./configs/digests";
 import type { Listing, Evaluation, ScanConfig } from "./types";
@@ -140,7 +140,6 @@ async function runConfigScan(
         evaluatedCount++;
 
         const score = combinedScore(baseEvaluation);
-        const qualifies = isGoodFind(baseEvaluation);
 
         dbEvaluation = await prisma.evaluation.create({
           data: {
@@ -158,7 +157,7 @@ async function runConfigScan(
             references: JSON.stringify(baseEvaluation.references),
             soldListings: JSON.stringify(baseEvaluation.soldListings),
             priceScore: baseEvaluation.priceScore ?? null,
-            isOpportunity: qualifies,
+            isOpportunity: true, // TODO: use combinedScore here to skip Gemini re-evaluation on cached listings
           },
         });
       } else {
@@ -190,11 +189,9 @@ async function runConfigScan(
           soldListings: JSON.parse(dbEvaluation.soldListings),
         });
 
-        // Update isOpportunity based on Phase 1 score — overrides Phase 2's preliminary value
-        const isOpportunity = score >= COMBINED_SCORE_THRESHOLD;
         await prisma.evaluation.update({
           where: { id: dbEvaluation.id },
-          data: { isOpportunity },
+          data: { isOpportunity: true },
         });
 
         await prisma.story.create({
@@ -235,13 +232,9 @@ async function runConfigScan(
           storyScoreReasoning: identification.storyScoreReasoning,
         };
 
-        if (isOpportunity) {
-          goodFinds.push({ listing, evaluation: storyEvaluation, score });
-          console.log(`  ✓ Good find (score ${(score * 100).toFixed(0)}%): ${listing.title.slice(0, 60)}`);
-        } else {
-          console.log(`  ✗ Scored ${(score * 100).toFixed(0)}% — below threshold`);
-        }
-      } else if (dbEvaluation.isOpportunity) {
+        goodFinds.push({ listing, evaluation: storyEvaluation, score });
+        console.log(`  Scored ${(score * 100).toFixed(0)}%: ${listing.title.slice(0, 60)}`);
+      } else {
         // Story already exists — use it for email
         storyEvaluation = {
           isAuthentic: dbEvaluation.isAuthentic,
@@ -265,6 +258,7 @@ async function runConfigScan(
           storyScoreReasoning: existingStory.storyScoreReasoning,
         };
         goodFinds.push({ listing, evaluation: storyEvaluation, score: existingStory.combinedScore });
+        console.log(`  Scored ${(existingStory.combinedScore * 100).toFixed(0)}% (cached): ${listing.title.slice(0, 60)}`);
       }
 
     } catch (error) {
@@ -277,11 +271,14 @@ async function runConfigScan(
   console.log(`[${configId}] Evaluation complete: ${evaluatedCount} evaluated, ${skippedCount} skipped, ${errorCount} errors`);
   console.log(`[${configId}] Good finds: ${goodFinds.length}`);
 
-  // 5. Send digest email
+  // 5. Send digest email — top 2 by score
+  const TOP_N = 2;
   if (goodFinds.length > 0) {
     goodFinds.sort((a, b) => b.score - a.score);
-    await sendDigestEmail(goodFinds, recipients, language);
+    const toSend = goodFinds.slice(0, TOP_N);
+    console.log(`[${configId}] Sending top ${toSend.length} of ${goodFinds.length} candidates`);
+    await sendDigestEmail(toSend, recipients, language);
   } else {
-    console.log(`[${configId}] No good finds — no email sent`);
+    console.log(`[${configId}] No candidates — no email sent`);
   }
 }

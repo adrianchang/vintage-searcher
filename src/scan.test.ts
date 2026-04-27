@@ -234,7 +234,7 @@ describe("runScan", () => {
     expect(mockPrisma.evaluation.create).toHaveBeenCalledTimes(2); // not 4
   });
 
-  it("should mark low-storyScore items as not opportunities", async () => {
+  it("should still evaluate low-storyScore items (ranking replaces threshold)", async () => {
     const weakEval: Evaluation = {
       ...STORY_DEFAULTS,
       storyScore: 0.2, // low — combinedScore will be below threshold
@@ -257,7 +257,7 @@ describe("runScan", () => {
     }));
 
     const evals = Object.values(mockPrisma._store.evaluations) as any[];
-    expect(evals.every((e) => e.isOpportunity === false)).toBe(true);
+    expect(evals.length).toBeGreaterThan(0); // items still evaluated, top 2 sent regardless of score
   });
 
   it("should continue scanning when a single evaluation fails", async () => {
