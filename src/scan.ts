@@ -3,7 +3,7 @@ import { type Platform } from "./services/ecommerce";
 import { type FilterOptions } from "./services/filter";
 import { sendDigestEmail, type DigestItem } from "./services/email";
 import { combinedScore } from "./services/score";
-import { runIdentification as defaultRunIdentification } from "./services/evaluate";
+import { runIdentification as defaultRunIdentification, computePersonalScores } from "./services/evaluate";
 import { DIGEST_CONFIGS, type DigestConfig } from "./configs/digests";
 import type { Listing, Evaluation, ScanConfig } from "./types";
 
@@ -194,7 +194,7 @@ async function runConfigScan(
           data: { isOpportunity: true },
         });
 
-        await prisma.story.create({
+        const newStory = await prisma.story.create({
           data: {
             evaluation: { connect: { id: dbEvaluation.id } },
             language,
@@ -234,7 +234,7 @@ async function runConfigScan(
           storyScoreReasoning: identification.storyScoreReasoning,
         };
 
-        goodFinds.push({ listing, evaluation: storyEvaluation, score });
+        goodFinds.push({ listing, evaluation: storyEvaluation, score, storyId: newStory.id });
         console.log(`  Scored ${(score * 100).toFixed(0)}%: ${listing.title.slice(0, 60)}`);
       } else {
         // Story already exists — use it for email
@@ -260,7 +260,7 @@ async function runConfigScan(
           storyScore: existingStory.storyScore,
           storyScoreReasoning: existingStory.storyScoreReasoning,
         };
-        goodFinds.push({ listing, evaluation: storyEvaluation, score: existingStory.combinedScore });
+        goodFinds.push({ listing, evaluation: storyEvaluation, score: existingStory.combinedScore, storyId: existingStory.id });
         console.log(`  Scored ${(existingStory.combinedScore * 100).toFixed(0)}% (cached): ${listing.title.slice(0, 60)}`);
       }
 
@@ -274,14 +274,54 @@ async function runConfigScan(
   console.log(`[${configId}] Evaluation complete: ${evaluatedCount} evaluated, ${skippedCount} skipped, ${errorCount} errors`);
   console.log(`[${configId}] Good finds: ${goodFinds.length}`);
 
-  // 5. Send digest email — top 3 by score
-  const TOP_N = 3;
-  if (goodFinds.length > 0) {
-    goodFinds.sort((a, b) => b.score - a.score);
-    const toSend = goodFinds.slice(0, TOP_N);
-    console.log(`[${configId}] Sending top ${toSend.length} of ${goodFinds.length} candidates`);
-    await sendDigestEmail(toSend, recipients, language);
-  } else {
+  if (goodFinds.length === 0) {
     console.log(`[${configId}] No candidates — no email sent`);
+    return;
+  }
+
+  // 5. Send digest email — top 3 per recipient, personalized if they have votes
+  const TOP_N = 3;
+  for (const recipient of recipients) {
+    const user = await prisma.user.findUnique({
+      where: { email: recipient },
+      include: {
+        votes: {
+          where: { direction: "up" },
+          include: { story: true },
+          orderBy: { createdAt: "desc" },
+          take: 20,
+        },
+      },
+    });
+
+    const likedStories = (user?.votes ?? []).map((v) => ({
+      itemIdentification: v.story.hook, // hook gives a tight summary
+      styleGuide: v.story.styleGuide,
+      hook: v.story.hook,
+      marketContext: v.story.marketContext,
+    }));
+
+    let scoredFinds = goodFinds;
+
+    if (likedStories.length > 0) {
+      console.log(`[${configId}] Computing personal scores for ${recipient} (${likedStories.length} liked stories)...`);
+      const candidates = goodFinds.map((f) => ({
+        itemIdentification: f.evaluation.itemIdentification,
+        styleGuide: f.evaluation.styleGuide,
+        hook: f.evaluation.hook,
+        marketContext: f.evaluation.marketContext,
+      }));
+      const personalScores = await computePersonalScores(candidates, likedStories);
+      scoredFinds = goodFinds.map((find, i) => {
+        const personalFavorScore = personalScores[i];
+        if (personalFavorScore == null) return find;
+        return { ...find, score: combinedScore(find.evaluation, personalFavorScore) };
+      });
+    }
+
+    scoredFinds = [...scoredFinds].sort((a, b) => b.score - a.score);
+    const toSend = scoredFinds.slice(0, TOP_N);
+    console.log(`[${configId}] Sending top ${toSend.length} of ${goodFinds.length} candidates to ${recipient}`);
+    await sendDigestEmail(toSend, recipient, language);
   }
 }

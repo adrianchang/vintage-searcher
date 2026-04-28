@@ -1,9 +1,12 @@
+import { createHmac } from "crypto";
 import { Resend } from "resend";
 import type { Listing, Evaluation } from "../types";
 import { combinedScore, priceScore } from "./score";
 
 const FROM_ADDRESS = process.env.EMAIL_FROM || "finds@vintagefinds.email";
 const RESEND_API_KEY = process.env.RESEND_API_KEY || "";
+const VOTE_SECRET = process.env.VOTE_SECRET || "dev-vote-secret";
+const APP_URL = process.env.APP_URL || "http://localhost:3000";
 
 function getResend() {
   return new Resend(RESEND_API_KEY);
@@ -13,6 +16,20 @@ export interface DigestItem {
   listing: Listing;
   evaluation: Evaluation;
   score: number;
+  storyId: string;
+}
+
+function buildVoteToken(email: string, storyId: string, direction: string): string {
+  return createHmac("sha256", VOTE_SECRET)
+    .update(`${email}:${storyId}:${direction}`)
+    .digest("hex")
+    .slice(0, 32);
+}
+
+function buildVoteUrl(email: string, storyId: string, direction: "up" | "down"): string {
+  const token = buildVoteToken(email, storyId, direction);
+  const params = new URLSearchParams({ e: email, s: storyId, d: direction, t: token });
+  return `${APP_URL}/vote?${params.toString()}`;
 }
 
 const LABELS: Record<string, Record<string, string>> = {
@@ -62,11 +79,11 @@ const LABELS: Record<string, Record<string, string>> = {
 
 export async function sendDigestEmail(
   items: DigestItem[],
-  recipients: string[],
+  recipient: string,
   lang = "en",
 ): Promise<void> {
-  if (recipients.length === 0) {
-    console.log("No recipients — skipping email");
+  if (!recipient) {
+    console.log("No recipient — skipping email");
     return;
   }
   if (items.length === 0) {
@@ -74,31 +91,29 @@ export async function sendDigestEmail(
     return;
   }
 
-  const html = buildEmailHtml(items, lang);
+  const html = buildEmailHtml(items, recipient, lang);
   const subject = buildSubject(items, lang);
 
   if (!RESEND_API_KEY) {
-    console.log(`[EMAIL] Would send "${subject}" to ${recipients.length} recipient(s) with ${items.length} finds (RESEND_API_KEY not set)`);
+    console.log(`[EMAIL] Would send "${subject}" to ${recipient} with ${items.length} finds (RESEND_API_KEY not set)`);
     return;
   }
 
   const resend = getResend();
-  for (const to of recipients) {
-    try {
-      const { error } = await resend.emails.send({
-        from: FROM_ADDRESS,
-        to,
-        subject,
-        html,
-      });
-      if (error) {
-        console.error(`[EMAIL] Failed to send to ${to}:`, error);
-      } else {
-        console.log(`[EMAIL] Sent to ${to}`);
-      }
-    } catch (err) {
-      console.error(`[EMAIL] Error sending to ${to}:`, err);
+  try {
+    const { error } = await resend.emails.send({
+      from: FROM_ADDRESS,
+      to: recipient,
+      subject,
+      html,
+    });
+    if (error) {
+      console.error(`[EMAIL] Failed to send to ${recipient}:`, error);
+    } else {
+      console.log(`[EMAIL] Sent to ${recipient}`);
     }
+  } catch (err) {
+    console.error(`[EMAIL] Error sending to ${recipient}:`, err);
   }
 }
 
@@ -113,7 +128,7 @@ function buildSubject(items: DigestItem[], lang = "en"): string {
   return `🏷️ ${items.length} FINDS WORTH YOUR ATTENTION · ${date.toUpperCase()}`;
 }
 
-function buildEmailHtml(items: DigestItem[], lang = "en"): string {
+function buildEmailHtml(items: DigestItem[], recipient: string, lang = "en"): string {
   const L = LABELS[lang] ?? LABELS.en;
   const date = lang === "zh"
     ? new Date().toLocaleDateString("zh-TW", { year: "numeric", month: "long", day: "numeric", weekday: "long" })
@@ -160,7 +175,7 @@ function buildEmailHtml(items: DigestItem[], lang = "en"): string {
           </tr>
 
           <!-- Items -->
-          ${items.map((item, index) => buildItemHtml(item, index, items.length, L)).join("")}
+          ${items.map((item, index) => buildItemHtml(item, index, items.length, L, recipient)).join("")}
 
           <!-- Footer -->
           <tr>
@@ -179,7 +194,7 @@ function buildEmailHtml(items: DigestItem[], lang = "en"): string {
 </html>`;
 }
 
-function buildItemHtml(item: DigestItem, index: number, total: number, L: Record<string, string>): string {
+function buildItemHtml(item: DigestItem, index: number, total: number, L: Record<string, string>, recipient: string): string {
   const { listing, evaluation } = item;
   const imageUrl = listing.imageUrls[0] || "";
   const pScore = priceScore(evaluation);
@@ -294,9 +309,13 @@ function buildItemHtml(item: DigestItem, index: number, total: number, L: Record
         ${redFlagsHtml}
       </table>
 
-      <!-- CTA -->
+      <!-- CTA + Vote -->
       <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:24px;">
         <tr>
+          <td>
+            <a href="${buildVoteUrl(recipient, item.storyId, "up")}" style="display:inline-block;padding:10px 18px;background:#f5f0eb;border:1px solid #ddd;color:#333;text-decoration:none;font-size:18px;border-radius:2px;margin-right:8px;">👍</a>
+            <a href="${buildVoteUrl(recipient, item.storyId, "down")}" style="display:inline-block;padding:10px 18px;background:#f5f0eb;border:1px solid #ddd;color:#333;text-decoration:none;font-size:18px;border-radius:2px;">👎</a>
+          </td>
           <td align="right">
             <a href="${listing.url}" style="display:inline-block;padding:12px 28px;background:#2c2c2c;color:#fff;text-decoration:none;font-size:13px;letter-spacing:1px;font-family:Helvetica,Arial,sans-serif;border-radius:2px;">
               ${L.viewOnEbay}

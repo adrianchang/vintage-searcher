@@ -619,6 +619,73 @@ export async function evaluateListing(listing: Listing, lang?: string, promptApp
   return evaluation;
 }
 
+type StorySnapshot = {
+  itemIdentification: string;
+  styleGuide: string;
+  hook: string;
+  marketContext: string;
+};
+
+// Scores a batch of candidate items against a user's liked stories in a single cheap model call.
+// Returns a map of index → personalFavorScore (0-1). Returns empty map if no liked stories.
+export async function computePersonalScores(
+  candidates: StorySnapshot[],
+  likedStories: StorySnapshot[],
+): Promise<Record<number, number>> {
+  if (likedStories.length === 0 || candidates.length === 0) return {};
+
+  const likedSummary = likedStories.slice(0, 15).map((s, i) =>
+    `${i + 1}. ${s.itemIdentification} — ${s.styleGuide}`
+  ).join("\n");
+
+  const candidateList = candidates.map((c, i) =>
+    `${i + 1}. ${c.itemIdentification} — ${c.styleGuide} | ${c.hook}`
+  ).join("\n");
+
+  const prompt = `You are scoring aesthetic and style compatibility for a vintage clothing enthusiast.
+
+The user has liked these items (their taste profile):
+${likedSummary}
+
+Score each candidate item (0–1) based on how well it matches this person's aesthetic:
+- 0.9–1.0: Near-identical aesthetic, era, and culture to their liked items
+- 0.7–0.9: Strong overlap in taste
+- 0.4–0.7: Some overlap but different vibe
+- 0.0–0.4: Different aesthetic entirely
+
+Candidates:
+${candidateList}
+
+Return scores as a JSON array in the same order as the candidates.`;
+
+  try {
+    const response = await genAI.models.generateContent({
+      model: "gemini-2.0-flash-lite",
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      config: {
+        responseMimeType: "application/json",
+        responseJsonSchema: {
+          type: "object",
+          properties: {
+            scores: { type: "array", items: { type: "number" } },
+          },
+          required: ["scores"],
+        },
+      },
+    });
+
+    const result = JSON.parse(response.text ?? "{}") as { scores?: number[] };
+    const scores: Record<number, number> = {};
+    (result.scores ?? []).forEach((s, i) => {
+      scores[i] = Math.min(1, Math.max(0, s));
+    });
+    return scores;
+  } catch (error) {
+    console.error("Personal score computation failed:", error instanceof Error ? error.message : error);
+    return {};
+  }
+}
+
 const MOCK_STORY_DEFAULTS = {
   hook: "American mills stopped making them like this fifty years ago. That's the whole story.",
   brandStory: "Founded when clothing was considered an investment, not a disposable good. Workers wore this brand because it lasted — not because it was marketed to them.",

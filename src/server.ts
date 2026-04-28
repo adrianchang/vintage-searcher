@@ -2,6 +2,8 @@ import "dotenv/config";
 import express from "express";
 import crypto from "crypto";
 import path from "path";
+
+const VOTE_SECRET = process.env.VOTE_SECRET || "dev-vote-secret";
 import { PrismaClient } from "./generated/prisma/client";
 import { fetchListings } from "./services/ecommerce";
 import { filterListings } from "./services/filter";
@@ -83,6 +85,52 @@ app.get("/ebay/auth/callback", (req, res) => {
     // eBay OAuth code received — not currently used
   } else {
     res.status(400).send("No authorization code received");
+  }
+});
+
+// --- Vote (thumbs up / down from email) ---
+
+app.get("/vote", async (req, res) => {
+  const { e: email, s: storyId, d: direction, t: token } = req.query as Record<string, string>;
+
+  const closeHtml = `<!DOCTYPE html><html><head><style>body{margin:0;display:flex;align-items:center;justify-content:center;height:100vh;background:#f5f0eb;font-family:Helvetica,sans-serif;}</style></head><body><p style="color:#888;font-size:14px;letter-spacing:2px;">NOTED</p><script>setTimeout(function(){window.close()},400);</script></body></html>`;
+
+  if (!email || !storyId || !["up", "down"].includes(direction) || !token) {
+    res.status(400).send("Invalid request");
+    return;
+  }
+
+  // Validate HMAC token
+  const expected = crypto.createHmac("sha256", VOTE_SECRET)
+    .update(`${email}:${storyId}:${direction}`)
+    .digest("hex")
+    .slice(0, 32);
+
+  if (token !== expected) {
+    res.status(403).send("Invalid token");
+    return;
+  }
+
+  try {
+    // Upsert user (creates a minimal record if they don't exist yet)
+    const user = await prisma.user.upsert({
+      where: { email },
+      update: {},
+      create: { name: email, email },
+    });
+
+    // Upsert vote — one vote per (user, story), last click wins
+    await prisma.vote.upsert({
+      where: { userId_storyId: { userId: user.id, storyId } },
+      update: { direction },
+      create: { userId: user.id, storyId, direction },
+    });
+
+    console.log(`[VOTE] ${email} voted ${direction} on story ${storyId}`);
+    res.send(closeHtml);
+  } catch (err) {
+    console.error("[VOTE] Error recording vote:", err);
+    res.send(closeHtml); // still close the tab — don't leave user on error page
   }
 });
 

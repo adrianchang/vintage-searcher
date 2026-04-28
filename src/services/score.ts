@@ -19,10 +19,15 @@ function eraPenalty(era: string | null | undefined): number {
   return 1;
 }
 
-// 80% story, 20% price, with era penalty for recent items
-export function combinedScore(evaluation: Evaluation): number {
-  const base = evaluation.storyScore * 0.8 + priceScore(evaluation) * 0.2;
-  return base * eraPenalty(evaluation.estimatedEra);
+// Base: 80% story, 20% price. Personalized: 40% personal favor, 30% story, 30% price.
+export function combinedScore(evaluation: Evaluation, personalFavorScore?: number): number {
+  const story = evaluation.storyScore;
+  const price = priceScore(evaluation);
+  const penalty = eraPenalty(evaluation.estimatedEra);
+  if (personalFavorScore != null) {
+    return (personalFavorScore * 0.4 + story * 0.3 + price * 0.3) * penalty;
+  }
+  return (story * 0.8 + price * 0.2) * penalty;
 }
 
 export function isGoodFind(evaluation: Evaluation): boolean {

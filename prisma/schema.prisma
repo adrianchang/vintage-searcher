@@ -18,6 +18,8 @@ model User {
   email     String?  @unique
   language  String   @default("en")
   createdAt DateTime @default(now())
+
+  votes     Vote[]
 }
 
 
@@ -81,8 +83,21 @@ model Story {
   combinedScore        Float
 
   createdAt            DateTime    @default(now())
+  votes                Vote[]
 
   @@unique([evaluationId, language, configId])
+}
+
+model Vote {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  storyId   String
+  story     Story    @relation(fields: [storyId], references: [id])
+  direction String   // "up" or "down"
+  createdAt DateTime @default(now())
+
+  @@unique([userId, storyId])
 }
 
 // Managed by connect-pg-simple (express-session), not by Prisma
