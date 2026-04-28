@@ -9,6 +9,7 @@ const STORY_DEFAULTS = {
   itemStory: "The loop collar, visible in the photos, was phased out after the early 1960s.",
   historicalContext: "Post-war American manufacturing was at its peak.",
   marketContext: "Loop-collar Pendletons are a grail. Three collector bases chasing the same shirt.",
+  styleGuide: "Wear it open over a white tee with raw denim. Classic Americana wardrobe anchor.",
   storyScore: 0.8,
   storyScoreReasoning: "Strong brand narrative with authenticating construction detail.",
 };
@@ -148,6 +149,7 @@ function makeDeps(overrides?: Partial<ScanDeps>): ScanDeps {
       itemStory: lang === "zh" ? `[ZH] ${EVALUATION.itemStory}` : EVALUATION.itemStory,
       historicalContext: lang === "zh" ? `[ZH] ${EVALUATION.historicalContext}` : EVALUATION.historicalContext,
       marketContext: lang === "zh" ? `[ZH] ${EVALUATION.marketContext}` : EVALUATION.marketContext,
+      styleGuide: lang === "zh" ? `[ZH] ${EVALUATION.styleGuide}` : EVALUATION.styleGuide,
       storyScore: EVALUATION.storyScore,
       storyScoreReasoning: lang === "zh" ? `[ZH] ${EVALUATION.storyScoreReasoning}` : EVALUATION.storyScoreReasoning,
     }),

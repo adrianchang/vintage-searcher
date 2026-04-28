@@ -8,6 +8,7 @@ const STORY_DEFAULTS = {
   itemStory: "A piece with details.",
   historicalContext: "A moment in time.",
   marketContext: "Real heads know this one.",
+  styleGuide: "Wear it with raw denim and a clean tee.",
   storyScore: 0.8,
   storyScoreReasoning: "Strong narrative.",
 };

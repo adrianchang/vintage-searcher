@@ -204,6 +204,7 @@ async function runConfigScan(
             itemStory: identification.itemStory,
             historicalContext: identification.historicalContext,
             marketContext: identification.marketContext,
+            styleGuide: identification.styleGuide,
             storyScore: identification.storyScore,
             storyScoreReasoning: identification.storyScoreReasoning,
             combinedScore: score,
@@ -228,6 +229,7 @@ async function runConfigScan(
           itemStory: identification.itemStory,
           historicalContext: identification.historicalContext,
           marketContext: identification.marketContext,
+          styleGuide: identification.styleGuide,
           storyScore: identification.storyScore,
           storyScoreReasoning: identification.storyScoreReasoning,
         };
@@ -254,6 +256,7 @@ async function runConfigScan(
           itemStory: existingStory.itemStory,
           historicalContext: existingStory.historicalContext,
           marketContext: existingStory.marketContext,
+          styleGuide: existingStory.styleGuide,
           storyScore: existingStory.storyScore,
           storyScoreReasoning: existingStory.storyScoreReasoning,
         };

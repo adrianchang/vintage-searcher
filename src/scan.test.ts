@@ -9,6 +9,7 @@ const STORY_DEFAULTS = {
   itemStory: "A piece with details.",
   historicalContext: "A moment in time.",
   marketContext: "Real heads know this one.",
+  styleGuide: "Wear it with raw denim and a clean tee. Americana wardrobe essential.",
   storyScore: 0.8,
   storyScoreReasoning: "Strong narrative.",
 };
@@ -191,6 +192,7 @@ function makeDeps(overrides?: Partial<ScanDeps>): ScanDeps {
         itemStory: `${prefix}${evaluation.itemStory}`,
         historicalContext: `${prefix}${evaluation.historicalContext}`,
         marketContext: `${prefix}${evaluation.marketContext}`,
+        styleGuide: `${prefix}${evaluation.styleGuide}`,
         storyScore: evaluation.storyScore,
         storyScoreReasoning: `${prefix}${evaluation.storyScoreReasoning}`,
       };

@@ -74,6 +74,7 @@ model Story {
   itemStory            String
   historicalContext    String
   marketContext        String
+  styleGuide           String   @default("")
 
   storyScore           Float
   storyScoreReasoning  String

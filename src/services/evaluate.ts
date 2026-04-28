@@ -51,7 +51,9 @@ itemStory: 2–3 sentences on this specific piece. What the construction details
 
 historicalContext: 1–2 sentences. Only include this if the cultural moment is genuinely relevant to the piece. No forced connections. If it doesn't add anything real, just state the era plainly.
 
-marketContext: 2–3 sentences. Who's buying this and why — be specific about the collector communities. If it's genuinely sought after, name them. If it's a sleeper, say why it hasn't caught on yet. Don't call everything a grail — most things aren't. Also talk about wearability and style: does this piece still work to wear today? Is it versatile or a display piece? What kind of person pulls this off? No hype, no salesmanship — just what you'd tell a friend before they hit Buy.
+marketContext: 2–3 sentences. Who's buying this and why — be specific about the collector communities. If it's genuinely sought after, name them. If it's a sleeper, say why it hasn't caught on yet. Don't call everything a grail — most things aren't. No hype, no salesmanship — just what you'd tell a friend before they hit Buy.
+
+styleGuide: 2–3 sentences. How to actually wear this piece today. Describe the fit, color palette, and the cultural aesthetic it belongs to — workwear, Americana, prep, skate, surf, streetwear, etc. Who pulls this off naturally? What wardrobe does it slot into? Be specific and honest — not every piece is for everyone.
 
 storyScore (0–1): How strong is the story, cultural weight, and collector desirability of this item?
 - 0.85–1.0: Genuinely iconic. Hard authentication markers. Real collector demand with receipts.
@@ -178,6 +180,7 @@ interface IdentificationResult {
   itemStory: string;
   historicalContext: string;
   marketContext: string;
+  styleGuide: string;
   storyScore: number;
   storyScoreReasoning: string;
 }
@@ -491,6 +494,7 @@ const IDENTIFICATION_SCHEMA = {
     itemStory: { type: "string" },
     historicalContext: { type: "string" },
     marketContext: { type: "string" },
+    styleGuide: { type: "string" },
     storyScore: { type: "number" },
     storyScoreReasoning: { type: "string" },
   },
@@ -498,7 +502,7 @@ const IDENTIFICATION_SCHEMA = {
     "isAuthentic", "itemIdentification", "itemIdentificationJapanese",
     "identificationConfidence", "estimatedEra", "redFlags",
     "hook", "brandStory", "itemStory", "historicalContext", "marketContext",
-    "storyScore", "storyScoreReasoning",
+    "styleGuide", "storyScore", "storyScoreReasoning",
   ],
 };
 
@@ -605,6 +609,7 @@ export async function evaluateListing(listing: Listing, lang?: string, promptApp
     itemStory: identification.itemStory,
     historicalContext: identification.historicalContext,
     marketContext: identification.marketContext,
+    styleGuide: identification.styleGuide,
     storyScore: identification.storyScore,
     storyScoreReasoning: identification.storyScoreReasoning,
   };
@@ -620,6 +625,7 @@ const MOCK_STORY_DEFAULTS = {
   itemStory: "The construction details are doing all the talking here. The stitching, the hardware, the label — everything points to an era when quality wasn't a premium tier, it was the baseline.",
   historicalContext: "Post-war American manufacturing at its absolute peak. The garment industry was producing things that nobody expected to still exist seventy years later.",
   marketContext: "Solid piece with a growing collector base. Not a grail, but the kind of thing that moves fast when it's priced right. Real heads know.",
+  styleGuide: "Fits into a workwear or Americana wardrobe without effort. Wear it over a plain white tee with straight-leg denim. The person who pulls this off dresses intentionally but doesn't overthink it.",
   storyScore: 0.72,
   storyScoreReasoning: "Solid vintage piece with authenticating details, good narrative potential.",
 };
@@ -648,6 +654,7 @@ function getMockEvaluation(listing: Listing): Evaluation {
       itemStory: "Loop collar is a hard authentication marker — Pendleton cut it after the early '60s, full stop. The wool flannel has that dense, slightly scratchy hand that every modern reproduction misses. This is the real thing.",
       historicalContext: "Early '60s America, peak casual. The moment before the counterculture fractured everything — when the same wool shirt worked at a beach bonfire and a Sunday service and nobody thought twice about it.",
       marketContext: "Loop-collar Pendletons are a legitimate grail. Surf collectors want them because of the Malibu connection. Workwear guys want them because of the construction. Ivy heads want them because of the silhouette. Three separate collector bases chasing the same shirt — that's why prices keep moving up. This one is priced like the seller doesn't know what they have.",
+      styleGuide: "This is a shirt for someone who dresses in the Ivy or surf-Americana lane. Medium-weight wool flannel — wear it open as an overshirt in fall, buttoned up with cords or raw denim in winter. The plaid reads classic, not costume. Works best on someone who owns at least one pair of well-worn Levi's and doesn't need to explain why.",
       storyScore: 0.88,
       storyScoreReasoning: "Iconic brand at its most collectible era, hard authentication detail in the loop collar, and three distinct collector communities actively chasing this specific variant.",
     },
@@ -672,6 +679,7 @@ function getMockEvaluation(listing: Listing): Evaluation {
       itemStory: "Big E red tab. Redline selvedge visible at the outseam. Single-needle stitching throughout. That's the authentication trinity and this pair has all three. The selvedge denim was woven on shuttle looms Levi's retired when they modernized — you literally cannot replicate this fabric with current production methods.",
       historicalContext: "Late '60s San Francisco, union workers, shuttle looms running their last years. The exact moment American manufacturing was about to change forever. These jeans were made at the end of something.",
       marketContext: "This is not a sleeper. Big E 501s with redline selvedge are the most documented, most sought-after piece of American vintage denim — full stop. Japanese collectors have been driving prices for two decades. A clean pair in this size regularly clears $400-600 on Grailed, more in Tokyo. This listing is priced by someone who doesn't know what the red tab means.",
+      styleGuide: "High-rise, straight leg, slightly tapered at the ankle — the original silhouette before Levi's started cutting them for mass market. Wear them cuffed with a plain white tee, a loop-collar flannel, or a trucker jacket. This is the foundation piece for a Japanese-influenced Americana wardrobe. The person who buys these knows exactly what they're doing.",
       storyScore: 0.97,
       storyScoreReasoning: "The canonical American garment. Ironclad authentication markers. Global collector demand with a decades-long track record. As close to a perfect vintage find as exists.",
     },
@@ -696,6 +704,7 @@ function getMockEvaluation(listing: Listing): Evaluation {
       itemStory: "Chain stitch embroidery loops back on itself — structurally different from modern machine embroidery, creates a raised, almost three-dimensional surface you can feel with your thumb. Two-tone rayon: smooth, cool, slightly shiny in a way synthetic fabrics never replicated. The 'Joes Auto Shop' script on the back turns this from a shirt into a primary source.",
       historicalContext: "Bowling was the number one participation sport in 1950s America. The league shirt was the uniform — the garment that put the factory worker and the shop owner in matching fits on a Tuesday night. Pure postwar American egalitarianism, sewn in rayon.",
       marketContext: "Custom chain stitch bowling shirts are a grail for the workwear and Americana crowd — and this one has the rare trifecta: two-tone rayon, chain stitch embroidery, and a named employer on the back. Named shirts command serious premiums. Rockabilly collectors, Japanese vintage buyers, and the Grailed streetwear crowd all want this shirt for different reasons. At $35 it's not even a decision.",
+      styleGuide: "Rayon drapes differently than cotton — it moves when you walk, which is the point. Wear it tucked into high-waist trousers or open over a ribbed tank. Two-tone color blocking reads as rockabilly or vintage Americana depending on how you style the rest. This is a statement shirt, not a layer. The person who wears it well has a point of view about how they dress.",
       storyScore: 0.91,
       storyScoreReasoning: "Named custom embroidery on an authenticated chain stitch rayon bowling shirt — the kind of piece that ends up on the Instagram of every serious Americana collector within a week of listing.",
     },
@@ -720,6 +729,7 @@ function getMockEvaluation(listing: Listing): Evaluation {
       itemStory: "Hand-applied sequin work, dense and heavy in the way early '60s formal wear was. Modern sequined pieces use iron-on or machine techniques — the weight alone tells you this is different. Silhouette is early-to-mid '60s: fitted waist, floor-length, the kind of construction that took a real seamstress two days to execute.",
       historicalContext: "Early '60s America, last golden era of domestic formal wear. Before synthetics took over. Before everything moved offshore. When getting dressed for the evening meant putting on something that was actually made for you.",
       marketContext: "ILGWU-labeled eveningwear is having a serious moment with vintage fashion collectors who care about provenance and labor history — which is increasingly everyone who matters in that space. This specific combination (union label, hand-sequin, '60s silhouette) moves fast on Vestiaire and 1stDibs when priced right. At $48 this is dramatically under what it should be.",
+      styleGuide: "Early '60s silhouette — fitted through the waist, floor-length, structured enough to hold its shape without a lot of undergarment architecture. The sequins make it an event piece, not an everyday wear. This is for someone who dresses for evenings with intention: gallery openings, dinner parties, occasions that warrant actual glamour. Pairs with minimal jewelry — the dress is doing the work.",
       storyScore: 0.85,
       storyScoreReasoning: "ILGWU authentication gives this dress documentary weight beyond fashion — it sits at the intersection of labor history and collectible formal wear, which is a collector sweet spot right now.",
     },

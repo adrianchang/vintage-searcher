@@ -31,6 +31,7 @@ const LABELS: Record<string, Record<string, string>> = {
     thisPiece: "This Piece",
     theMoment: "The Moment",
     theMarket: "The Market",
+    theStyle: "The Style",
     storyScore: "Story score",
     combined: "Combined",
     viewOnEbay: "View on eBay →",
@@ -51,6 +52,7 @@ const LABELS: Record<string, Record<string, string>> = {
     thisPiece: "單品",
     theMoment: "時代背景",
     theMarket: "行情",
+    theStyle: "穿搭指南",
     storyScore: "故事分",
     combined: "綜合分",
     viewOnEbay: "前往 eBay 查看 →",
@@ -279,6 +281,12 @@ function buildItemHtml(item: DigestItem, index: number, total: number, L: Record
       <h3 style="margin:0 0 8px;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#c8a96e;font-family:Helvetica,Arial,sans-serif;">${L.theMarket}</h3>
       <p style="margin:0 0 24px;font-size:15px;line-height:1.8;color:#333;">
         ${escapeHtml(evaluation.marketContext)}
+      </p>
+
+      <!-- Style Guide -->
+      <h3 style="margin:0 0 8px;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#7ec8a0;font-family:Helvetica,Arial,sans-serif;">${L.theStyle}</h3>
+      <p style="margin:0 0 24px;font-size:15px;line-height:1.8;color:#333;">
+        ${escapeHtml(evaluation.styleGuide)}
       </p>
 
       <!-- Red flags -->
