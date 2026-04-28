@@ -14,24 +14,24 @@ export interface DigestConfig {
 }
 
 const DEFAULT_KEYWORDS: SearchQueryInput[] = [
-  { query: "vintage workwear jacket", count: 8 },
-  { query: "vintage denim", count: 8 },
-  { query: "vintage outerwear", count: 8 },
-  { query: "vintage flannel shirt", count: 6 },
+  { query: "vintage workwear jacket", count: 5 },
+  { query: "vintage denim", count: 5 },
+  { query: "vintage outerwear", count: 5 },
+  { query: "vintage flannel shirt", count: 5 },
 ];
 
 const CONTEMPORARY_KEYWORDS: SearchQueryInput[] = [
-  { query: "vintage leather jacket", count: 8 },
-  { query: "vintage outerwear", count: 8 },
-  { query: "archive jacket", count: 7 },
-  { query: "rare japanese jacket", count: 7 },
+  { query: "vintage leather jacket", count: 5 },
+  { query: "vintage outerwear", count: 5 },
+  { query: "archive jacket", count: 5 },
+  { query: "rare japanese jacket", count: 5 },
 ];
 
 const SOUVENIR_KEYWORDS: SearchQueryInput[] = [
-  { query: "vintage workwear jacket", count: 8 },
-  { query: "vintage denim", count: 8 },
-  { query: "vintage chinese souvenir jacket", count: 7 },
-  { query: "vintage taiwan souvenir outerwear", count: 7 },
+  { query: "vintage workwear jacket", count: 5 },
+  { query: "vintage denim", count: 5 },
+  { query: "vintage chinese souvenir jacket", count: 5 },
+  { query: "vintage taiwan souvenir outerwear", count: 5 },
 ];
 
 export const DIGEST_CONFIGS: DigestConfig[] = [
