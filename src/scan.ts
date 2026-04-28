@@ -271,7 +271,7 @@ async function runConfigScan(
   console.log(`[${configId}] Evaluation complete: ${evaluatedCount} evaluated, ${skippedCount} skipped, ${errorCount} errors`);
   console.log(`[${configId}] Good finds: ${goodFinds.length}`);
 
-  // 5. Send digest email — top 2 by score
+  // 5. Send digest email — top 3 by score
   const TOP_N = 3;
   if (goodFinds.length > 0) {
     goodFinds.sort((a, b) => b.score - a.score);
