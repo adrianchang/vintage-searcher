@@ -272,7 +272,7 @@ async function runConfigScan(
   console.log(`[${configId}] Good finds: ${goodFinds.length}`);
 
   // 5. Send digest email — top 2 by score
-  const TOP_N = 2;
+  const TOP_N = 3;
   if (goodFinds.length > 0) {
     goodFinds.sort((a, b) => b.score - a.score);
     const toSend = goodFinds.slice(0, TOP_N);

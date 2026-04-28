@@ -17,7 +17,7 @@ const EBAY_ENDPOINT = process.env.EBAY_ENDPOINT || "";
 const prisma = new PrismaClient();
 const scanConfig: ScanConfig = {
   platform: "ebay",
-  maxListings: 30,
+  maxListings: 20,
   minMargin: 0,
   minConfidence: 0,
 };
