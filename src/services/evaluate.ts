@@ -626,15 +626,14 @@ type StorySnapshot = {
   marketContext: string;
 };
 
-// Scores a batch of candidate items against a user's liked stories in a single cheap model call.
-// Returns a map of index → personalFavorScore (0-1). Returns empty map if no liked stories.
-export async function computePersonalScores(
+async function batchScoreAgainstStories(
   candidates: StorySnapshot[],
-  likedStories: StorySnapshot[],
+  referenceStories: StorySnapshot[],
+  promptInstruction: string,
 ): Promise<Record<number, number>> {
-  if (likedStories.length === 0 || candidates.length === 0) return {};
+  if (referenceStories.length === 0 || candidates.length === 0) return {};
 
-  const likedSummary = likedStories.slice(0, 15).map((s, i) =>
+  const referenceSummary = referenceStories.slice(0, 15).map((s, i) =>
     `${i + 1}. ${s.itemIdentification} — ${s.styleGuide}`
   ).join("\n");
 
@@ -642,18 +641,12 @@ export async function computePersonalScores(
     `${i + 1}. ${c.itemIdentification} — ${c.styleGuide} | ${c.hook}`
   ).join("\n");
 
-  const prompt = `You are scoring aesthetic and style compatibility for a vintage clothing enthusiast.
+  const prompt = `You are scoring aesthetic and style similarity for a vintage clothing enthusiast.
 
-The user has liked these items (their taste profile):
-${likedSummary}
+${promptInstruction}
+${referenceSummary}
 
-Score each candidate item (0–1) based on how well it matches this person's aesthetic:
-- 0.9–1.0: Near-identical aesthetic, era, and culture to their liked items
-- 0.7–0.9: Strong overlap in taste
-- 0.4–0.7: Some overlap but different vibe
-- 0.0–0.4: Different aesthetic entirely
-
-Candidates:
+Candidates to score:
 ${candidateList}
 
 Return scores as a JSON array in the same order as the candidates.`;
@@ -681,9 +674,46 @@ Return scores as a JSON array in the same order as the candidates.`;
     });
     return scores;
   } catch (error) {
-    console.error("Personal score computation failed:", error instanceof Error ? error.message : error);
+    console.error("Batch score computation failed:", error instanceof Error ? error.message : error);
     return {};
   }
+}
+
+// Scores candidates against liked stories (0=no match, 1=perfect match).
+export async function computePersonalScores(
+  candidates: StorySnapshot[],
+  likedStories: StorySnapshot[],
+): Promise<Record<number, number>> {
+  return batchScoreAgainstStories(
+    candidates,
+    likedStories,
+    `The user has liked these items (their taste profile). Score each candidate 0–1 on how well it matches this person's aesthetic:
+- 0.9–1.0: Near-identical aesthetic, era, and culture to their liked items
+- 0.7–0.9: Strong overlap in taste
+- 0.4–0.7: Some overlap but different vibe
+- 0.0–0.4: Different aesthetic entirely
+
+Liked items:`,
+  );
+}
+
+// Scores candidates against disliked stories (0=nothing in common, 1=very similar to disliked items).
+// This score is used as a penalty: finalScore = baseScore × (1 - dislikeSimilarity).
+export async function computeDislikeScores(
+  candidates: StorySnapshot[],
+  dislikedStories: StorySnapshot[],
+): Promise<Record<number, number>> {
+  return batchScoreAgainstStories(
+    candidates,
+    dislikedStories,
+    `The user has disliked these items. Score each candidate 0–1 on how similar it is to what this person dislikes:
+- 0.9–1.0: Very similar aesthetic, era, and culture to their disliked items
+- 0.7–0.9: Strong overlap with what they dislike
+- 0.4–0.7: Some overlap but different enough
+- 0.0–0.4: Clearly different from what they dislike
+
+Disliked items:`,
+  );
 }
 
 const MOCK_STORY_DEFAULTS = {

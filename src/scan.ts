@@ -3,7 +3,7 @@ import { type Platform } from "./services/ecommerce";
 import { type FilterOptions } from "./services/filter";
 import { sendDigestEmail, type DigestItem } from "./services/email";
 import { combinedScore } from "./services/score";
-import { runIdentification as defaultRunIdentification, computePersonalScores } from "./services/evaluate";
+import { runIdentification as defaultRunIdentification, computePersonalScores, computeDislikeScores } from "./services/evaluate";
 import { DIGEST_CONFIGS, type DigestConfig } from "./configs/digests";
 import type { Listing, Evaluation, ScanConfig } from "./types";
 
@@ -286,36 +286,54 @@ async function runConfigScan(
       where: { email: recipient },
       include: {
         votes: {
-          where: { direction: "up" },
           include: { story: true },
           orderBy: { createdAt: "desc" },
-          take: 20,
+          take: 40,
         },
       },
     });
 
-    const likedStories = (user?.votes ?? []).map((v) => ({
-      itemIdentification: v.story.hook, // hook gives a tight summary
-      styleGuide: v.story.styleGuide,
-      hook: v.story.hook,
-      marketContext: v.story.marketContext,
+    const likedStories = (user?.votes ?? [])
+      .filter((v) => v.direction === "up")
+      .slice(0, 20)
+      .map((v) => ({
+        itemIdentification: v.story.hook,
+        styleGuide: v.story.styleGuide,
+        hook: v.story.hook,
+        marketContext: v.story.marketContext,
+      }));
+
+    const dislikedStories = (user?.votes ?? [])
+      .filter((v) => v.direction === "down")
+      .slice(0, 20)
+      .map((v) => ({
+        itemIdentification: v.story.hook,
+        styleGuide: v.story.styleGuide,
+        hook: v.story.hook,
+        marketContext: v.story.marketContext,
+      }));
+
+    const candidates = goodFinds.map((f) => ({
+      itemIdentification: f.evaluation.itemIdentification,
+      styleGuide: f.evaluation.styleGuide,
+      hook: f.evaluation.hook,
+      marketContext: f.evaluation.marketContext,
     }));
 
     let scoredFinds = goodFinds;
+    const hasVotes = likedStories.length > 0 || dislikedStories.length > 0;
 
-    if (likedStories.length > 0) {
-      console.log(`[${configId}] Computing personal scores for ${recipient} (${likedStories.length} liked stories)...`);
-      const candidates = goodFinds.map((f) => ({
-        itemIdentification: f.evaluation.itemIdentification,
-        styleGuide: f.evaluation.styleGuide,
-        hook: f.evaluation.hook,
-        marketContext: f.evaluation.marketContext,
-      }));
-      const personalScores = await computePersonalScores(candidates, likedStories);
+    if (hasVotes) {
+      console.log(`[${configId}] Personalizing for ${recipient}: ${likedStories.length} liked, ${dislikedStories.length} disliked`);
+      const [personalScores, dislikeScores] = await Promise.all([
+        computePersonalScores(candidates, likedStories),
+        computeDislikeScores(candidates, dislikedStories),
+      ]);
       scoredFinds = goodFinds.map((find, i) => {
         const personalFavorScore = personalScores[i];
-        if (personalFavorScore == null) return find;
-        return { ...find, score: combinedScore(find.evaluation, personalFavorScore) };
+        const dislikeSimilarity = dislikeScores[i];
+        const score = combinedScore(find.evaluation, personalFavorScore, dislikeSimilarity);
+        return { ...find, score };
       });
     }
 
