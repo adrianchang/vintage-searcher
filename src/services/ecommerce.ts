@@ -77,7 +77,8 @@ async function fetchEbay(limit: number, queries: SearchQueryInput[]): Promise<Li
           }
 
           const rawUrl = item.itemWebUrl || "";
-          const normalizedUrl = rawUrl ? `https://www.ebay.com/itm/${item.itemId}` : "";
+          const itemIdMatch = rawUrl.match(/\/itm\/(\d+)/);
+          const normalizedUrl = itemIdMatch ? `https://www.ebay.com/itm/${itemIdMatch[1]}` : rawUrl;
           const listing: Listing = {
             url: normalizedUrl,
             platform: "ebay",
