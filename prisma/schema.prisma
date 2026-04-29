@@ -59,7 +59,6 @@ model Evaluation {
   createdAt      DateTime @default(now())
 
   stories        Story[]
-  deliveries     StoryDelivery[]
 }
 
 model Story {
@@ -99,14 +98,13 @@ model Vote {
 }
 
 model StoryDelivery {
-  id           String     @id @default(cuid())
-  userId       String
-  user         User       @relation(fields: [userId], references: [id])
-  evaluationId String
-  evaluation   Evaluation @relation(fields: [evaluationId], references: [id])
-  sentAt       DateTime   @default(now())
+  id     String   @id @default(cuid())
+  userId String
+  user   User     @relation(fields: [userId], references: [id])
+  url    String
+  sentAt DateTime @default(now())
 
-  @@unique([userId, evaluationId])
+  @@unique([userId, url])
 }
 
 // Managed by connect-pg-simple (express-session), not by Prisma
