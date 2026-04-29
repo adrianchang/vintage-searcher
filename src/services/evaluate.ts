@@ -644,6 +644,7 @@ Return scores as a JSON array in the same order as the candidates.`;
     (result.scores ?? []).forEach((s, i) => {
       scores[i] = Math.min(1, Math.max(0, s));
     });
+    console.log(`  Personalization scores: [${Object.values(scores).map(s => s.toFixed(2)).join(", ")}]`);
     return scores;
   } catch (error) {
     console.error("Batch score computation failed:", error instanceof Error ? error.message : error);
