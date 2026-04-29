@@ -138,114 +138,84 @@ export async function runScan(
     console.log(`  "${query}" → ${results.length} listings`);
   }
 
-  // 5. Deduplicate across all queries
-  const allListingsMap = new Map<string, Listing>();
-  for (const listings of queryResults.values()) {
-    for (const l of listings) allListingsMap.set(l.url, l);
-  }
-  console.log(`Total unique listings: ${allListingsMap.size}`);
-
-  // 6. Filter
-  const filtered = await deps.filterListings([...allListingsMap.values()]);
-  console.log(`${filtered.length} listings passed filter`);
-  onProgress?.({ stage: 'filter', message: `${filtered.length} passed filter` });
-
-  // 7. Store filtered listings (deduped by URL)
-  for (const listing of filtered) {
-    await prisma.filteredListing.upsert({
-      where: { url: listing.url },
-      update: {},
-      create: {
-        url: listing.url,
-        platform: listing.platform,
-        title: listing.title,
-        price: listing.price,
-        imageUrls: JSON.stringify(listing.imageUrls),
-        description: listing.description,
-        rawData: JSON.stringify(listing.rawData),
-      },
-    });
-  }
-
-  // 8. Evaluate all filtered listings (shared — language-neutral price/identification data)
-  const evalCache = new Map<string, { dbListing: any; dbEvaluation: any }>();
+  // 5. Per-user: build listing pool, filter, evaluate (shared cache), generate stories, send
+  const evalCache = new Map<string, { dbEvaluation: any }>();
   let evalCount = 0;
   let evalErrors = 0;
-
-  for (const listing of filtered) {
-    const dbListing = await prisma.filteredListing.findUnique({ where: { url: listing.url } });
-    if (!dbListing) continue;
-
-    let dbEvaluation = await prisma.evaluation.findUnique({ where: { listingId: dbListing.id } });
-
-    if (!dbEvaluation) {
-      onProgress?.({
-        stage: 'evaluate',
-        message: `Evaluating: ${listing.title.slice(0, 50)}...`,
-        evaluated: evalCount,
-        total: filtered.length,
-      });
-
-      try {
-        // Phase 1: identification (no language — neutral for price evaluation)
-        const identification = await identify(listing);
-
-        // Phase 2: valuation (Vertex Search + Gemini urlContext)
-        const valuation = await valuate(listing, identification);
-
-        evalCount++;
-        const hasSoldData = (valuation.soldListings?.length ?? 0) > 0;
-
-        dbEvaluation = await prisma.evaluation.create({
-          data: {
-            listing: { connect: { id: dbListing.id } },
-            isAuthentic: identification.isAuthentic,
-            itemIdentification: identification.itemIdentification,
-            identificationConfidence: identification.identificationConfidence,
-            estimatedEra: identification.estimatedEra,
-            estimatedValue: hasSoldData ? (valuation.estimatedValue ?? null) : listing.price,
-            currentPrice: valuation.currentPrice,
-            margin: hasSoldData ? (valuation.margin ?? null) : 0,
-            confidence: valuation.confidence,
-            reasoning: valuation.reasoning,
-            redFlags: JSON.stringify(identification.redFlags),
-            references: JSON.stringify(valuation.references),
-            soldListings: JSON.stringify(valuation.soldListings ?? []),
-            priceScore: hasSoldData ? (valuation.priceScore ?? 0) : 0,
-            isOpportunity: true, // TODO: use combinedScore to skip story generation for low-scoring items
-          },
-        });
-      } catch (error) {
-        evalErrors++;
-        console.error(`Failed to evaluate: ${listing.title.slice(0, 50)}`);
-        console.error(error instanceof Error ? error.message : error);
-        continue;
-      }
-    }
-
-    evalCache.set(listing.url, { dbListing, dbEvaluation });
-  }
-
-  console.log(`Evaluation complete: ${evalCount} evaluated, ${evalErrors} errors`);
-
-  // 9. Per-user: generate stories in their language, personalize, send
   let totalSent = 0;
 
   for (const user of usersWithKW) {
     if (!user.email) continue;
     console.log(`\n--- User: ${user.email} (${user.language}) ---`);
 
-    // This user's listing pool = union of results from their queries
-    const userQuerySet = new Set(user.resolvedKeywords.map(k => k.query));
-    const userListings = filtered.filter(listing =>
-      [...userQuerySet].some(q => queryResults.get(q)?.some(r => r.url === listing.url))
-    );
+    // Build this user's listing pool: N per keyword, deduped
+    const kwCounts = resolveKeywordCounts(user.resolvedKeywords, config.maxListings);
+    const userListingsMap = new Map<string, Listing>();
+    for (const { query, count } of kwCounts) {
+      for (const listing of (queryResults.get(query) ?? []).slice(0, count)) {
+        userListingsMap.set(listing.url, listing);
+      }
+    }
+
+    // Filter per-user
+    const filtered = await deps.filterListings([...userListingsMap.values()]);
+    console.log(`  ${filtered.length} listings passed filter`);
+    onProgress?.({ stage: 'filter', message: `${filtered.length} passed filter` });
 
     const goodFinds: DigestItem[] = [];
 
-    for (const listing of userListings) {
-      const cached = evalCache.get(listing.url);
-      if (!cached) continue;
+    for (const listing of filtered) {
+      let cached = evalCache.get(listing.url);
+
+      if (!cached) {
+        let dbEvaluation = await prisma.evaluation.findUnique({ where: { url: listing.url } });
+
+        if (!dbEvaluation) {
+          onProgress?.({
+            stage: 'evaluate',
+            message: `Evaluating: ${listing.title.slice(0, 50)}...`,
+            evaluated: evalCount,
+            total: filtered.length,
+          });
+
+          try {
+            const identification = await identify(listing);
+            const valuation = await valuate(listing, identification);
+
+            evalCount++;
+            const hasSoldData = (valuation.soldListings?.length ?? 0) > 0;
+
+            dbEvaluation = await prisma.evaluation.create({
+              data: {
+                url: listing.url,
+                isAuthentic: identification.isAuthentic,
+                itemIdentification: identification.itemIdentification,
+                identificationConfidence: identification.identificationConfidence,
+                estimatedEra: identification.estimatedEra,
+                estimatedValue: hasSoldData ? (valuation.estimatedValue ?? null) : listing.price,
+                currentPrice: valuation.currentPrice,
+                margin: hasSoldData ? (valuation.margin ?? null) : 0,
+                confidence: valuation.confidence,
+                reasoning: valuation.reasoning,
+                redFlags: JSON.stringify(identification.redFlags),
+                references: JSON.stringify(valuation.references),
+                soldListings: JSON.stringify(valuation.soldListings ?? []),
+                priceScore: hasSoldData ? (valuation.priceScore ?? 0) : 0,
+                isOpportunity: true,
+              },
+            });
+          } catch (error) {
+            evalErrors++;
+            console.error(`Failed to evaluate: ${listing.title.slice(0, 50)}`);
+            console.error(error instanceof Error ? error.message : error);
+            continue;
+          }
+        }
+
+        cached = { dbEvaluation };
+        evalCache.set(listing.url, cached);
+      }
+
       const { dbEvaluation } = cached;
 
       // Stories are keyed by (evaluationId, language) — configId = language as a natural dedup key

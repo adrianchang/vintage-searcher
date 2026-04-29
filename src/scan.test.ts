@@ -134,24 +134,14 @@ function createMockPrisma() {
       }),
       upsert: vi.fn(async ({ where, create }: any) => TEST_USERS.find(u => u.email === where.email) ?? create),
     },
-    filteredListing: {
-      upsert: vi.fn(async ({ where, create }: any) => {
-        if (!listings[where.url]) listings[where.url] = { id: `cuid-${++idCounter}`, ...create };
-        return listings[where.url];
-      }),
-      findUnique: vi.fn(async ({ where }: any) => listings[where.url] ?? null),
-      findMany: vi.fn(async () => Object.values(listings)),
-    },
     evaluation: {
       create: vi.fn(async ({ data }: any) => {
         const id = `eval-${++idCounter}`;
-        const listingId = data.listing.connect.id;
-        const record = { id, listingId, ...data, listing: undefined };
-        delete record.listing;
-        evaluations[listingId] = record;
+        const record = { id, ...data };
+        evaluations[data.url] = record;
         return record;
       }),
-      findUnique: vi.fn(async ({ where }: any) => evaluations[where.listingId] ?? null),
+      findUnique: vi.fn(async ({ where }: any) => evaluations[where.url] ?? null),
       update: vi.fn(async ({ where, data }: any) => {
         const record = Object.values(evaluations).find((e: any) => e.id === where.id) as any;
         if (record) Object.assign(record, data);
@@ -178,7 +168,7 @@ function createMockPrisma() {
     vote: {
       upsert: vi.fn(async () => ({})),
     },
-    _store: { listings, evaluations, stories },
+    _store: { evaluations, stories },
   };
 }
 
@@ -218,13 +208,13 @@ beforeEach(() => {
 });
 
 describe("runScan", () => {
-  it("should store filtered listings (reproduction filtered out)", async () => {
+  it("should evaluate filtered listings (reproduction filtered out)", async () => {
     await runScan(config, makeDeps());
 
-    // 2 listings pass filter, stored once globally (not per-user)
-    expect(mockPrisma.filteredListing.upsert).toHaveBeenCalledTimes(2);
+    // 2 listings pass filter, evaluated once each
+    expect(mockPrisma.evaluation.create).toHaveBeenCalledTimes(2);
 
-    const storedUrls = Object.keys(mockPrisma._store.listings).sort();
+    const storedUrls = Object.keys(mockPrisma._store.evaluations).sort();
     expect(storedUrls).toEqual([
       "https://www.ebay.com/itm/test-001",
       "https://www.ebay.com/itm/test-002",

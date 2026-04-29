@@ -80,7 +80,6 @@ const TEST_USERS = [
 ];
 
 function createMockPrisma() {
-  const listings: Record<string, any> = {};
   const evaluations: Record<string, any> = {};
   const stories: Record<string, any> = {};
   let idCounter = 0;
@@ -94,23 +93,14 @@ function createMockPrisma() {
       }),
       upsert: vi.fn(async ({ where, create }: any) => TEST_USERS.find(u => u.email === where.email) ?? create),
     },
-    filteredListing: {
-      upsert: vi.fn(async ({ where, create }: any) => {
-        if (!listings[where.url]) listings[where.url] = { id: `cuid-${++idCounter}`, ...create };
-        return listings[where.url];
-      }),
-      findUnique: vi.fn(async ({ where }: any) => listings[where.url] ?? null),
-    },
     evaluation: {
       create: vi.fn(async ({ data }: any) => {
         const id = `eval-${++idCounter}`;
-        const listingId = data.listing.connect.id;
-        const record = { id, listingId, ...data, listing: undefined };
-        delete record.listing;
-        evaluations[listingId] = record;
+        const record = { id, ...data };
+        evaluations[data.url] = record;
         return record;
       }),
-      findUnique: vi.fn(async ({ where }: any) => evaluations[where.listingId] ?? null),
+      findUnique: vi.fn(async ({ where }: any) => evaluations[where.url] ?? null),
       update: vi.fn(async ({ where, data }: any) => {
         const record = Object.values(evaluations).find((e: any) => e.id === where.id) as any;
         if (record) Object.assign(record, data);
@@ -137,7 +127,7 @@ function createMockPrisma() {
     vote: {
       upsert: vi.fn(async () => ({})),
     },
-    _store: { listings, evaluations, stories },
+    _store: { evaluations, stories },
   };
 }
 
@@ -176,17 +166,12 @@ describe("Pipeline: fetch → filter → store → evaluate → store", () => {
     expect(typeof result[0].rawData).toBe("object");
   });
 
-  it("listing upsert serializes arrays to JSON strings", async () => {
+  it("evaluation create includes url", async () => {
     await runScan(CONFIG, makeDeps());
 
-    // 1 listing, stored once globally
-    expect(mockPrisma.filteredListing.upsert).toHaveBeenCalledTimes(1);
-    const create = mockPrisma.filteredListing.upsert.mock.calls[0][0].create;
-
-    expect(typeof create.imageUrls).toBe("string");
-    expect(JSON.parse(create.imageUrls)).toEqual(LISTING.imageUrls);
-    expect(typeof create.rawData).toBe("string");
-    expect(JSON.parse(create.rawData)).toEqual(LISTING.rawData);
+    expect(mockPrisma.evaluation.create).toHaveBeenCalledTimes(1);
+    const data = mockPrisma.evaluation.create.mock.calls[0][0].data;
+    expect(data.url).toBe(LISTING.url);
   });
 
   it("evaluation create serializes arrays and includes priceScore", async () => {
@@ -239,13 +224,8 @@ describe("Pipeline: fetch → filter → store → evaluate → store", () => {
   it("full round-trip: stored data can reconstruct original Listing", async () => {
     await runScan(CONFIG, makeDeps());
 
-    const storedListing = mockPrisma._store.listings[LISTING.url];
-    expect(JSON.parse(storedListing.imageUrls)).toEqual(LISTING.imageUrls);
-    expect(JSON.parse(storedListing.rawData)).toEqual(LISTING.rawData);
-    expect(storedListing.url).toBe(LISTING.url);
-    expect(storedListing.title).toBe(LISTING.title);
-
-    const storedEval = Object.values(mockPrisma._store.evaluations)[0] as any;
+    const storedEval = mockPrisma._store.evaluations[LISTING.url] as any;
+    expect(storedEval.url).toBe(LISTING.url);
     expect(JSON.parse(storedEval.redFlags)).toEqual(IDENTIFICATION.redFlags);
     expect(JSON.parse(storedEval.soldListings)).toEqual(VALUATION.soldListings);
     expect(storedEval.isAuthentic).toBe(IDENTIFICATION.isAuthentic);

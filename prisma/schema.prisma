@@ -35,26 +35,10 @@ model UserKeyword {
 }
 
 
-// Listings that passed the first filter (for iteration on filter rules)
-model FilteredListing {
-  id          String   @id @default(cuid())
-  url         String   @unique
-  platform    String
-  title       String
-  price       Float
-  imageUrls   String   // JSON array of image URLs
-  description String
-  rawData     String   // JSON
-  createdAt   DateTime @default(now())
-
-  evaluation   Evaluation?
-}
-
 // Full LLM evaluation results
 model Evaluation {
   id             String   @id @default(cuid())
-  listingId      String   @unique
-  listing        FilteredListing @relation(fields: [listingId], references: [id])
+  url            String   @unique
 
   isAuthentic              Boolean
   itemIdentification       String   @default("")
