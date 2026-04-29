@@ -218,6 +218,15 @@ export async function runScan(
 
       const { dbEvaluation } = cached;
 
+      // Skip if already sent to this user
+      const alreadyDelivered = await prisma.storyDelivery.findUnique({
+        where: { userId_evaluationId: { userId: user.id, evaluationId: dbEvaluation.id } },
+      });
+      if (alreadyDelivered) {
+        console.log(`  Skipping (already sent): ${listing.title.slice(0, 60)}`);
+        continue;
+      }
+
       // Stories are keyed by (evaluationId, language) — configId = language as a natural dedup key
       const storyWhere = { evaluationId: dbEvaluation.id, language: user.language, configId: user.language };
       let existingStory = await prisma.story.findUnique({ where: { evaluationId_language_configId: storyWhere } });
@@ -297,6 +306,17 @@ export async function runScan(
     const toSend = [...scoredFinds].sort((a, b) => b.score - a.score).slice(0, TOP_N);
     console.log(`  Sending top ${toSend.length} of ${goodFinds.length} candidates`);
     await sendDigestEmail(toSend, user.email, user.language);
+
+    // Record deliveries so these listings are never resent to this user
+    for (const find of toSend) {
+      const evalId = evalCache.get(find.listing.url)?.dbEvaluation.id;
+      if (evalId) {
+        await prisma.storyDelivery.create({
+          data: { userId: user.id, evaluationId: evalId },
+        });
+      }
+    }
+
     totalSent++;
   }
 

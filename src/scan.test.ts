@@ -168,6 +168,10 @@ function createMockPrisma() {
     vote: {
       upsert: vi.fn(async () => ({})),
     },
+    storyDelivery: {
+      findUnique: vi.fn(async () => null),
+      create: vi.fn(async ({ data }: any) => ({ id: `delivery-${++idCounter}`, ...data })),
+    },
     _store: { evaluations, stories },
   };
 }

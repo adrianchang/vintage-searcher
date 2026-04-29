@@ -19,8 +19,9 @@ model User {
   language  String   @default("en")
   createdAt DateTime @default(now())
 
-  keywords  UserKeyword[]
-  votes     Vote[]
+  keywords   UserKeyword[]
+  votes      Vote[]
+  deliveries StoryDelivery[]
 }
 
 model UserKeyword {
@@ -58,6 +59,7 @@ model Evaluation {
   createdAt      DateTime @default(now())
 
   stories        Story[]
+  deliveries     StoryDelivery[]
 }
 
 model Story {
@@ -94,6 +96,17 @@ model Vote {
   createdAt DateTime @default(now())
 
   @@unique([userId, storyId])
+}
+
+model StoryDelivery {
+  id           String     @id @default(cuid())
+  userId       String
+  user         User       @relation(fields: [userId], references: [id])
+  evaluationId String
+  evaluation   Evaluation @relation(fields: [evaluationId], references: [id])
+  sentAt       DateTime   @default(now())
+
+  @@unique([userId, evaluationId])
 }
 
 // Managed by connect-pg-simple (express-session), not by Prisma
