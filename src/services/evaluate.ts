@@ -398,7 +398,7 @@ async function extractGroundingReferences(response: GenerateContentResponse): Pr
 
 interface CallGeminiConfig<T> {
   prompt: string;
-  imageParts: ImagePart[];
+  imageParts?: ImagePart[];
   schema: Record<string, unknown>;
   tools: Record<string, unknown>[];
   timestamp: () => string;
@@ -419,7 +419,7 @@ async function callGemini<T>(config: CallGeminiConfig<T>): Promise<{ result: T; 
         contents: [
           {
             role: "user",
-            parts: [{ text: prompt }, ...imageParts],
+            parts: [{ text: prompt }, ...(imageParts ?? [])],
           },
         ],
         config: {
@@ -466,7 +466,7 @@ async function callGemini<T>(config: CallGeminiConfig<T>): Promise<{ result: T; 
 
       // Extra logging for INVALID_ARGUMENT to help diagnose root cause
       if (errorMsg.includes("INVALID_ARGUMENT") || errorMsg.includes("400")) {
-        console.error(`[${timestamp()}]   ✗ ${phaseLabel} INVALID_ARGUMENT — prompt length: ${prompt.length} chars, images: ${imageParts.length}, tools: ${JSON.stringify(tools)}`);
+        console.error(`[${timestamp()}]   ✗ ${phaseLabel} INVALID_ARGUMENT — prompt length: ${prompt.length} chars, images: ${(imageParts ?? []).length}, tools: ${JSON.stringify(tools)}`);
         console.error(`[${timestamp()}]   ✗ ${phaseLabel} prompt preview (last 500 chars):`, prompt.slice(-500));
       }
 
@@ -556,7 +556,6 @@ export async function runValuation(
 
   const { result: valuation, references } = await callGemini<ValuationResult>({
     prompt: valuationPrompt,
-    imageParts,
     schema: VALUATION_SCHEMA,
     tools: [{ urlContext: {} }],
     timestamp,
@@ -618,7 +617,6 @@ export async function evaluateListing(listing: Listing, lang?: string, promptApp
   const valuationPrompt = buildValuationPrompt(listing, identification, englishSoldResults, englishActiveResults, japaneseSoldResults, japaneseActiveResults, lang);
   const { result: valuation, references: refs2 } = await callGemini<ValuationResult>({
     prompt: valuationPrompt,
-    imageParts,
     schema: VALUATION_SCHEMA,
     tools: [{ urlContext: {} }],
     timestamp,
