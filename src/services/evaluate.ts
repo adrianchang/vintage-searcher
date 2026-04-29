@@ -166,8 +166,7 @@ async function fetchListingImages(
   return imageParts;
 }
 
-// Phase result types (internal only — merged into Evaluation before returning)
-interface IdentificationResult {
+export interface IdentificationResult {
   isAuthentic: boolean;
   itemIdentification: string;
   itemIdentificationJapanese: string;
@@ -194,6 +193,8 @@ interface ValuationResult {
   confidence: number;
   reasoning: string;
 }
+
+export type ValuationOutput = ValuationResult & { references: string[] };
 
 interface SearchResult {
   title: string;
@@ -530,6 +531,45 @@ const VALUATION_SCHEMA = {
   },
   required: ["soldListings", "currentPrice", "priceScore", "confidence", "reasoning"],
 };
+
+export async function runValuation(
+  listing: Listing,
+  identification: IdentificationResult,
+  lang?: string,
+): Promise<ValuationOutput> {
+  const timestamp = () => new Date().toISOString();
+  const imageParts = await fetchListingImages(listing, timestamp);
+
+  const { englishSoldResults, englishActiveResults, japaneseSoldResults, japaneseActiveResults } =
+    await searchForComps(identification, timestamp);
+
+  console.log(`[${timestamp()}]   Search results for "${identification.itemIdentification}":`);
+  [...englishSoldResults, ...englishActiveResults, ...japaneseSoldResults, ...japaneseActiveResults]
+    .forEach((r, i) => console.log(`[${timestamp()}]     ${i + 1}. ${r.title} — ${r.link}${r.price ? ` ($${r.price})` : ""}`));
+
+  const valuationPrompt = buildValuationPrompt(
+    listing, identification,
+    englishSoldResults, englishActiveResults,
+    japaneseSoldResults, japaneseActiveResults,
+    lang,
+  );
+
+  const { result: valuation, references } = await callGemini<ValuationResult>({
+    prompt: valuationPrompt,
+    imageParts,
+    schema: VALUATION_SCHEMA,
+    tools: [{ urlContext: {} }],
+    timestamp,
+    phaseLabel: "Phase 2: Valuation",
+  });
+
+  console.log(`[${timestamp()}]   soldListings (${valuation.soldListings?.length ?? 0}):`);
+  (valuation.soldListings ?? []).forEach((s, i) =>
+    console.log(`[${timestamp()}]     ${i + 1}. ${s.title} — ${s.price != null ? `$${s.price}` : "N/A"}${s.url ? ` — ${s.url}` : ""}`)
+  );
+
+  return { ...valuation, references };
+}
 
 export async function runIdentification(listing: Listing, lang?: string, promptAppend?: string): Promise<IdentificationResult> {
   const timestamp = () => new Date().toISOString();

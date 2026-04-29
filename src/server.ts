@@ -7,7 +7,7 @@ const VOTE_SECRET = process.env.VOTE_SECRET || "dev-vote-secret";
 import { PrismaClient } from "./generated/prisma/client";
 import { fetchListings } from "./services/ecommerce";
 import { filterListings } from "./services/filter";
-import { evaluateListing } from "./services/evaluate";
+import { runIdentification, runValuation } from "./services/evaluate";
 import { runScan } from "./scan";
 import type { ScanConfig } from "./types";
 
@@ -158,8 +158,9 @@ app.post("/scan", (req, res) => {
     prisma,
     fetchListings,
     filterListings,
-    evaluateListing,
-  }, undefined, undefined, testRecipients).catch((error) => {
+    runIdentification,
+    runValuation,
+  }, undefined, testRecipients).catch((error) => {
     console.error("Scan failed:", error);
   });
 });

@@ -2,7 +2,7 @@ import "dotenv/config";
 import { PrismaClient } from "./generated/prisma/client";
 import { fetchListings } from "./services/ecommerce";
 import { filterListings } from "./services/filter";
-import { evaluateListing } from "./services/evaluate";
+import { runIdentification, runValuation } from "./services/evaluate";
 import { runScan } from "./scan";
 import type { ScanConfig } from "./types";
 
@@ -19,7 +19,8 @@ runScan(config, {
   prisma,
   fetchListings,
   filterListings,
-  evaluateListing,
+  runIdentification,
+  runValuation,
 })
   .catch(console.error)
   .finally(() => prisma.$disconnect());

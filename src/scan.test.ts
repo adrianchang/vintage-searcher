@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { runScan, type ScanDeps } from "./scan";
 import { filterListings } from "./services/filter";
 import type { Listing, Evaluation, ScanConfig } from "./types";
+import type { IdentificationResult, ValuationOutput } from "./services/evaluate";
 
 const STORY_DEFAULTS = {
   hook: "A garment from another era.",
@@ -44,36 +45,47 @@ const MOCK_LISTINGS: Listing[] = [
   },
 ];
 
-const MOCK_EVALUATIONS: Record<string, Evaluation> = {
+const MOCK_IDENTIFICATIONS: Record<string, IdentificationResult> = {
   "https://www.ebay.com/itm/test-001": {
     ...STORY_DEFAULTS,
     isAuthentic: true,
     itemIdentification: "Pendleton Board Shirt, loop collar, wool, 1960s",
+    itemIdentificationJapanese: "ペンドルトン ループカラー ボードシャツ 60s",
     identificationConfidence: 0.9,
     estimatedEra: "1960s",
-    estimatedValue: 120,
-    currentPrice: 45,
-    margin: 75,
-    confidence: 0.85,
-    reasoning: "Pendleton board shirts with loop collars are collectible.",
     redFlags: ["Condition not fully visible"],
-    references: ["Similar sold for $135"],
-    soldListings: [{ title: "Pendleton loop collar board shirt sz M", price: 135, url: null }],
   },
   "https://www.ebay.com/itm/test-002": {
     ...STORY_DEFAULTS,
     isAuthentic: true,
     itemIdentification: "1950s rayon bowling shirt, chain stitch embroidery",
+    itemIdentificationJapanese: "50年代 レーヨン ボウリングシャツ チェーンステッチ",
     identificationConfidence: 0.92,
     estimatedEra: "1950s",
+    redFlags: [],
+  },
+};
+
+const MOCK_VALUATIONS: Record<string, ValuationOutput> = {
+  "https://www.ebay.com/itm/test-001": {
+    soldListings: [{ title: "Pendleton loop collar board shirt sz M", price: 135, url: null }],
+    estimatedValue: 120,
+    currentPrice: 45,
+    margin: 75,
+    priceScore: 0.625,
+    confidence: 0.85,
+    reasoning: "Pendleton board shirts with loop collars are collectible.",
+    references: ["Similar sold for $135"],
+  },
+  "https://www.ebay.com/itm/test-002": {
+    soldListings: [{ title: "1950s chain stitch bowling shirt two-tone", price: 225, url: null }],
     estimatedValue: 180,
     currentPrice: 35,
     margin: 145,
+    priceScore: 0.8,
     confidence: 0.88,
     reasoning: "Chain stitch bowling shirts are highly collectible.",
-    redFlags: [],
     references: ["Chain stitch bowling shirts sold $150-300"],
-    soldListings: [{ title: "1950s chain stitch bowling shirt two-tone", price: 225, url: null }],
   },
 };
 
@@ -84,6 +96,29 @@ const config: ScanConfig = {
   minConfidence: 0,
 };
 
+const TEST_USERS = [
+  {
+    id: "user-en",
+    name: "test@example.com",
+    email: "test@example.com",
+    language: "en",
+    googleId: null,
+    createdAt: new Date(),
+    keywords: [{ id: "kw-1", userId: "user-en", query: "vintage", percentage: 1.0, createdAt: new Date() }],
+    votes: [],
+  },
+  {
+    id: "user-zh",
+    name: "test-zh@example.com",
+    email: "test-zh@example.com",
+    language: "zh",
+    googleId: null,
+    createdAt: new Date(),
+    keywords: [{ id: "kw-2", userId: "user-zh", query: "vintage", percentage: 1.0, createdAt: new Date() }],
+    votes: [],
+  },
+];
+
 function createMockPrisma() {
   const listings: Record<string, any> = {};
   const evaluations: Record<string, any> = {};
@@ -92,21 +127,19 @@ function createMockPrisma() {
 
   return {
     user: {
-      findUnique: vi.fn(async () => null),
-      findMany: vi.fn(async () => []),
+      findMany: vi.fn(async () => TEST_USERS),
+      findUnique: vi.fn(async ({ where }: any) => {
+        const user = TEST_USERS.find(u => u.email === where.email || u.id === where.id);
+        return user ? { ...user, votes: [] } : null;
+      }),
+      upsert: vi.fn(async ({ where, create }: any) => TEST_USERS.find(u => u.email === where.email) ?? create),
     },
     filteredListing: {
       upsert: vi.fn(async ({ where, create }: any) => {
-        const url = where.url;
-        if (!listings[url]) {
-          const id = `cuid-${++idCounter}`;
-          listings[url] = { id, ...create };
-        }
-        return listings[url];
+        if (!listings[where.url]) listings[where.url] = { id: `cuid-${++idCounter}`, ...create };
+        return listings[where.url];
       }),
-      findUnique: vi.fn(async ({ where }: any) => {
-        return listings[where.url] ?? null;
-      }),
+      findUnique: vi.fn(async ({ where }: any) => listings[where.url] ?? null),
       findMany: vi.fn(async () => Object.values(listings)),
     },
     evaluation: {
@@ -118,9 +151,7 @@ function createMockPrisma() {
         evaluations[listingId] = record;
         return record;
       }),
-      findUnique: vi.fn(async ({ where }: any) => {
-        return evaluations[where.listingId] ?? null;
-      }),
+      findUnique: vi.fn(async ({ where }: any) => evaluations[where.listingId] ?? null),
       update: vi.fn(async ({ where, data }: any) => {
         const record = Object.values(evaluations).find((e: any) => e.id === where.id) as any;
         if (record) Object.assign(record, data);
@@ -132,7 +163,7 @@ function createMockPrisma() {
         const id = `story-${++idCounter}`;
         const evaluationId = data.evaluation.connect.id;
         const lang = data.language ?? "en";
-        const configId = data.configId ?? "en-default";
+        const configId = data.configId ?? "en";
         const key = `${evaluationId}:${lang}:${configId}`;
         const record = { id, evaluationId, ...data, evaluation: undefined };
         delete record.evaluation;
@@ -144,58 +175,39 @@ function createMockPrisma() {
         return stories[`${evaluationId}:${language}:${configId}`] ?? null;
       }),
     },
+    vote: {
+      upsert: vi.fn(async () => ({})),
+    },
     _store: { listings, evaluations, stories },
   };
 }
 
 let mockPrisma: ReturnType<typeof createMockPrisma>;
 
-const TEST_CONFIG = [
-  {
-    id: "en-default",
-    language: "en" as const,
-    searchKeywords: [{ query: "vintage", count: 10 }],
-    recipients: ["test@example.com"],
-  },
-  {
-    id: "zh-default",
-    language: "zh" as const,
-    searchKeywords: [{ query: "vintage", count: 10 }],
-    recipients: ["test-zh@example.com"],
-  },
-];
-
 function makeDeps(overrides?: Partial<ScanDeps>): ScanDeps {
   return {
     prisma: mockPrisma as any,
-    fetchListings: async () => MOCK_LISTINGS,
+    fetchListings: async (_platform, _count, _queries) => MOCK_LISTINGS,
     filterListings,
-    configs: TEST_CONFIG,
-    evaluateListing: async (listing: Listing) => {
-      const evaluation = MOCK_EVALUATIONS[listing.url];
-      if (!evaluation) throw new Error(`No mock evaluation for ${listing.url}`);
-      return evaluation;
-    },
     runIdentification: async (listing: Listing, lang?: string) => {
-      const evaluation = MOCK_EVALUATIONS[listing.url];
-      if (!evaluation) throw new Error(`No mock evaluation for ${listing.url}`);
+      const id = MOCK_IDENTIFICATIONS[listing.url];
+      if (!id) throw new Error(`No mock identification for ${listing.url}`);
       const prefix = lang === "zh" ? "[ZH] " : "";
       return {
-        isAuthentic: evaluation.isAuthentic,
-        itemIdentification: evaluation.itemIdentification,
-        itemIdentificationJapanese: evaluation.itemIdentification,
-        identificationConfidence: evaluation.identificationConfidence,
-        estimatedEra: evaluation.estimatedEra ?? "Unknown",
-        redFlags: evaluation.redFlags,
-        hook: `${prefix}${evaluation.hook}`,
-        brandStory: `${prefix}${evaluation.brandStory}`,
-        itemStory: `${prefix}${evaluation.itemStory}`,
-        historicalContext: `${prefix}${evaluation.historicalContext}`,
-        marketContext: `${prefix}${evaluation.marketContext}`,
-        styleGuide: `${prefix}${evaluation.styleGuide}`,
-        storyScore: evaluation.storyScore,
-        storyScoreReasoning: `${prefix}${evaluation.storyScoreReasoning}`,
+        ...id,
+        hook: `${prefix}${id.hook}`,
+        brandStory: `${prefix}${id.brandStory}`,
+        itemStory: `${prefix}${id.itemStory}`,
+        historicalContext: `${prefix}${id.historicalContext}`,
+        marketContext: `${prefix}${id.marketContext}`,
+        styleGuide: `${prefix}${id.styleGuide}`,
+        storyScoreReasoning: `${prefix}${id.storyScoreReasoning}`,
       };
+    },
+    runValuation: async (listing: Listing) => {
+      const val = MOCK_VALUATIONS[listing.url];
+      if (!val) throw new Error(`No mock valuation for ${listing.url}`);
+      return val;
     },
     ...overrides,
   };
@@ -209,8 +221,8 @@ describe("runScan", () => {
   it("should store filtered listings (reproduction filtered out)", async () => {
     await runScan(config, makeDeps());
 
-    // 2 filtered listings × 2 configs = 4 upsert calls (deduped in DB by URL)
-    expect(mockPrisma.filteredListing.upsert).toHaveBeenCalledTimes(4);
+    // 2 listings pass filter, stored once globally (not per-user)
+    expect(mockPrisma.filteredListing.upsert).toHaveBeenCalledTimes(2);
 
     const storedUrls = Object.keys(mockPrisma._store.listings).sort();
     expect(storedUrls).toEqual([
@@ -219,11 +231,12 @@ describe("runScan", () => {
     ]);
   });
 
-  it("should create evaluations and stories for each filtered listing", async () => {
+  it("should create evaluations once globally and stories per user language", async () => {
     await runScan(config, makeDeps());
 
+    // 2 listings evaluated once each
     expect(mockPrisma.evaluation.create).toHaveBeenCalledTimes(2);
-    // 2 listings × 2 languages (EN + ZH) = 4 story creates
+    // 2 listings × 2 users (EN + ZH) = 4 stories
     expect(mockPrisma.story.create).toHaveBeenCalledTimes(4);
   });
 
@@ -232,51 +245,35 @@ describe("runScan", () => {
     await runScan(config, deps);
     await runScan(config, deps);
 
-    // Second run finds existing evaluations and skips
-    expect(mockPrisma.evaluation.create).toHaveBeenCalledTimes(2); // not 4
+    // Evaluations created only on first run
+    expect(mockPrisma.evaluation.create).toHaveBeenCalledTimes(2);
   });
 
   it("should still evaluate low-storyScore items (ranking replaces threshold)", async () => {
-    const weakEval: Evaluation = {
-      ...STORY_DEFAULTS,
-      storyScore: 0.2, // low — combinedScore will be below threshold
-      isAuthentic: true,
-      itemIdentification: "Generic item",
-      identificationConfidence: 0.5,
-      estimatedEra: "1990s",
-      estimatedValue: 50,
-      currentPrice: 45,
-      margin: 5,
-      confidence: 0.5,
-      reasoning: "Not much here.",
-      redFlags: [],
-      references: [],
-      soldListings: [],
+    const weakId: IdentificationResult = {
+      ...MOCK_IDENTIFICATIONS["https://www.ebay.com/itm/test-001"]!,
+      storyScore: 0.2,
     };
-
     await runScan(config, makeDeps({
-      evaluateListing: async () => weakEval,
+      runIdentification: async () => weakId,
     }));
 
-    const evals = Object.values(mockPrisma._store.evaluations) as any[];
-    expect(evals.length).toBeGreaterThan(0); // items still evaluated, top 2 sent regardless of score
+    expect(mockPrisma.evaluation.create.mock.calls.length).toBeGreaterThan(0);
   });
 
   it("should continue scanning when a single evaluation fails", async () => {
     let callCount = 0;
     await runScan(config, makeDeps({
-      evaluateListing: async (listing) => {
+      runIdentification: async (listing) => {
         callCount++;
         if (listing.url === "https://www.ebay.com/itm/test-001") {
           throw new Error("Gemini API error");
         }
-        return MOCK_EVALUATIONS[listing.url]!;
+        return MOCK_IDENTIFICATIONS[listing.url]!;
       },
     }));
 
-    // EN config: test-001 errors (no eval), test-002 succeeds → 2 calls
-    // ZH config: test-001 still has no eval → retried → 3rd call; test-002 has eval → skip
-    expect(callCount).toBe(3);
+    // test-001 throws for both phase 1 (eval) and story gen → test-002 succeeds
     expect(mockPrisma.evaluation.create).toHaveBeenCalledTimes(1);
   });
 

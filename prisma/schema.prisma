@@ -19,7 +19,19 @@ model User {
   language  String   @default("en")
   createdAt DateTime @default(now())
 
+  keywords  UserKeyword[]
   votes     Vote[]
+}
+
+model UserKeyword {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  query      String
+  percentage Float    // 0.0–1.0, must sum to 1.0 per user
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, query])
 }
 
 

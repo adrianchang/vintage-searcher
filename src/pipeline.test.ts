@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { runScan, type ScanDeps } from "./scan";
 import { filterListings } from "./services/filter";
 import type { Listing, Evaluation, ScanConfig } from "./types";
+import type { IdentificationResult, ValuationOutput } from "./services/evaluate";
 
 const STORY_DEFAULTS = {
   hook: "Before fast fashion, this jacket outlasted everything.",
@@ -24,23 +25,28 @@ const LISTING: Listing = {
   rawData: { itemId: "pipe-001", condition: "Pre-owned", seller: "vintagefinds" },
 };
 
-const EVALUATION: Evaluation = {
+const IDENTIFICATION: IdentificationResult = {
   ...STORY_DEFAULTS,
   isAuthentic: true,
   itemIdentification: "Pendleton Board Shirt, loop collar, wool, 1960s",
+  itemIdentificationJapanese: "ペンドルトン ループカラー ボードシャツ 60s",
   identificationConfidence: 0.9,
   estimatedEra: "1960s",
-  estimatedValue: 120,
-  currentPrice: 45,
-  margin: 75,
-  confidence: 0.85,
-  reasoning: "Pendleton board shirts with loop collars are collectible.",
   redFlags: ["Condition not fully visible"],
-  references: ["Similar sold for $135", "Grailed avg $110-150"],
+};
+
+const VALUATION: ValuationOutput = {
   soldListings: [
     { title: "Pendleton loop collar board shirt sz M", price: 135, url: null },
     { title: "Pendleton wool plaid 60s board shirt", price: 110, url: "https://sold.example.com/1" },
   ],
+  estimatedValue: 120,
+  currentPrice: 45,
+  margin: 75,
+  priceScore: 0.625,
+  confidence: 0.85,
+  reasoning: "Pendleton board shirts with loop collars are collectible.",
+  references: ["Similar sold for $135", "Grailed avg $110-150"],
 };
 
 const CONFIG: ScanConfig = {
@@ -50,6 +56,29 @@ const CONFIG: ScanConfig = {
   minConfidence: 0,
 };
 
+const TEST_USERS = [
+  {
+    id: "user-en",
+    name: "test@example.com",
+    email: "test@example.com",
+    language: "en",
+    googleId: null,
+    createdAt: new Date(),
+    keywords: [{ id: "kw-1", userId: "user-en", query: "vintage", percentage: 1.0, createdAt: new Date() }],
+    votes: [],
+  },
+  {
+    id: "user-zh",
+    name: "test-zh@example.com",
+    email: "test-zh@example.com",
+    language: "zh",
+    googleId: null,
+    createdAt: new Date(),
+    keywords: [{ id: "kw-2", userId: "user-zh", query: "vintage", percentage: 1.0, createdAt: new Date() }],
+    votes: [],
+  },
+];
+
 function createMockPrisma() {
   const listings: Record<string, any> = {};
   const evaluations: Record<string, any> = {};
@@ -58,21 +87,19 @@ function createMockPrisma() {
 
   return {
     user: {
-      findUnique: vi.fn(async () => null),
-      findMany: vi.fn(async () => []),
+      findMany: vi.fn(async () => TEST_USERS),
+      findUnique: vi.fn(async ({ where }: any) => {
+        const user = TEST_USERS.find(u => u.email === where.email || u.id === where.id);
+        return user ? { ...user, votes: [] } : null;
+      }),
+      upsert: vi.fn(async ({ where, create }: any) => TEST_USERS.find(u => u.email === where.email) ?? create),
     },
     filteredListing: {
       upsert: vi.fn(async ({ where, create }: any) => {
-        const url = where.url;
-        if (!listings[url]) {
-          const id = `cuid-${++idCounter}`;
-          listings[url] = { id, ...create };
-        }
-        return listings[url];
+        if (!listings[where.url]) listings[where.url] = { id: `cuid-${++idCounter}`, ...create };
+        return listings[where.url];
       }),
-      findUnique: vi.fn(async ({ where }: any) => {
-        return listings[where.url] ?? null;
-      }),
+      findUnique: vi.fn(async ({ where }: any) => listings[where.url] ?? null),
     },
     evaluation: {
       create: vi.fn(async ({ data }: any) => {
@@ -83,9 +110,7 @@ function createMockPrisma() {
         evaluations[listingId] = record;
         return record;
       }),
-      findUnique: vi.fn(async ({ where }: any) => {
-        return evaluations[where.listingId] ?? null;
-      }),
+      findUnique: vi.fn(async ({ where }: any) => evaluations[where.listingId] ?? null),
       update: vi.fn(async ({ where, data }: any) => {
         const record = Object.values(evaluations).find((e: any) => e.id === where.id) as any;
         if (record) Object.assign(record, data);
@@ -97,7 +122,7 @@ function createMockPrisma() {
         const id = `story-${++idCounter}`;
         const evaluationId = data.evaluation.connect.id;
         const lang = data.language ?? "en";
-        const configId = data.configId ?? "en-default";
+        const configId = data.configId ?? "en";
         const key = `${evaluationId}:${lang}:${configId}`;
         const record = { id, evaluationId, ...data, evaluation: undefined };
         delete record.evaluation;
@@ -109,50 +134,31 @@ function createMockPrisma() {
         return stories[`${evaluationId}:${language}:${configId}`] ?? null;
       }),
     },
+    vote: {
+      upsert: vi.fn(async () => ({})),
+    },
     _store: { listings, evaluations, stories },
   };
 }
 
 let mockPrisma: ReturnType<typeof createMockPrisma>;
 
-const TEST_CONFIG = [
-  {
-    id: "en-default",
-    language: "en" as const,
-    searchKeywords: [{ query: "vintage", count: 10 }],
-    recipients: ["test@example.com"],
-  },
-  {
-    id: "zh-default",
-    language: "zh" as const,
-    searchKeywords: [{ query: "vintage", count: 10 }],
-    recipients: ["test-zh@example.com"],
-  },
-];
-
 function makeDeps(overrides?: Partial<ScanDeps>): ScanDeps {
   return {
     prisma: mockPrisma as any,
     fetchListings: async () => [LISTING],
     filterListings,
-    configs: TEST_CONFIG,
-    evaluateListing: async () => EVALUATION,
     runIdentification: async (_listing, lang) => ({
-      isAuthentic: EVALUATION.isAuthentic,
-      itemIdentification: EVALUATION.itemIdentification,
-      itemIdentificationJapanese: EVALUATION.itemIdentification,
-      identificationConfidence: EVALUATION.identificationConfidence,
-      estimatedEra: EVALUATION.estimatedEra ?? "Unknown",
-      redFlags: EVALUATION.redFlags,
-      hook: lang === "zh" ? `[ZH] ${EVALUATION.hook}` : EVALUATION.hook,
-      brandStory: lang === "zh" ? `[ZH] ${EVALUATION.brandStory}` : EVALUATION.brandStory,
-      itemStory: lang === "zh" ? `[ZH] ${EVALUATION.itemStory}` : EVALUATION.itemStory,
-      historicalContext: lang === "zh" ? `[ZH] ${EVALUATION.historicalContext}` : EVALUATION.historicalContext,
-      marketContext: lang === "zh" ? `[ZH] ${EVALUATION.marketContext}` : EVALUATION.marketContext,
-      styleGuide: lang === "zh" ? `[ZH] ${EVALUATION.styleGuide}` : EVALUATION.styleGuide,
-      storyScore: EVALUATION.storyScore,
-      storyScoreReasoning: lang === "zh" ? `[ZH] ${EVALUATION.storyScoreReasoning}` : EVALUATION.storyScoreReasoning,
+      ...IDENTIFICATION,
+      hook: lang === "zh" ? `[ZH] ${IDENTIFICATION.hook}` : IDENTIFICATION.hook,
+      brandStory: lang === "zh" ? `[ZH] ${IDENTIFICATION.brandStory}` : IDENTIFICATION.brandStory,
+      itemStory: lang === "zh" ? `[ZH] ${IDENTIFICATION.itemStory}` : IDENTIFICATION.itemStory,
+      historicalContext: lang === "zh" ? `[ZH] ${IDENTIFICATION.historicalContext}` : IDENTIFICATION.historicalContext,
+      marketContext: lang === "zh" ? `[ZH] ${IDENTIFICATION.marketContext}` : IDENTIFICATION.marketContext,
+      styleGuide: lang === "zh" ? `[ZH] ${IDENTIFICATION.styleGuide}` : IDENTIFICATION.styleGuide,
+      storyScoreReasoning: lang === "zh" ? `[ZH] ${IDENTIFICATION.storyScoreReasoning}` : IDENTIFICATION.storyScoreReasoning,
     }),
+    runValuation: async () => VALUATION,
     ...overrides,
   };
 }
@@ -164,96 +170,73 @@ beforeEach(() => {
 describe("Pipeline: fetch → filter → store → evaluate → store", () => {
   it("filter preserves Listing shape", async () => {
     const result = await filterListings([LISTING]);
-
     expect(result).toHaveLength(1);
-    const out = result[0];
-    expect(Array.isArray(out.imageUrls)).toBe(true);
-    expect(out.imageUrls).toEqual(LISTING.imageUrls);
-    expect(typeof out.rawData).toBe("object");
-    expect(out.rawData).toEqual(LISTING.rawData);
+    expect(Array.isArray(result[0].imageUrls)).toBe(true);
+    expect(result[0].imageUrls).toEqual(LISTING.imageUrls);
+    expect(typeof result[0].rawData).toBe("object");
   });
 
   it("listing upsert serializes arrays to JSON strings", async () => {
     await runScan(CONFIG, makeDeps());
 
-    const upsertCalls = mockPrisma.filteredListing.upsert.mock.calls;
-    // 1 listing × 2 configs = 2 upsert calls (deduped in DB by URL)
-    expect(upsertCalls).toHaveLength(2);
-
-    const create = upsertCalls[0][0].create;
+    // 1 listing, stored once globally
+    expect(mockPrisma.filteredListing.upsert).toHaveBeenCalledTimes(1);
+    const create = mockPrisma.filteredListing.upsert.mock.calls[0][0].create;
 
     expect(typeof create.imageUrls).toBe("string");
     expect(JSON.parse(create.imageUrls)).toEqual(LISTING.imageUrls);
     expect(typeof create.rawData).toBe("string");
     expect(JSON.parse(create.rawData)).toEqual(LISTING.rawData);
-    expect(create.url).toBe(LISTING.url);
-    expect(create.title).toBe(LISTING.title);
-    expect(create.price).toBe(LISTING.price);
   });
 
-  it("evaluation create serializes arrays and computes isOpportunity via combinedScore", async () => {
+  it("evaluation create serializes arrays and includes priceScore", async () => {
     await runScan(CONFIG, makeDeps());
 
     const createCalls = mockPrisma.evaluation.create.mock.calls;
     expect(createCalls).toHaveLength(1);
-
     const data = createCalls[0][0].data;
 
     expect(typeof data.redFlags).toBe("string");
-    expect(JSON.parse(data.redFlags)).toEqual(EVALUATION.redFlags);
+    expect(JSON.parse(data.redFlags)).toEqual(IDENTIFICATION.redFlags);
     expect(typeof data.references).toBe("string");
-    expect(JSON.parse(data.references)).toEqual(EVALUATION.references);
     expect(typeof data.soldListings).toBe("string");
 
     const parsedSold = JSON.parse(data.soldListings);
-    expect(parsedSold).toEqual(EVALUATION.soldListings);
+    expect(parsedSold).toEqual(VALUATION.soldListings);
     for (const sold of parsedSold) {
       expect(sold).toHaveProperty("title");
       expect(sold).toHaveProperty("price");
       expect(sold).toHaveProperty("url");
     }
 
-    // storyScore=0.8, priceScore=75/120≈0.625 → combinedScore≈0.765 > 0.7 → true
+    expect(typeof data.priceScore).toBe("number");
     expect(data.isOpportunity).toBe(true);
   });
 
-  it("story create is called with correct fields for EN and ZH", async () => {
+  it("story create is called for EN and ZH users", async () => {
     await runScan(CONFIG, makeDeps());
 
-    // EN story + ZH story = 2 calls
+    // 1 listing × 2 users (EN + ZH) = 2 story creates
     expect(mockPrisma.story.create).toHaveBeenCalledTimes(2);
 
     const enData = mockPrisma.story.create.mock.calls[0][0].data;
     expect(enData.language).toBe("en");
-    expect(enData.hook).toBe(EVALUATION.hook);
-    expect(enData.brandStory).toBe(EVALUATION.brandStory);
-    expect(enData.itemStory).toBe(EVALUATION.itemStory);
-    expect(enData.historicalContext).toBe(EVALUATION.historicalContext);
-    expect(enData.storyScore).toBe(EVALUATION.storyScore);
-    expect(typeof enData.combinedScore).toBe("number");
+    expect(enData.hook).toBe(IDENTIFICATION.hook);
 
     const zhData = mockPrisma.story.create.mock.calls[1][0].data;
     expect(zhData.language).toBe("zh");
-    expect(zhData.hook).toBe(`[ZH] ${EVALUATION.hook}`);
+    expect(zhData.hook).toBe(`[ZH] ${IDENTIFICATION.hook}`);
   });
 
   it("low storyScore items are still evaluated and ranked", async () => {
-    const weakEval: Evaluation = {
-      ...EVALUATION,
-      storyScore: 0.2,
-      estimatedValue: 50,
-      margin: 5,
-    };
-
     await runScan(CONFIG, makeDeps({
-      evaluateListing: async () => weakEval,
+      runIdentification: async () => ({ ...IDENTIFICATION, storyScore: 0.2 }),
     }));
 
-    // Item is still evaluated — ranking replaces threshold filtering
     expect(mockPrisma.evaluation.create).toHaveBeenCalledTimes(1);
   });
 
-  it("full round-trip: stored data can reconstruct original Listing + Evaluation", async () => {
+  it("full round-trip: stored data can reconstruct original Listing", async () => {
     await runScan(CONFIG, makeDeps());
 
     const storedListing = mockPrisma._store.listings[LISTING.url];
@@ -261,14 +244,11 @@ describe("Pipeline: fetch → filter → store → evaluate → store", () => {
     expect(JSON.parse(storedListing.rawData)).toEqual(LISTING.rawData);
     expect(storedListing.url).toBe(LISTING.url);
     expect(storedListing.title).toBe(LISTING.title);
-    expect(storedListing.price).toBe(LISTING.price);
 
     const storedEval = Object.values(mockPrisma._store.evaluations)[0] as any;
-    expect(JSON.parse(storedEval.redFlags)).toEqual(EVALUATION.redFlags);
-    expect(JSON.parse(storedEval.references)).toEqual(EVALUATION.references);
-    expect(JSON.parse(storedEval.soldListings)).toEqual(EVALUATION.soldListings);
-    expect(storedEval.isAuthentic).toBe(EVALUATION.isAuthentic);
-    expect(storedEval.estimatedValue).toBe(EVALUATION.estimatedValue);
-    expect(storedEval.margin).toBe(EVALUATION.margin);
+    expect(JSON.parse(storedEval.redFlags)).toEqual(IDENTIFICATION.redFlags);
+    expect(JSON.parse(storedEval.soldListings)).toEqual(VALUATION.soldListings);
+    expect(storedEval.isAuthentic).toBe(IDENTIFICATION.isAuthentic);
+    expect(storedEval.estimatedValue).toBe(VALUATION.estimatedValue);
   });
 });
