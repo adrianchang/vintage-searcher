@@ -653,7 +653,7 @@ Return scores as a JSON array in the same order as the candidates.`;
 
   try {
     const response = await genAI.models.generateContent({
-      model: "gemini-2.0-flash-lite",
+      model: "gemini-2.5-flash-lite",
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       config: {
         responseMimeType: "application/json",
