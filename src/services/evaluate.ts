@@ -623,33 +623,37 @@ ${candidateList}
 
 Return scores as a JSON array in the same order as the candidates.`;
 
-  try {
-    const response = await genAI.models.generateContent({
-      model: "gemini-2.5-flash-lite",
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      config: {
-        responseMimeType: "application/json",
-        responseJsonSchema: {
-          type: "object",
-          properties: {
-            scores: { type: "array", items: { type: "number" } },
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      if (attempt > 0) await new Promise(r => setTimeout(r, INITIAL_RETRY_DELAY_MS * attempt));
+      const response = await genAI.models.generateContent({
+        model: "gemini-2.5-flash-lite",
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        config: {
+          responseMimeType: "application/json",
+          responseJsonSchema: {
+            type: "object",
+            properties: {
+              scores: { type: "array", items: { type: "number" } },
+            },
+            required: ["scores"],
           },
-          required: ["scores"],
         },
-      },
-    });
+      });
 
-    const result = JSON.parse(response.text ?? "{}") as { scores?: number[] };
-    const scores: Record<number, number> = {};
-    (result.scores ?? []).forEach((s, i) => {
-      scores[i] = Math.min(1, Math.max(0, s));
-    });
-    console.log(`  Personalization scores: [${Object.values(scores).map(s => s.toFixed(2)).join(", ")}]`);
-    return scores;
-  } catch (error) {
-    console.error("Batch score computation failed:", error instanceof Error ? error.message : error);
-    return {};
+      const result = JSON.parse(response.text ?? "{}") as { scores?: number[] };
+      const scores: Record<number, number> = {};
+      (result.scores ?? []).forEach((s, i) => {
+        scores[i] = Math.min(1, Math.max(0, s));
+      });
+      console.log(`  Personalization scores: [${Object.values(scores).map(s => s.toFixed(2)).join(", ")}]`);
+      return scores;
+    } catch (error) {
+      console.error(`Batch score computation failed (attempt ${attempt + 1}):`, error instanceof Error ? error.message : error);
+      if (attempt === MAX_RETRIES - 1) return {};
+    }
   }
+  return {};
 }
 
 // Scores candidates against liked stories (0=no match, 1=perfect match).
