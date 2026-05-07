@@ -38,10 +38,11 @@ export const ARCHETYPES: Record<ArchetypeId, Archetype> = {
     id: "americana",
     label: "Americana",
     keywords: [
-      { query: "vintage workwear jacket", percentage: 0.30 },
-      { query: "vintage selvedge denim", percentage: 0.25 },
       { query: "vintage chore coat", percentage: 0.25 },
-      { query: "vintage flannel union label", percentage: 0.20 },
+      { query: "vintage work jacket", percentage: 0.22 },
+      { query: "vintage denim jacket", percentage: 0.20 },
+      { query: "vintage flannel shirt", percentage: 0.18 },
+      { query: "vintage workwear", percentage: 0.15 },
     ],
     promptContext: `This item will be shown to a collector who specializes in American heritage workwear and Americana. Pay particular attention to:
 - Union labels (ILGWU, ACWA, UGWA), country of origin tags, and lot/style numbers that confirm domestic manufacture
@@ -57,10 +58,11 @@ In the styleGuide field, speak to how this fits into a rugged, utilitarian Ameri
     id: "ivy",
     label: "Ivy League / Prep",
     keywords: [
-      { query: "vintage Brooks Brothers blazer", percentage: 0.25 },
-      { query: "vintage OCBD prep shirt", percentage: 0.25 },
-      { query: "vintage Shetland crewneck", percentage: 0.25 },
-      { query: "vintage tweed sport coat", percentage: 0.25 },
+      { query: "vintage oxford shirt", percentage: 0.28 },
+      { query: "vintage tweed jacket", percentage: 0.25 },
+      { query: "vintage crewneck sweater", percentage: 0.22 },
+      { query: "vintage sack suit", percentage: 0.15 },
+      { query: "vintage sport coat", percentage: 0.10 },
     ],
     promptContext: `This item will be shown to a collector focused on Ivy League and traditional American prep style. Pay particular attention to:
 - Natural-shoulder construction, sack silhouette, and 3/2-roll lapels on jackets
@@ -77,10 +79,11 @@ In the styleGuide field, speak to how this fits into a trad wardrobe — khakis,
     id: "military",
     label: "Military Surplus",
     keywords: [
-      { query: "vintage M-65 field jacket", percentage: 0.30 },
-      { query: "vintage MA-1 bomber jacket", percentage: 0.30 },
-      { query: "vintage N-1 deck jacket", percentage: 0.20 },
-      { query: "vintage military surplus", percentage: 0.20 },
+      { query: "vintage military jacket", percentage: 0.30 },
+      { query: "vintage field jacket", percentage: 0.25 },
+      { query: "vintage flight jacket", percentage: 0.22 },
+      { query: "vintage military fatigue", percentage: 0.13 },
+      { query: "vintage deck jacket", percentage: 0.10 },
     ],
     promptContext: `This item will be shown to a collector who specializes in authentic US military surplus and vintage government-issue clothing. Pay particular attention to:
 - Contract tags: manufacturer name, contract number (DSA/DLA prefix), date of manufacture, and size
@@ -97,10 +100,11 @@ In the styleGuide field, speak to how the piece is worn today — the gap betwee
     id: "european-workwear",
     label: "European Workwear",
     keywords: [
-      { query: "vintage French chore coat", percentage: 0.30 },
-      { query: "vintage bleu de travail", percentage: 0.25 },
-      { query: "vintage moleskin jacket", percentage: 0.25 },
-      { query: "vintage European workwear", percentage: 0.20 },
+      { query: "vintage chore coat", percentage: 0.28 },
+      { query: "french work jacket", percentage: 0.25 },
+      { query: "vintage work jacket", percentage: 0.20 },
+      { query: "vintage HBT jacket", percentage: 0.15 },
+      { query: "vintage moleskin jacket", percentage: 0.12 },
     ],
     promptContext: `This item will be shown to a collector who specializes in European — especially French and British — vintage workwear. Pay particular attention to:
 - French manufacture markers: "Fabriqué en France" tags, typical French sizing (38, 40, 42 in jacket), loom-woven cotton twill or moleskin fabric
@@ -117,10 +121,11 @@ In the styleGuide field, speak to the minimalist, utilitarian aesthetic — how 
     id: "cowboy",
     label: "Western / Cowboy",
     keywords: [
-      { query: "vintage pearl snap western shirt", percentage: 0.30 },
-      { query: "vintage rodeo embroidered jacket", percentage: 0.25 },
-      { query: "vintage Wrangler cowboy", percentage: 0.25 },
-      { query: "vintage western wear", percentage: 0.20 },
+      { query: "vintage western shirt", percentage: 0.30 },
+      { query: "vintage pearl snap shirt", percentage: 0.25 },
+      { query: "vintage rodeo shirt", percentage: 0.20 },
+      { query: "vintage cowboy shirt", percentage: 0.15 },
+      { query: "vintage western jacket", percentage: 0.10 },
     ],
     promptContext: `This item will be shown to a collector focused on authentic American western wear. Pay particular attention to:
 - Pearl snap construction: the specific snap brand (Scovill, Gripper, etc.) and placement authentic to vintage western shirts
@@ -137,10 +142,11 @@ In the styleGuide field, speak honestly to who wears vintage western wear today 
     id: "biker",
     label: "Biker / Moto",
     keywords: [
-      { query: "vintage leather motorcycle jacket", percentage: 0.30 },
-      { query: "vintage Schott Perfecto", percentage: 0.25 },
-      { query: "vintage cafe racer jacket", percentage: 0.25 },
-      { query: "vintage Belstaff waxed", percentage: 0.20 },
+      { query: "vintage motorcycle jacket", percentage: 0.32 },
+      { query: "vintage leather biker jacket", percentage: 0.28 },
+      { query: "vintage cafe racer jacket", percentage: 0.20 },
+      { query: "vintage moto jacket", percentage: 0.12 },
+      { query: "vintage riding jacket", percentage: 0.08 },
     ],
     promptContext: `This item will be shown to a collector who specializes in vintage motorcycle jackets and biker wear. Pay particular attention to:
 - Leather type and grade: horsehide vs cowhide vs steerhide — horsehide is the most prized for its toughness and characteristic grain
@@ -159,9 +165,10 @@ In the styleGuide field, speak to how a vintage motorcycle jacket actually gets 
     label: "Reggae / Rude Boy / Ska",
     keywords: [
       { query: "vintage porkpie hat", percentage: 0.25 },
-      { query: "vintage ska reggae clothing", percentage: 0.25 },
-      { query: "vintage Jamaican tropical shirt", percentage: 0.25 },
-      { query: "vintage rude boy style", percentage: 0.25 },
+      { query: "vintage jamaican shirt", percentage: 0.22 },
+      { query: "vintage tropical shirt", percentage: 0.20 },
+      { query: "vintage ska suit", percentage: 0.18 },
+      { query: "vintage tonic suit", percentage: 0.15 },
     ],
     promptContext: `This item will be shown to a collector focused on vintage reggae, ska, and rude boy style — the fashion of Jamaica's Kingston scene, the British ska revival, and related subcultures. Pay particular attention to:
 - Porkpie hat construction and provenance — the silhouette, brim width, and material
@@ -178,10 +185,11 @@ In the styleGuide field, speak to the sharp, cool, understated nature of this ae
     id: "british-mod",
     label: "British Mod",
     keywords: [
-      { query: "vintage Harrington jacket", percentage: 0.30 },
-      { query: "vintage Fred Perry polo", percentage: 0.25 },
-      { query: "vintage mod suit 60s", percentage: 0.25 },
-      { query: "vintage Ben Sherman", percentage: 0.20 },
+      { query: "vintage harrington jacket", percentage: 0.28 },
+      { query: "vintage mod suit", percentage: 0.22 },
+      { query: "vintage 60s slim suit", percentage: 0.20 },
+      { query: "vintage mod polo shirt", percentage: 0.18 },
+      { query: "vintage sta-prest trousers", percentage: 0.12 },
     ],
     promptContext: `This item will be shown to a collector focused on British mod style — the original 1960s London scene and its various revivals. Pay particular attention to:
 - Harrington jacket provenance: Baracuta G9 vs alternatives, British vs later manufacture, correct tartan lining, era-specific label
@@ -198,10 +206,11 @@ In the styleGuide field, speak to the specific mod aesthetic — slim and precis
     id: "sportswear",
     label: "Vintage Sportswear",
     keywords: [
-      { query: "vintage Champion reverse weave", percentage: 0.30 },
-      { query: "vintage Nike track jacket", percentage: 0.25 },
-      { query: "vintage Adidas trefoil", percentage: 0.25 },
-      { query: "vintage Starter jacket", percentage: 0.20 },
+      { query: "vintage track jacket", percentage: 0.28 },
+      { query: "vintage windbreaker", percentage: 0.22 },
+      { query: "vintage sweatshirt", percentage: 0.20 },
+      { query: "vintage warm up suit", percentage: 0.18 },
+      { query: "vintage athletic jacket", percentage: 0.12 },
     ],
     promptContext: `This item will be shown to a collector who specializes in vintage American and European sportswear — athletic brand heritage pieces from the 1970s through the early 1990s. Pay particular attention to:
 - Champion reverse weave authentication: the specific reverse-weave construction (horizontal ribs on the torso), era-correct "C" logo, bar tag, and union label

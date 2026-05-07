@@ -406,10 +406,11 @@ interface CallGeminiConfig<T> {
   tools: Record<string, unknown>[];
   timestamp: () => string;
   phaseLabel: string;
+  model?: string;
 }
 
 async function callGemini<T>(config: CallGeminiConfig<T>): Promise<{ result: T; references: string[] }> {
-  const { prompt, imageParts, schema, tools, timestamp, phaseLabel } = config;
+  const { prompt, imageParts, schema, tools, timestamp, phaseLabel, model = "gemini-3-flash-preview" } = config;
   let lastError: Error | null = null;
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
@@ -418,7 +419,7 @@ async function callGemini<T>(config: CallGeminiConfig<T>): Promise<{ result: T; 
       await throttle();
       const startTime = Date.now();
       const response = await genAI.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model,
         contents: [
           {
             role: "user",
@@ -588,6 +589,101 @@ export async function runIdentification(listing: Listing, lang?: string, promptA
   });
   console.log(`[${timestamp()}]   Identified as: ${identification.itemIdentification} (${(identification.identificationConfidence * 100).toFixed(0)}% confidence)`);
   return identification;
+}
+
+// Story fields only — no image fetching, no Google Search.
+// Used for per-(language, configId) story variants after the base Evaluation is cached.
+export type StoryResult = Pick<IdentificationResult,
+  "hook" | "brandStory" | "itemStory" | "historicalContext" | "marketContext" |
+  "styleGuide" | "storyScore" | "storyScoreReasoning"
+>;
+
+const STORY_SCHEMA = {
+  type: "object",
+  properties: {
+    hook: { type: "string" },
+    brandStory: { type: "string" },
+    itemStory: { type: "string" },
+    historicalContext: { type: "string" },
+    marketContext: { type: "string" },
+    styleGuide: { type: "string" },
+    storyScore: { type: "number" },
+    storyScoreReasoning: { type: "string" },
+  },
+  required: ["hook", "brandStory", "itemStory", "historicalContext", "marketContext", "styleGuide", "storyScore", "storyScoreReasoning"],
+};
+
+const STORY_ONLY_PROMPT = `You are a veteran vintage clothing collector and storyteller writing for an editorial email digest.
+
+ITEM ALREADY IDENTIFIED:
+- Item: {itemIdentification}
+- Era: {estimatedEra}
+- Listed Price: ${"{currentPrice}"}
+- Identification Confidence: {identificationConfidence}%
+- Authentication Notes: {redFlags}
+
+Write the editorial story for this item. You are a veteran collector talking to someone who's in the hobby but might not know this specific brand or detail yet. You're genuinely excited about what makes this piece special. Short sentences. Present tense. No passive voice. No overselling.
+
+hook: One or two sentences. Lead with the authenticating detail or the fact that matters most. No scene-setting. No adjectives. Just the thing itself.
+Good: "The loop collar disappeared from Pendleton's lineup in 1963. This one has it."
+Bad: "Somewhere in postwar America, workers wore shirts built to last a lifetime."
+
+brandStory: 2–3 sentences. The one thing about this brand that a serious collector would actually care about — the specific fact that changes how you see the piece. No "quality craftsmanship", no founding-year trivia for its own sake.
+
+itemStory: 2–3 sentences on this specific piece. What the construction details, hardware, stitching, or label are actually telling you. Be honest if it's unremarkable.
+
+historicalContext: 1–2 sentences. Only include if the cultural moment is genuinely relevant. If it doesn't add anything real, just state the era plainly.
+
+marketContext: 2–3 sentences. Who's buying this and why — be specific about the collector communities. No hype, no salesmanship.
+
+styleGuide: 2–3 sentences. How to actually wear this piece today. Describe the fit, color palette, and the cultural aesthetic it belongs to. Be specific and honest.
+
+storyScore (0–1): How strong is the story, cultural weight, and collector desirability of this item?
+- 0.85–1.0: Genuinely iconic. Hard authentication markers. Real collector demand.
+- 0.65–0.85: Solid piece. Known in the right circles, good story.
+- 0.45–0.65: Interesting but niche or light on provenance.
+- Below 0.45: Generic. The story isn't there.
+
+storyScoreReasoning: One sentence — what pushed the score where it landed.
+
+{storyLanguageInstruction}`;
+
+function buildStoryPrompt(
+  dbEvaluation: { itemIdentification: string; estimatedEra: string | null; currentPrice: number; identificationConfidence: number; redFlags: string },
+  lang?: string,
+  promptAppend?: string,
+): string {
+  const redFlags = (() => { try { return (JSON.parse(dbEvaluation.redFlags) as string[]).join(", ") || "None"; } catch { return "None"; } })();
+  const langInstruction = STORY_LANGUAGE_INSTRUCTIONS[lang ?? ""] ?? "";
+  const append = [langInstruction, promptAppend].filter(Boolean).join("\n\n");
+  return STORY_ONLY_PROMPT
+    .replace("{itemIdentification}", dbEvaluation.itemIdentification)
+    .replace("{estimatedEra}", dbEvaluation.estimatedEra || "Unknown")
+    .replace("{currentPrice}", dbEvaluation.currentPrice.toString())
+    .replace("{identificationConfidence}", (dbEvaluation.identificationConfidence * 100).toFixed(0))
+    .replace("{redFlags}", redFlags)
+    .replace("{storyLanguageInstruction}", append);
+}
+
+export async function runStory(
+  dbEvaluation: { itemIdentification: string; estimatedEra: string | null; currentPrice: number; identificationConfidence: number; redFlags: string },
+  listing: Listing,
+  lang?: string,
+  promptAppend?: string,
+): Promise<StoryResult> {
+  const timestamp = () => new Date().toISOString();
+  const imageParts = await fetchListingImages(listing, timestamp);
+  const prompt = buildStoryPrompt(dbEvaluation, lang, promptAppend);
+  const { result } = await callGemini<StoryResult>({
+    prompt,
+    imageParts,
+    schema: STORY_SCHEMA,
+    tools: [],
+    timestamp,
+    phaseLabel: `Story (${lang ?? "en"}${promptAppend ? ", archetype" : ""})`,
+    model: "gemini-2.5-flash-lite",
+  });
+  return result;
 }
 
 

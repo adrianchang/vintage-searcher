@@ -5,6 +5,7 @@ import { combinedScore } from "./services/score";
 import {
   runIdentification as defaultRunIdentification,
   runValuation as defaultRunValuation,
+  runStory,
   computePersonalScores,
   computeDislikeScores,
   type IdentificationResult,
@@ -37,6 +38,15 @@ export interface ScanDeps {
 
 // Distribute total listings across keywords using percentage weights.
 // Uses largest remainder method so counts sum exactly to total.
+//
+// IMPORTANT: if total < keywords.length, some queries will get count=0 and their
+// eBay search is skipped entirely. This happens when maxListings is too small
+// relative to the number of active queries (e.g. 3 archetypes × 5 keywords = 15
+// queries but maxListings=5 → 10 queries silently get 0 listings).
+// Low-weight queries floor to 0 first, but the remainder bump rescues the ones
+// with the highest fractional part — it does NOT guarantee every query gets ≥1.
+// Safe today: maxListings=20 with max 15 queries → minimum ~1.33 exact per query.
+// If you raise archetype keyword counts or lower maxListings, add a floor of 1 here.
 function resolveKeywordCounts(
   keywords: { query: string; percentage: number }[],
   total: number,
@@ -247,28 +257,29 @@ export async function runScan(
 
       if (!existingStory) {
         try {
-          // Phase 1 again, with language + archetype style context injected into prompt
-          const identification = await identify(listing, user.language, user.promptAppend);
-          const baseScore = combinedScore(buildEvaluationFromParts(dbEvaluation, identification));
+          // Text-only story generation — no image fetching, no Google Search.
+          // Uses facts already stored in dbEvaluation from Phase 1.
+          const story = await runStory(dbEvaluation, listing, user.language, user.promptAppend);
+          const baseScore = combinedScore(buildEvaluationFromParts(dbEvaluation, story));
 
           existingStory = await prisma.story.create({
             data: {
               evaluation: { connect: { id: dbEvaluation.id } },
               language: user.language,
               configId: user.configId,
-              hook: identification.hook,
-              brandStory: identification.brandStory,
-              itemStory: identification.itemStory,
-              historicalContext: identification.historicalContext,
-              marketContext: identification.marketContext,
-              styleGuide: identification.styleGuide,
-              storyScore: identification.storyScore,
-              storyScoreReasoning: identification.storyScoreReasoning,
+              hook: story.hook,
+              brandStory: story.brandStory,
+              itemStory: story.itemStory,
+              historicalContext: story.historicalContext,
+              marketContext: story.marketContext,
+              styleGuide: story.styleGuide,
+              storyScore: story.storyScore,
+              storyScoreReasoning: story.storyScoreReasoning,
               combinedScore: baseScore,
             },
           });
 
-          const storyEval = buildEvaluationFromParts(dbEvaluation, identification);
+          const storyEval = buildEvaluationFromParts(dbEvaluation, story);
           goodFinds.push({ listing, evaluation: storyEval, score: baseScore, storyId: existingStory.id });
           console.log(`  Scored ${(baseScore * 100).toFixed(0)}%: ${listing.title.slice(0, 60)}`);
         } catch (error) {
