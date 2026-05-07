@@ -304,7 +304,7 @@ async function searchForComps(
 }
 
 const STORY_LANGUAGE_INSTRUCTIONS: Record<string, string> = {
-  zh: "Write ALL story fields (hook, brandStory, itemStory, historicalContext, marketContext, storyScoreReasoning) in Traditional Chinese (繁體中文). Keep the tone casual, cool, and insider — like a GQ editor texting a friend who collects vintage. Short punchy sentences.",
+  zh: "Write ALL story fields (hook, brandStory, itemStory, historicalContext, marketContext, styleGuide, storyScoreReasoning) in Traditional Chinese (繁體中文). Keep the tone casual, cool, and insider — like a GQ editor texting a friend who collects vintage. Short punchy sentences.",
 };
 
 function buildIdentificationPrompt(listing: Listing, lang?: string, promptAppend?: string): string {
@@ -613,7 +613,9 @@ const STORY_SCHEMA = {
   required: ["hook", "brandStory", "itemStory", "historicalContext", "marketContext", "styleGuide", "storyScore", "storyScoreReasoning"],
 };
 
-const STORY_ONLY_PROMPT = `You are a veteran vintage clothing collector and storyteller writing for an editorial email digest.
+const STORY_ONLY_PROMPT = `{storyLanguageInstruction}
+
+You are a veteran vintage clothing collector and storyteller writing for an editorial email digest.
 
 ITEM ALREADY IDENTIFIED:
 - Item: {itemIdentification}
@@ -644,9 +646,7 @@ storyScore (0–1): How strong is the story, cultural weight, and collector desi
 - 0.45–0.65: Interesting but niche or light on provenance.
 - Below 0.45: Generic. The story isn't there.
 
-storyScoreReasoning: One sentence — what pushed the score where it landed.
-
-{storyLanguageInstruction}`;
+storyScoreReasoning: One sentence — what pushed the score where it landed.`;
 
 function buildStoryPrompt(
   dbEvaluation: { itemIdentification: string; estimatedEra: string | null; currentPrice: number; identificationConfidence: number; redFlags: string },
