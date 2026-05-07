@@ -11,6 +11,12 @@ import {
   type ValuationOutput,
 } from "./services/evaluate";
 import { DEFAULT_KEYWORDS } from "./configs/digests";
+import {
+  buildArchetypeConfigId,
+  buildArchetypePromptAppend,
+  buildArchetypeScoringContext,
+  type ArchetypeId,
+} from "./configs/archetypes";
 import type { Listing, Evaluation, ScanConfig } from "./types";
 
 export type ScanProgress = {
@@ -96,6 +102,7 @@ export async function runScan(
     where: { email: { not: null } },
     include: {
       keywords: true,
+      archetypes: true,
       votes: {
         include: { story: true },
         orderBy: { createdAt: "desc" },
@@ -114,11 +121,18 @@ export async function runScan(
     return;
   }
 
-  // 2. Resolve keywords per user (fall back to defaults if none set)
-  const usersWithKW = users.map(user => ({
-    ...user,
-    resolvedKeywords: (user.keywords.length > 0 ? user.keywords : DEFAULT_KEYWORDS) as { query: string; percentage: number }[],
-  }));
+  // 2. Resolve keywords and archetype config per user (fall back to defaults if none set)
+  const usersWithKW = users.map(user => {
+    const archetypeIds = user.archetypes.map(a => a.archetypeId as ArchetypeId);
+    return {
+      ...user,
+      resolvedKeywords: (user.keywords.length > 0 ? user.keywords : DEFAULT_KEYWORDS) as { query: string; percentage: number }[],
+      archetypeIds,
+      configId: buildArchetypeConfigId(archetypeIds),
+      promptAppend: buildArchetypePromptAppend(archetypeIds),
+      scoringContext: buildArchetypeScoringContext(archetypeIds),
+    };
+  });
 
   // 3. Collect unique queries with max count across all users
   const queryCountMap = new Map<string, number>();
@@ -227,21 +241,21 @@ export async function runScan(
 
       const { dbEvaluation } = cached;
 
-      // Stories are keyed by (evaluationId, language) — configId = language as a natural dedup key
-      const storyWhere = { evaluationId: dbEvaluation.id, language: user.language, configId: user.language };
+      // Stories are keyed by (evaluationId, language, configId) — configId encodes archetype set
+      const storyWhere = { evaluationId: dbEvaluation.id, language: user.language, configId: user.configId };
       let existingStory = await prisma.story.findUnique({ where: { evaluationId_language_configId: storyWhere } });
 
       if (!existingStory) {
         try {
-          // Phase 1 again, this time with language instruction for story fields
-          const identification = await identify(listing, user.language);
+          // Phase 1 again, with language + archetype style context injected into prompt
+          const identification = await identify(listing, user.language, user.promptAppend);
           const baseScore = combinedScore(buildEvaluationFromParts(dbEvaluation, identification));
 
           existingStory = await prisma.story.create({
             data: {
               evaluation: { connect: { id: dbEvaluation.id } },
               language: user.language,
-              configId: user.language,
+              configId: user.configId,
               hook: identification.hook,
               brandStory: identification.brandStory,
               itemStory: identification.itemStory,
@@ -284,8 +298,9 @@ export async function runScan(
       .map(v => ({ itemIdentification: v.story.hook, styleGuide: v.story.styleGuide, hook: v.story.hook, marketContext: v.story.marketContext }));
 
     let scoredFinds = goodFinds;
-    if (likedStories.length > 0 || dislikedStories.length > 0) {
-      console.log(`  Personalizing: ${likedStories.length} liked, ${dislikedStories.length} disliked`);
+    const hasStylingSignal = likedStories.length > 0 || dislikedStories.length > 0 || !!user.scoringContext;
+    if (hasStylingSignal) {
+      console.log(`  Personalizing: ${likedStories.length} liked, ${dislikedStories.length} disliked${user.scoringContext ? " + archetype profile" : ""}`);
       const candidates = goodFinds.map(f => ({
         itemIdentification: f.evaluation.itemIdentification,
         styleGuide: f.evaluation.styleGuide,
@@ -293,7 +308,7 @@ export async function runScan(
         marketContext: f.evaluation.marketContext,
       }));
       const [personalScores, dislikeScores] = await Promise.all([
-        computePersonalScores(candidates, likedStories),
+        computePersonalScores(candidates, likedStories, user.scoringContext),
         computeDislikeScores(candidates, dislikedStories),
       ]);
       scoredFinds = goodFinds.map((find, i) => ({

@@ -10,6 +10,11 @@ import { filterListings } from "./services/filter";
 import { runIdentification, runValuation } from "./services/evaluate";
 import { runScan } from "./scan";
 import type { ScanConfig } from "./types";
+import {
+  isValidArchetypeId,
+  mergeArchetypeKeywords,
+  type ArchetypeId,
+} from "./configs/archetypes";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -33,22 +38,85 @@ app.get("/", (_req, res) => {
 
 // --- Public signup ---
 
-app.post("/subscribe", async (req, res) => {
-  const { email, language } = req.body as { email?: string; language?: string };
+const MAX_ARCHETYPES = 3;
 
+app.post("/subscribe", async (req, res) => {
+  const { email, language, archetypeIds } = req.body as {
+    email?: string;
+    language?: string;
+    archetypeIds?: unknown;
+  };
+
+  // --- Validate email ---
   if (!email || !email.includes("@")) {
     res.status(400).json({ error: "Valid email required" });
     return;
   }
 
+  // --- Validate archetypeIds ---
+  // Accept missing/null/undefined as "no archetypes selected" (fall back to defaults).
+  // Reject anything that is present but malformed.
+  let validatedArchetypeIds: ArchetypeId[] = [];
+
+  if (archetypeIds !== undefined && archetypeIds !== null) {
+    if (!Array.isArray(archetypeIds)) {
+      res.status(400).json({ error: "archetypeIds must be an array" });
+      return;
+    }
+    if (archetypeIds.length > MAX_ARCHETYPES) {
+      res.status(400).json({ error: `Maximum ${MAX_ARCHETYPES} archetypes allowed` });
+      return;
+    }
+    const invalid = archetypeIds.filter((id) => typeof id !== "string" || !isValidArchetypeId(id));
+    if (invalid.length > 0) {
+      res.status(400).json({ error: `Invalid archetype ID(s): ${invalid.join(", ")}` });
+      return;
+    }
+    // Deduplicate while preserving order
+    validatedArchetypeIds = [...new Set(archetypeIds as ArchetypeId[])];
+  }
+
   const lang = language === "zh" ? "zh" : "en";
 
   try {
-    await prisma.user.upsert({
+    // Upsert the user — never touch votes, deliveries, or story history.
+    const user = await prisma.user.upsert({
       where: { email },
       update: { language: lang },
       create: { name: email, email, language: lang },
     });
+
+    // Build keyword list: merge archetype keywords, or fall back to defaults when none selected.
+    // mergeArchetypeKeywords([]) returns DEFAULT_KEYWORDS.
+    const keywords = mergeArchetypeKeywords(validatedArchetypeIds);
+
+    // Atomically replace UserKeyword rows and UserArchetype rows in a transaction.
+    // All votes, StoryDelivery, and Story records are untouched — they live on the User
+    // and Evaluation/Story models which we never modify here.
+    await prisma.$transaction([
+      // Replace keywords
+      prisma.userKeyword.deleteMany({ where: { userId: user.id } }),
+      prisma.userKeyword.createMany({
+        data: keywords.map((kw) => ({
+          userId: user.id,
+          query: kw.query,
+          percentage: kw.percentage,
+        })),
+      }),
+      // Replace archetypes
+      prisma.userArchetype.deleteMany({ where: { userId: user.id } }),
+      ...(validatedArchetypeIds.length > 0
+        ? [
+            prisma.userArchetype.createMany({
+              data: validatedArchetypeIds.map((archetypeId) => ({
+                userId: user.id,
+                archetypeId,
+              })),
+            }),
+          ]
+        : []),
+    ]);
+
     res.json({ ok: true });
   } catch (err) {
     console.error("Subscribe error:", err);

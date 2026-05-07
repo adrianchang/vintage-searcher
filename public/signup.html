@@ -11,16 +11,10 @@
       background: #f5f0eb;
       font-family: Georgia, 'Times New Roman', serif;
       min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 32px 16px;
+      padding: 0;
     }
 
-    .container {
-      max-width: 520px;
-      width: 100%;
-    }
+    /* ─── Shared primitives ───────────────────────────────── */
 
     .eyebrow {
       font-family: Helvetica, Arial, sans-serif;
@@ -29,25 +23,6 @@
       text-transform: uppercase;
       color: #999;
       margin-bottom: 12px;
-    }
-
-    h1 {
-      font-size: 42px;
-      font-weight: normal;
-      color: #1a1a1a;
-      line-height: 1.15;
-      letter-spacing: -1px;
-      margin-bottom: 20px;
-    }
-
-    .tagline {
-      font-size: 17px;
-      line-height: 1.75;
-      color: #555;
-      font-style: italic;
-      margin-bottom: 40px;
-      padding-bottom: 40px;
-      border-bottom: 1px solid #ddd;
     }
 
     .form-label {
@@ -74,9 +49,7 @@
       margin-bottom: 20px;
     }
 
-    input[type="email"]:focus {
-      border-color: #2c2c2c;
-    }
+    input[type="email"]:focus { border-color: #2c2c2c; }
 
     .lang-row {
       display: flex;
@@ -104,11 +77,9 @@
       color: #fff;
     }
 
-    .lang-btn:not(.active):hover {
-      border-color: #888;
-    }
+    .lang-btn:not(.active):hover { border-color: #888; }
 
-    .submit-btn {
+    .primary-btn {
       width: 100%;
       padding: 16px;
       background: #2c2c2c;
@@ -123,16 +94,14 @@
       transition: background 0.15s;
     }
 
-    .submit-btn:hover:not(:disabled) {
-      background: #1a1a1a;
-    }
+    .primary-btn:hover:not(:disabled) { background: #1a1a1a; }
 
-    .submit-btn:disabled {
-      opacity: 0.5;
+    .primary-btn:disabled {
+      opacity: 0.4;
       cursor: default;
     }
 
-    .error {
+    .error-msg {
       font-family: Helvetica, Arial, sans-serif;
       font-size: 13px;
       color: #c0392b;
@@ -140,35 +109,373 @@
       display: none;
     }
 
-    .success {
-      text-align: center;
+    /* ─── Step shell ──────────────────────────────────────── */
+
+    .step {
       display: none;
+      opacity: 0;
+      transition: opacity 0.3s ease;
     }
 
-    .success .check {
-      font-size: 40px;
+    .step.active {
+      display: block;
+      opacity: 1;
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       STEP 1 — QUIZ
+    ═══════════════════════════════════════════════════════ */
+
+    #step1 {
+      padding: 48px 24px 72px;
+    }
+
+    .quiz-header {
+      max-width: 720px;
+      margin: 0 auto 40px;
+      text-align: center;
+    }
+
+    .quiz-header h1 {
+      font-size: 38px;
+      font-weight: normal;
+      color: #1a1a1a;
+      line-height: 1.15;
+      letter-spacing: -0.5px;
+      margin-bottom: 16px;
+    }
+
+    @media (max-width: 600px) {
+      .quiz-header h1 { font-size: 28px; }
+    }
+
+    .quiz-header .tagline {
+      font-size: 16px;
+      line-height: 1.75;
+      color: #666;
+      font-style: italic;
+    }
+
+    .selection-count {
+      font-family: Helvetica, Arial, sans-serif;
+      font-size: 11px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: #c8a96e;
+      margin-top: 12px;
+      min-height: 18px;
+      transition: opacity 0.2s;
+    }
+
+    /* Card grid */
+
+    .card-grid {
+      max-width: 960px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+
+    @media (max-width: 700px) {
+      .card-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+      }
+    }
+
+    @media (max-width: 400px) {
+      .card-grid { gap: 8px; }
+    }
+
+    .archetype-card {
+      position: relative;
+      aspect-ratio: 3 / 4;
+      border-radius: 4px;
+      overflow: hidden;
+      cursor: pointer;
+      background: #2c2c2c;
+      /* selection ring lives here, outside the overflow:hidden clip */
+      outline: 3px solid transparent;
+      outline-offset: 2px;
+      transition: outline-color 0.15s, transform 0.15s;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+
+    .archetype-card:hover {
+      transform: translateY(-2px);
+    }
+
+    .archetype-card.selected {
+      outline-color: #c8a96e;
+    }
+
+    .archetype-card img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      transition: transform 0.3s ease, filter 0.2s ease;
+      filter: brightness(0.75);
+    }
+
+    .archetype-card:hover img { filter: brightness(0.65); }
+    .archetype-card.selected img { filter: brightness(0.55); }
+
+    /* Fallback when no image is present */
+    .archetype-card .img-placeholder {
+      width: 100%;
+      height: 100%;
+      background: #3a3530;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .card-label {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 36px 14px 14px;
+      background: linear-gradient(to top, rgba(0,0,0,0.72) 0%, transparent 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .card-name {
+      font-family: Helvetica, Arial, sans-serif;
+      font-size: 13px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: #fff;
+      font-weight: 600;
+      line-height: 1;
+    }
+
+    .card-check {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: #c8a96e;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transform: scale(0.5);
+      transition: opacity 0.15s, transform 0.15s;
+    }
+
+    .archetype-card.selected .card-check {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    .card-check svg {
+      width: 13px;
+      height: 13px;
+      stroke: #fff;
+      stroke-width: 2.5;
+      fill: none;
+    }
+
+    /* "Show me everything" row */
+
+    .everything-row {
+      max-width: 960px;
+      margin: 16px auto 0;
+    }
+
+    .everything-btn {
+      width: 100%;
+      padding: 15px 20px;
+      border: 1.5px solid #ccc;
+      border-radius: 3px;
+      background: transparent;
+      font-family: Helvetica, Arial, sans-serif;
+      font-size: 12px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: #888;
+      cursor: pointer;
+      transition: all 0.15s;
+      text-align: center;
+    }
+
+    .everything-btn:hover {
+      border-color: #888;
+      color: #555;
+    }
+
+    .everything-btn.active {
+      border-color: #2c2c2c;
+      background: #f0ebe4;
+      color: #2c2c2c;
+    }
+
+    /* Continue bar */
+
+    .quiz-footer {
+      max-width: 960px;
+      margin: 32px auto 0;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .continue-btn {
+      flex: 0 0 auto;
+      padding: 15px 40px;
+      background: #2c2c2c;
+      color: #fff;
+      border: none;
+      border-radius: 3px;
+      font-family: Helvetica, Arial, sans-serif;
+      font-size: 12px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background 0.15s, opacity 0.15s;
+    }
+
+    .continue-btn:hover:not(:disabled) { background: #1a1a1a; }
+
+    .continue-btn:disabled {
+      opacity: 0.35;
+      cursor: default;
+    }
+
+    .continue-hint {
+      font-family: Helvetica, Arial, sans-serif;
+      font-size: 12px;
+      color: #aaa;
+      font-style: italic;
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       STEP 2 — EMAIL FORM
+    ═══════════════════════════════════════════════════════ */
+
+    #step2 {
+      display: none;
+      min-height: 100vh;
+      align-items: center;
+      justify-content: center;
+      padding: 32px 16px;
+    }
+
+    #step2.active { display: flex; }
+
+    .form-card {
+      max-width: 520px;
+      width: 100%;
+    }
+
+    .form-card h2 {
+      font-size: 32px;
+      font-weight: normal;
+      color: #1a1a1a;
+      line-height: 1.2;
+      letter-spacing: -0.5px;
+      margin-bottom: 10px;
+    }
+
+    .form-card .subtitle {
+      font-size: 16px;
+      line-height: 1.75;
+      color: #666;
+      font-style: italic;
+      margin-bottom: 36px;
+      padding-bottom: 36px;
+      border-bottom: 1px solid #ddd;
+    }
+
+    /* Selected taste chips */
+    .taste-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 32px;
+    }
+
+    .taste-chip {
+      padding: 5px 12px;
+      background: #2c2c2c;
+      color: #c8a96e;
+      font-family: Helvetica, Arial, sans-serif;
+      font-size: 10px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      border-radius: 2px;
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       STEP 3 — REVEAL
+    ═══════════════════════════════════════════════════════ */
+
+    #step3 {
+      display: none;
+      min-height: 100vh;
+      align-items: center;
+      justify-content: center;
+      padding: 32px 16px;
+    }
+
+    #step3.active { display: flex; }
+
+    .reveal-card {
+      max-width: 560px;
+      width: 100%;
+      text-align: center;
+    }
+
+    .reveal-mark {
+      font-size: 44px;
+      margin-bottom: 24px;
+      /* gentle pulse on entry */
+      animation: pop 0.4s ease both;
+    }
+
+    @keyframes pop {
+      0%   { transform: scale(0.6); opacity: 0; }
+      70%  { transform: scale(1.12); opacity: 1; }
+      100% { transform: scale(1); }
+    }
+
+    .reveal-eyebrow {
+      font-family: Helvetica, Arial, sans-serif;
+      font-size: 11px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: #c8a96e;
+      margin-bottom: 16px;
+    }
+
+    .reveal-card h2 {
+      font-size: 30px;
+      font-weight: normal;
+      color: #1a1a1a;
+      line-height: 1.25;
+      letter-spacing: -0.3px;
       margin-bottom: 20px;
     }
 
-    .success h2 {
-      font-size: 28px;
-      font-weight: normal;
-      color: #1a1a1a;
-      margin-bottom: 12px;
-    }
-
-    .success p {
-      font-size: 16px;
-      color: #666;
+    .reveal-copy {
+      font-size: 17px;
+      line-height: 1.8;
+      color: #555;
       font-style: italic;
-      line-height: 1.7;
+      margin-bottom: 36px;
+      padding-bottom: 36px;
+      border-bottom: 1px solid #ddd;
     }
 
-    .sample {
-      margin-top: 56px;
-      padding-top: 40px;
-      border-top: 1px solid #ddd;
-    }
+    /* Recent finds teaser */
 
     .sample-label {
       font-family: Helvetica, Arial, sans-serif;
@@ -177,13 +484,15 @@
       text-transform: uppercase;
       color: #bbb;
       margin-bottom: 20px;
+      text-align: left;
     }
 
     .sample-item {
       display: flex;
       gap: 16px;
       align-items: flex-start;
-      margin-bottom: 24px;
+      margin-bottom: 22px;
+      text-align: left;
     }
 
     .sample-era {
@@ -197,9 +506,8 @@
       border-radius: 2px;
       white-space: nowrap;
       margin-top: 3px;
+      flex-shrink: 0;
     }
-
-    .sample-text {}
 
     .sample-hook {
       font-size: 15px;
@@ -215,50 +523,181 @@
       color: #aaa;
     }
 
-    .footer {
-      margin-top: 48px;
+    .reveal-footer {
+      margin-top: 40px;
       font-family: Helvetica, Arial, sans-serif;
       font-size: 11px;
       color: #bbb;
       line-height: 1.8;
     }
+
   </style>
 </head>
 <body>
-  <div class="container">
 
-    <div id="formSection">
+  <!-- ═══════════════════════════════════════════════════
+       STEP 1 — ARCHETYPE QUIZ
+  ═══════════════════════════════════════════════════ -->
+  <div id="step1" class="step active">
+    <div class="quiz-header">
       <p class="eyebrow">The Daily Edit</p>
-      <h1>Vintage finds worth knowing about.</h1>
-      <p class="tagline">Every morning, we scan thousands of listings and surface the ones with a real story — underpriced grails, authenticated workwear, pieces with cultural weight. One email. No noise.</p>
+      <h1>What kind of collector are you?</h1>
+      <p class="tagline">Pick up to three. We'll tailor your morning digest around what you actually care about.</p>
+      <p class="selection-count" id="selectionCount">&nbsp;</p>
+    </div>
 
-      <div id="formInner">
-        <label class="form-label" for="emailInput">Your email</label>
-        <input type="email" id="emailInput" placeholder="you@example.com" autocomplete="email">
+    <div class="card-grid" id="cardGrid">
 
-        <label class="form-label">Language</label>
-        <div class="lang-row">
-          <button class="lang-btn active" data-lang="en" onclick="selectLang('en')">English</button>
-          <button class="lang-btn" data-lang="zh" onclick="selectLang('zh')">中文</button>
+      <div class="archetype-card" data-id="americana" data-name="Americana" role="checkbox" aria-checked="false" tabindex="0">
+        <img src="/images/archetypes/americana.jpg" alt="Americana" onerror="this.replaceWith(makePlaceholder())">
+        <div class="card-label">
+          <span class="card-name">Americana</span>
         </div>
-
-        <button class="submit-btn" id="submitBtn" onclick="subscribe()">Subscribe — It's Free</button>
-        <p class="error" id="errorMsg"></p>
+        <div class="card-check">
+          <svg viewBox="0 0 14 14"><polyline points="2,7 6,11 12,3"/></svg>
+        </div>
       </div>
+
+      <div class="archetype-card" data-id="ivy" data-name="Ivy Style" role="checkbox" aria-checked="false" tabindex="0">
+        <img src="/images/archetypes/ivy.jpg" alt="Ivy Style" onerror="this.replaceWith(makePlaceholder())">
+        <div class="card-label">
+          <span class="card-name">Ivy Style</span>
+        </div>
+        <div class="card-check">
+          <svg viewBox="0 0 14 14"><polyline points="2,7 6,11 12,3"/></svg>
+        </div>
+      </div>
+
+      <div class="archetype-card" data-id="military" data-name="Military" role="checkbox" aria-checked="false" tabindex="0">
+        <img src="/images/archetypes/military.jpg" alt="Military" onerror="this.replaceWith(makePlaceholder())">
+        <div class="card-label">
+          <span class="card-name">Military</span>
+        </div>
+        <div class="card-check">
+          <svg viewBox="0 0 14 14"><polyline points="2,7 6,11 12,3"/></svg>
+        </div>
+      </div>
+
+      <div class="archetype-card" data-id="european-workwear" data-name="European Workwear" role="checkbox" aria-checked="false" tabindex="0">
+        <img src="/images/archetypes/european-workwear.jpg" alt="European Workwear" onerror="this.replaceWith(makePlaceholder())">
+        <div class="card-label">
+          <span class="card-name">European Workwear</span>
+        </div>
+        <div class="card-check">
+          <svg viewBox="0 0 14 14"><polyline points="2,7 6,11 12,3"/></svg>
+        </div>
+      </div>
+
+      <div class="archetype-card" data-id="cowboy" data-name="Cowboy" role="checkbox" aria-checked="false" tabindex="0">
+        <img src="/images/archetypes/cowboy.jpg" alt="Cowboy" onerror="this.replaceWith(makePlaceholder())">
+        <div class="card-label">
+          <span class="card-name">Cowboy</span>
+        </div>
+        <div class="card-check">
+          <svg viewBox="0 0 14 14"><polyline points="2,7 6,11 12,3"/></svg>
+        </div>
+      </div>
+
+      <div class="archetype-card" data-id="biker" data-name="Biker" role="checkbox" aria-checked="false" tabindex="0">
+        <img src="/images/archetypes/biker.jpg" alt="Biker" onerror="this.replaceWith(makePlaceholder())">
+        <div class="card-label">
+          <span class="card-name">Biker</span>
+        </div>
+        <div class="card-check">
+          <svg viewBox="0 0 14 14"><polyline points="2,7 6,11 12,3"/></svg>
+        </div>
+      </div>
+
+      <div class="archetype-card" data-id="reggae" data-name="Reggae" role="checkbox" aria-checked="false" tabindex="0">
+        <img src="/images/archetypes/reggae.jpg" alt="Reggae" onerror="this.replaceWith(makePlaceholder())">
+        <div class="card-label">
+          <span class="card-name">Reggae</span>
+        </div>
+        <div class="card-check">
+          <svg viewBox="0 0 14 14"><polyline points="2,7 6,11 12,3"/></svg>
+        </div>
+      </div>
+
+      <div class="archetype-card" data-id="british-mod" data-name="British Mod" role="checkbox" aria-checked="false" tabindex="0">
+        <img src="/images/archetypes/british-mod.jpg" alt="British Mod" onerror="this.replaceWith(makePlaceholder())">
+        <div class="card-label">
+          <span class="card-name">British Mod</span>
+        </div>
+        <div class="card-check">
+          <svg viewBox="0 0 14 14"><polyline points="2,7 6,11 12,3"/></svg>
+        </div>
+      </div>
+
+      <div class="archetype-card" data-id="sportswear" data-name="Sportswear" role="checkbox" aria-checked="false" tabindex="0">
+        <img src="/images/archetypes/sportswear.jpg" alt="Sportswear" onerror="this.replaceWith(makePlaceholder())">
+        <div class="card-label">
+          <span class="card-name">Sportswear</span>
+        </div>
+        <div class="card-check">
+          <svg viewBox="0 0 14 14"><polyline points="2,7 6,11 12,3"/></svg>
+        </div>
+      </div>
+
     </div>
 
-    <div class="success" id="successSection">
-      <div class="check">✓</div>
-      <h2 id="successHeading">You're in.</h2>
-      <p id="successBody">First issue lands tomorrow morning. Keep an eye on your inbox.</p>
+    <div class="everything-row">
+      <button class="everything-btn" id="everythingBtn" type="button">
+        Show me everything — I collect across styles
+      </button>
     </div>
 
-    <div class="sample">
+    <div class="quiz-footer">
+      <button class="continue-btn" id="continueBtn" type="button" disabled>Continue</button>
+      <span class="continue-hint" id="continueHint">Select at least one to continue</span>
+    </div>
+  </div>
+
+
+  <!-- ═══════════════════════════════════════════════════
+       STEP 2 — EMAIL + LANGUAGE
+  ═══════════════════════════════════════════════════ -->
+  <div id="step2" class="step">
+    <div class="form-card">
+      <p class="eyebrow">The Daily Edit</p>
+      <h2 id="step2Heading">Good taste confirmed.</h2>
+      <p class="subtitle" id="step2Subtitle">
+        One email each morning. The finds worth knowing about, matched to what you just told us.
+      </p>
+
+      <div class="taste-chips" id="tasteChips"></div>
+
+      <label class="form-label" for="emailInput">Your email</label>
+      <input type="email" id="emailInput" placeholder="you@example.com" autocomplete="email">
+
+      <label class="form-label">Language</label>
+      <div class="lang-row">
+        <button class="lang-btn active" data-lang="en" onclick="selectLang('en')">English</button>
+        <button class="lang-btn" data-lang="zh" onclick="selectLang('zh')">中文</button>
+      </div>
+
+      <button class="primary-btn" id="submitBtn" type="button" onclick="subscribe()">
+        Start my daily edit — it's free
+      </button>
+      <p class="error-msg" id="errorMsg"></p>
+    </div>
+  </div>
+
+
+  <!-- ═══════════════════════════════════════════════════
+       STEP 3 — TASTE PROFILE REVEAL
+  ═══════════════════════════════════════════════════ -->
+  <div id="step3" class="step">
+    <div class="reveal-card">
+      <div class="reveal-mark">✓</div>
+      <p class="reveal-eyebrow">Your taste profile</p>
+      <h2 id="revealHeading">You're in.</h2>
+      <p class="reveal-copy" id="revealCopy"></p>
+
       <p class="sample-label">Recent finds</p>
 
       <div class="sample-item">
         <span class="sample-era">1960s</span>
-        <div class="sample-text">
+        <div>
           <p class="sample-hook">"The loop collar disappeared from Pendleton's lineup in 1963. This one has it."</p>
           <p class="sample-meta">Listed $45 · Est. value $120</p>
         </div>
@@ -266,7 +705,7 @@
 
       <div class="sample-item">
         <span class="sample-era">1950s</span>
-        <div class="sample-text">
+        <div>
           <p class="sample-hook">"Joe's Auto Shop closed decades ago. The shirt survived."</p>
           <p class="sample-meta">Listed $35 · Est. value $180</p>
         </div>
@@ -274,18 +713,181 @@
 
       <div class="sample-item">
         <span class="sample-era">1960s</span>
-        <div class="sample-text">
+        <div>
           <p class="sample-hook">"Levi's changed the red tab from uppercase to lowercase in 1971. Everything before that date is a different animal entirely."</p>
           <p class="sample-meta">Listed $150 · Est. value $400</p>
         </div>
       </div>
-    </div>
 
-    <p class="footer">Unsubscribe any time. No spam, ever.</p>
+      <p class="reveal-footer">Unsubscribe any time. No spam, ever.</p>
+    </div>
   </div>
 
+
   <script>
-    let selectedLang = 'en';
+    // ─── Archetype data ──────────────────────────────────────────────────────
+
+    const ARCHETYPES = {
+      'americana':          { name: 'Americana',          copy: "You'll see the pieces collectors argue about — loop-collar Pendletons, Big E Levi's, blanket-lined Carhartts." },
+      'ivy':                { name: 'Ivy Style',           copy: "You'll see what prep looked like before it became a costume — sack suits, real OCBDs, Shetland wool with patina." },
+      'military':           { name: 'Military',            copy: "You'll see field gear that actually went somewhere — M-65s, MA-1s, deck jackets with the right contract labels." },
+      'european-workwear':  { name: 'European Workwear',   copy: "You'll see French moleskin, German HBT, the kind of chore coat that took decades to look this good." },
+      'cowboy':             { name: 'Cowboy',              copy: "You'll see pearl snaps, embroidered yokes, and deadstock western wear from ranches and rodeos." },
+      'biker':              { name: 'Biker',               copy: "You'll see Schott Perfectos, Lewis Leathers, the jackets that outlasted the bikes they were built for." },
+      'reggae':             { name: 'Reggae',              copy: "You'll see porkpie hats, Clarks, tropical prints — the sound system era dressed sharp and meant it." },
+      'british-mod':        { name: 'British Mod',         copy: "You'll see Harringtons, Fred Perrys, slim suits from when Carnaby Street was the center of everything." },
+      'sportswear':         { name: 'Sportswear',          copy: "You'll see reverse weave Champions, early Nike swoosh gear, Starter jackets in colorways that never came back." },
+    };
+
+    // ─── State ───────────────────────────────────────────────────────────────
+
+    let selectedIds    = [];    // up to 3 archetype ids
+    let showEverything = false; // the "show me everything" toggle
+    let selectedLang   = 'en';
+
+    // ─── Step 1: card selection ──────────────────────────────────────────────
+
+    function makePlaceholder() {
+      // Returns a div to swap in when an archetype image 404s
+      const d = document.createElement('div');
+      d.className = 'img-placeholder';
+      return d;
+    }
+
+    document.querySelectorAll('.archetype-card').forEach(card => {
+      card.addEventListener('click',    () => toggleCard(card));
+      card.addEventListener('keydown',  e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggleCard(card); } });
+    });
+
+    function toggleCard(card) {
+      // If "show me everything" is active, deactivate it first
+      if (showEverything) {
+        showEverything = false;
+        document.getElementById('everythingBtn').classList.remove('active');
+      }
+
+      const id = card.dataset.id;
+      const idx = selectedIds.indexOf(id);
+
+      if (idx > -1) {
+        // Deselect
+        selectedIds.splice(idx, 1);
+        card.classList.remove('selected');
+        card.setAttribute('aria-checked', 'false');
+      } else {
+        // Select — cap at 3
+        if (selectedIds.length >= 3) {
+          // Briefly shake the count label to signal the cap
+          const countEl = document.getElementById('selectionCount');
+          countEl.style.color = '#c0392b';
+          setTimeout(() => { countEl.style.color = '#c8a96e'; }, 600);
+          return;
+        }
+        selectedIds.push(id);
+        card.classList.add('selected');
+        card.setAttribute('aria-checked', 'true');
+      }
+
+      updateQuizUI();
+    }
+
+    document.getElementById('everythingBtn').addEventListener('click', () => {
+      showEverything = !showEverything;
+      const btn = document.getElementById('everythingBtn');
+      btn.classList.toggle('active', showEverything);
+
+      if (showEverything) {
+        // Clear individual selections — "everything" is its own signal
+        selectedIds = [];
+        document.querySelectorAll('.archetype-card.selected').forEach(c => {
+          c.classList.remove('selected');
+          c.setAttribute('aria-checked', 'false');
+        });
+      }
+
+      updateQuizUI();
+    });
+
+    function updateQuizUI() {
+      const count      = selectedIds.length;
+      const hasAny     = count > 0 || showEverything;
+      const countEl    = document.getElementById('selectionCount');
+      const continueBtn = document.getElementById('continueBtn');
+      const hintEl     = document.getElementById('continueHint');
+
+      continueBtn.disabled = !hasAny;
+
+      if (showEverything) {
+        countEl.textContent  = 'Showing all styles';
+        hintEl.textContent   = '';
+      } else if (count === 0) {
+        countEl.textContent  = ' ';
+        hintEl.textContent   = 'Select at least one to continue';
+      } else if (count === 1) {
+        countEl.textContent  = '1 selected — pick up to 2 more';
+        hintEl.textContent   = '';
+      } else if (count === 2) {
+        countEl.textContent  = '2 selected — pick 1 more, or continue';
+        hintEl.textContent   = '';
+      } else {
+        countEl.textContent  = '3 selected';
+        hintEl.textContent   = '';
+      }
+    }
+
+    document.getElementById('continueBtn').addEventListener('click', () => {
+      goToStep(2);
+    });
+
+    // ─── Step 2: email form ──────────────────────────────────────────────────
+
+    function goToStep(n) {
+      // Fade out all, fade in target
+      document.querySelectorAll('.step').forEach(s => {
+        s.classList.remove('active');
+      });
+
+      if (n === 2) buildStep2();
+      if (n === 3) buildStep3();
+
+      const target = document.getElementById('step' + n);
+      // Small tick lets the display:none → display:flex transition work
+      requestAnimationFrame(() => {
+        target.classList.add('active');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+    }
+
+    function buildStep2() {
+      const chipsEl = document.getElementById('tasteChips');
+      chipsEl.innerHTML = '';
+
+      if (showEverything) {
+        const chip = document.createElement('span');
+        chip.className = 'taste-chip';
+        chip.textContent = 'All Styles';
+        chipsEl.appendChild(chip);
+
+        document.getElementById('step2Heading').textContent  = 'The whole archive.';
+        document.getElementById('step2Subtitle').textContent = 'One email each morning. The best finds across every category we cover.';
+      } else {
+        selectedIds.forEach(id => {
+          const chip = document.createElement('span');
+          chip.className   = 'taste-chip';
+          chip.textContent = ARCHETYPES[id].name;
+          chipsEl.appendChild(chip);
+        });
+
+        if (selectedIds.length === 1) {
+          const name = ARCHETYPES[selectedIds[0]].name;
+          document.getElementById('step2Heading').textContent  = name + '.';
+          document.getElementById('step2Subtitle').textContent = 'One email each morning — every find matched to what you just told us.';
+        } else {
+          document.getElementById('step2Heading').textContent  = 'Good taste confirmed.';
+          document.getElementById('step2Subtitle').textContent = 'One email each morning. The finds worth knowing about, matched to what you just told us.';
+        }
+      }
+    }
 
     function selectLang(lang) {
       selectedLang = lang;
@@ -295,58 +897,129 @@
     }
 
     async function subscribe() {
-      const email = document.getElementById('emailInput').value.trim();
+      const email   = document.getElementById('emailInput').value.trim();
       const errorEl = document.getElementById('errorMsg');
-      const btn = document.getElementById('submitBtn');
+      const btn     = document.getElementById('submitBtn');
 
       errorEl.style.display = 'none';
 
       if (!email || !email.includes('@')) {
-        errorEl.textContent = 'Please enter a valid email address.';
-        errorEl.style.display = 'block';
+        errorEl.textContent    = 'Please enter a valid email address.';
+        errorEl.style.display  = 'block';
         return;
       }
 
-      btn.disabled = true;
+      btn.disabled    = true;
       btn.textContent = 'Subscribing...';
 
+      // Build payload
+      const archetypeIds = showEverything ? [] : [...selectedIds];
+      const payload = { email, language: selectedLang, archetypeIds };
+
       try {
-        const res = await fetch('/subscribe', {
+        const res  = await fetch('/subscribe', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, language: selectedLang }),
+          body: JSON.stringify(payload),
         });
 
         const data = await res.json();
 
         if (!res.ok) {
-          errorEl.textContent = data.error || 'Something went wrong. Please try again.';
+          errorEl.textContent   = data.error || 'Something went wrong. Please try again.';
           errorEl.style.display = 'block';
-          btn.disabled = false;
-          btn.textContent = 'Subscribe — It\'s Free';
+          btn.disabled    = false;
+          btn.textContent = 'Start my daily edit — it\'s free';
           return;
         }
 
-        document.getElementById('formSection').style.display = 'none';
-        const success = document.getElementById('successSection');
-        success.style.display = 'block';
-
-        if (selectedLang === 'zh') {
-          document.getElementById('successHeading').textContent = '訂閱成功。';
-          document.getElementById('successBody').textContent = '明天早上第一封信就會送到你的信箱。';
-        }
+        goToStep(3);
 
       } catch (err) {
-        errorEl.textContent = 'Network error. Please try again.';
+        errorEl.textContent   = 'Network error. Please try again.';
         errorEl.style.display = 'block';
-        btn.disabled = false;
-        btn.textContent = 'Subscribe — It\'s Free';
+        btn.disabled    = false;
+        btn.textContent = 'Start my daily edit — it\'s free';
       }
     }
 
-    document.getElementById('emailInput').addEventListener('keydown', (e) => {
+    document.getElementById('emailInput').addEventListener('keydown', e => {
       if (e.key === 'Enter') subscribe();
     });
+
+    // ─── Step 3: reveal ──────────────────────────────────────────────────────
+
+    function buildStep3() {
+      const headingEl = document.getElementById('revealHeading');
+      const copyEl    = document.getElementById('revealCopy');
+
+      if (showEverything) {
+        headingEl.textContent = "You're in.";
+        copyEl.textContent    = "You'll see everything we surface — every archetype, every era. If it has a story worth telling, it lands in your inbox.";
+        return;
+      }
+
+      // Single archetype: use its exact copy line
+      if (selectedIds.length === 1) {
+        headingEl.textContent = "You're in.";
+        copyEl.textContent    = ARCHETYPES[selectedIds[0]].copy;
+        return;
+      }
+
+      // 2–3 archetypes: craft a combined line
+      const names = selectedIds.map(id => ARCHETYPES[id].name);
+      const last  = names.pop();
+      const label = names.join(', ') + ' and ' + last;
+      headingEl.textContent = "You're in.";
+      copyEl.textContent    = buildCombinedCopy(selectedIds, label);
+    }
+
+    /**
+     * Picks a combined reveal line for multi-archetype selections.
+     * Each pairing has a hand-crafted variant; the default is a
+     * clean fallback that names the archetypes and sets expectations.
+     */
+    function buildCombinedCopy(ids, label) {
+      // Check for specific known combinations (order-insensitive)
+      const set = new Set(ids);
+      const has = id => set.has(id);
+
+      // Hand-crafted two-way combinations
+      if (ids.length === 2) {
+        if (has('americana') && has('military'))
+          return "You'll see the working-class canon — Big E denim, blanket-lined Carhartts, M-65s and MA-1s with real contract labels. The gear that built things and survived things.";
+        if (has('americana') && has('ivy'))
+          return "You'll see the two strands of American dress that still hold up — the collegiate and the workwear, the campus and the ranch. Stuff that was never supposed to be collectible.";
+        if (has('ivy') && has('british-mod'))
+          return "You'll see the Anglo-American exchange — OCBDs and Harringtons, slim suits and sack coats, the period when both sides of the Atlantic dressed like they meant it.";
+        if (has('military') && has('biker'))
+          return "You'll see the hard stuff — MA-1s, Perfectos, deck jackets, Lewis Leathers. The kind of gear that shows up in provenance conversations, not trend reports.";
+        if (has('european-workwear') && has('military'))
+          return "You'll see the utilitarian canon — French moleskin, German HBT, M-65s, chore coats built to last. Everything that was functional first and collectible later.";
+        if (has('cowboy') && has('americana'))
+          return "You'll see the American West in textile form — pearl snaps, blanket linings, deadstock from rodeos and ranch supply stores, the full frontier archive.";
+        if (has('reggae') && has('british-mod'))
+          return "You'll see the British street underground — the Jamaican-British exchange that produced skinhead, rude boy, and mod. Clarks, Harringtons, Fred Perrys, porkpie hats.";
+        if (has('sportswear') && has('americana'))
+          return "You'll see American casual at its peak — reverse weave Champions, Big E denim, early swoosh gear, the decades before streetwear had a name.";
+        if (has('biker') && has('cowboy'))
+          return "You'll see American leather in both registers — the Perfecto and the pearl snap, the road and the range. The two most iconic jacket cultures this country produced.";
+      }
+
+      // Three-way combinations with recognizable clusters
+      if (ids.length === 3) {
+        if (has('americana') && has('military') && has('european-workwear'))
+          return "You'll see the utilitarian canon across three continents — Big E denim, M-65s with contract labels, French moleskin, German HBT. The stuff that was built to last and somehow still does.";
+        if (has('ivy') && has('british-mod') && has('reggae'))
+          return "You'll see the Atlantic style triangle — American collegiate, British mod, Jamaican sharp. The three scenes that shaped how men dress when they care about it.";
+        if (has('biker') && has('military') && has('americana'))
+          return "You'll see American hard wear in full — field jackets, riding leathers, workwear that went decades of hard use and came out the other side as grails.";
+      }
+
+      // Generic fallback — names the archetypes and sets honest expectations
+      return `You'll see finds across ${label} — the pieces with real provenance, real stories, and the kind of patina that can't be faked.`;
+    }
+
   </script>
 </body>
 </html>

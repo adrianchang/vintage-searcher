@@ -602,21 +602,34 @@ async function batchScoreAgainstStories(
   candidates: StorySnapshot[],
   referenceStories: StorySnapshot[],
   promptInstruction: string,
+  styleContext?: string,
 ): Promise<Record<number, number>> {
-  if (referenceStories.length === 0 || candidates.length === 0) return {};
-
-  const referenceSummary = referenceStories.slice(0, 15).map((s, i) =>
-    `${i + 1}. ${s.itemIdentification} — ${s.styleGuide}`
-  ).join("\n");
+  if (candidates.length === 0) return {};
+  if (referenceStories.length === 0 && !styleContext) return {};
 
   const candidateList = candidates.map((c, i) =>
     `${i + 1}. ${c.itemIdentification} — ${c.styleGuide} | ${c.hook}`
   ).join("\n");
 
+  let contextBlock: string;
+  if (referenceStories.length > 0) {
+    const referenceSummary = referenceStories.slice(0, 15).map((s, i) =>
+      `${i + 1}. ${s.itemIdentification} — ${s.styleGuide}`
+    ).join("\n");
+    contextBlock = `${promptInstruction}\n${referenceSummary}`;
+    if (styleContext) contextBlock += `\n\nCOLLECTOR PROFILE:\n${styleContext}`;
+  } else {
+    // Cold-start: no vote history, score purely against archetype profile
+    contextBlock = `COLLECTOR PROFILE (use this to infer the user's taste):\n${styleContext}\n\nScore each candidate 0–1 on how well it matches this collector's aesthetic profile:
+- 0.9–1.0: Perfect match for their stated aesthetic
+- 0.7–0.9: Strong match
+- 0.4–0.7: Some overlap but different vibe
+- 0.0–0.4: Doesn't match their aesthetic`;
+  }
+
   const prompt = `You are scoring aesthetic and style similarity for a vintage clothing enthusiast.
 
-${promptInstruction}
-${referenceSummary}
+${contextBlock}
 
 Candidates to score:
 ${candidateList}
@@ -657,9 +670,11 @@ Return scores as a JSON array in the same order as the candidates.`;
 }
 
 // Scores candidates against liked stories (0=no match, 1=perfect match).
+// styleContext enables cold-start personalization when likedStories is empty.
 export async function computePersonalScores(
   candidates: StorySnapshot[],
   likedStories: StorySnapshot[],
+  styleContext?: string,
 ): Promise<Record<number, number>> {
   return batchScoreAgainstStories(
     candidates,
@@ -671,6 +686,7 @@ export async function computePersonalScores(
 - 0.0–0.4: Different aesthetic entirely
 
 Liked items:`,
+    styleContext,
   );
 }
 

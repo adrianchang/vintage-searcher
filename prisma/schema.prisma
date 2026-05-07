@@ -22,6 +22,7 @@ model User {
   keywords   UserKeyword[]
   votes      Vote[]
   deliveries StoryDelivery[]
+  archetypes UserArchetype[]
 }
 
 model UserKeyword {
@@ -105,6 +106,16 @@ model StoryDelivery {
   sentAt DateTime @default(now())
 
   @@unique([userId, url])
+}
+
+model UserArchetype {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  archetypeId String   // slug: "americana", "ivy", etc.
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, archetypeId])
 }
 
 // Managed by connect-pg-simple (express-session), not by Prisma
