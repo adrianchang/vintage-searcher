@@ -410,7 +410,7 @@ interface CallGeminiConfig<T> {
 }
 
 async function callGemini<T>(config: CallGeminiConfig<T>): Promise<{ result: T; references: string[] }> {
-  const { prompt, imageParts, schema, tools, timestamp, phaseLabel, model = "gemini-3-flash-preview" } = config;
+  const { prompt, imageParts, schema, tools, timestamp, phaseLabel, model = "gemini-3.1-flash-lite" } = config;
   let lastError: Error | null = null;
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
@@ -624,6 +624,8 @@ ITEM ALREADY IDENTIFIED:
 - Identification Confidence: {identificationConfidence}%
 - Authentication Notes: {redFlags}
 
+Use Google Search to verify brand history, collector market details, and any facts you're not certain about before writing.
+
 Write the editorial story for this item. You are a veteran collector talking to someone who's in the hobby but might not know this specific brand or detail yet. You're genuinely excited about what makes this piece special. Short sentences. Present tense. No passive voice. No overselling.
 
 hook: One or two sentences. Lead with the authenticating detail or the fact that matters most. No scene-setting. No adjectives. Just the thing itself.
@@ -678,10 +680,10 @@ export async function runStory(
     prompt,
     imageParts,
     schema: STORY_SCHEMA,
-    tools: [],
+    tools: [{ googleSearch: {} }],
     timestamp,
     phaseLabel: `Story (${lang ?? "en"}${promptAppend ? ", archetype" : ""})`,
-    model: "gemini-2.5-flash-lite",
+    model: "gemini-3.1-flash-lite",
   });
   return result;
 }
@@ -736,7 +738,7 @@ Return scores as a JSON array in the same order as the candidates.`;
     try {
       if (attempt > 0) await new Promise(r => setTimeout(r, INITIAL_RETRY_DELAY_MS * attempt));
       const response = await genAI.models.generateContent({
-        model: "gemini-2.5-flash-lite",
+        model: "gemini-3.1-flash-lite",
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         config: {
           responseMimeType: "application/json",
