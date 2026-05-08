@@ -267,11 +267,14 @@ app.get("/threads/callback", async (req, res) => {
         code,
       }),
     });
-    const tokenJson = await tokenRes.json() as { access_token?: string; user_id?: string; error_message?: string };
+    const tokenJson = await tokenRes.json() as { access_token?: string; user_id?: string; error_message?: string; scopes?: string };
     if (!tokenJson.access_token) {
       res.status(500).send(`Token exchange failed: ${tokenJson.error_message ?? JSON.stringify(tokenJson)}`);
       return;
     }
+
+    // Debug: show full short-lived token response before proceeding
+    const shortLivedDebug = JSON.stringify(tokenJson, null, 2);
 
     // Exchange short-lived token for long-lived token (60 days)
     const longRes = await fetch(
@@ -279,7 +282,12 @@ app.get("/threads/callback", async (req, res) => {
     );
     const longJson = await longRes.json() as { access_token?: string; expires_in?: number; error?: { message: string } };
     if (!longJson.access_token) {
-      res.status(500).send(`Long-lived token exchange failed: ${longJson.error?.message ?? JSON.stringify(longJson)}`);
+      res.status(500).send(`
+        <h2>Long-lived token exchange failed</h2>
+        <p><strong>Error:</strong> ${longJson.error?.message ?? JSON.stringify(longJson)}</p>
+        <h3>Short-lived token response (debug):</h3>
+        <pre>${shortLivedDebug}</pre>
+      `);
       return;
     }
 
