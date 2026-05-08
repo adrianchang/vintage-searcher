@@ -21,6 +21,9 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const EBAY_VERIFICATION_TOKEN = process.env.EBAY_VERIFICATION_TOKEN || "";
 const EBAY_ENDPOINT = process.env.EBAY_ENDPOINT || "";
+const THREADS_APP_ID = process.env.THREADS_APP_ID || "";
+const THREADS_APP_SECRET = process.env.THREADS_APP_SECRET || "";
+const THREADS_REDIRECT_URI = process.env.THREADS_REDIRECT_URI || "https://vintage-searcher.onrender.com/threads/callback";
 
 const prisma = new PrismaClient();
 const scanConfig: ScanConfig = {
@@ -232,6 +235,69 @@ app.post("/scan", (req, res) => {
   }, undefined, testRecipients).catch((error) => {
     console.error("Scan failed:", error);
   });
+});
+
+// --- Threads OAuth ---
+
+app.get("/threads/auth", (_req, res) => {
+  const url = new URL("https://threads.net/oauth/authorize");
+  url.searchParams.set("client_id", THREADS_APP_ID);
+  url.searchParams.set("redirect_uri", THREADS_REDIRECT_URI);
+  url.searchParams.set("scope", "threads_basic,threads_content_publish");
+  url.searchParams.set("response_type", "code");
+  res.redirect(url.toString());
+});
+
+app.get("/threads/callback", async (req, res) => {
+  const code = req.query.code as string;
+  if (!code) {
+    res.status(400).send("Missing code");
+    return;
+  }
+
+  try {
+    // Exchange code for short-lived token
+    const tokenRes = await fetch("https://graph.threads.net/oauth/access_token", {
+      method: "POST",
+      body: new URLSearchParams({
+        client_id: THREADS_APP_ID,
+        client_secret: THREADS_APP_SECRET,
+        grant_type: "authorization_code",
+        redirect_uri: THREADS_REDIRECT_URI,
+        code,
+      }),
+    });
+    const tokenJson = await tokenRes.json() as { access_token?: string; user_id?: string; error_message?: string };
+    if (!tokenJson.access_token) {
+      res.status(500).send(`Token exchange failed: ${tokenJson.error_message ?? JSON.stringify(tokenJson)}`);
+      return;
+    }
+
+    // Exchange short-lived token for long-lived token (60 days)
+    const longRes = await fetch(
+      `https://graph.threads.net/access_token?grant_type=th_exchange_token&client_secret=${THREADS_APP_SECRET}&access_token=${tokenJson.access_token}`
+    );
+    const longJson = await longRes.json() as { access_token?: string; expires_in?: number; error?: { message: string } };
+    if (!longJson.access_token) {
+      res.status(500).send(`Long-lived token exchange failed: ${longJson.error?.message ?? JSON.stringify(longJson)}`);
+      return;
+    }
+
+    const expiresInDays = Math.floor((longJson.expires_in ?? 0) / 86400);
+
+    res.send(`
+      <h2>Threads Auth Complete</h2>
+      <p><strong>User ID:</strong> ${tokenJson.user_id}</p>
+      <p><strong>Long-lived token</strong> (expires in ~${expiresInDays} days):</p>
+      <textarea rows="4" cols="80">${longJson.access_token}</textarea>
+      <p>Add these to Render env vars:<br>
+        <code>THREADS_USER_ID=${tokenJson.user_id}</code><br>
+        <code>THREADS_ACCESS_TOKEN=${longJson.access_token}</code>
+      </p>
+    `);
+  } catch (err) {
+    res.status(500).send(`Error: ${err instanceof Error ? err.message : err}`);
+  }
 });
 
 // --- Threads post ---
