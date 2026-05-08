@@ -234,6 +234,7 @@ export async function runScan(
                 references: JSON.stringify(valuation.references),
                 soldListings: JSON.stringify(valuation.soldListings ?? []),
                 priceScore: hasSoldData ? (valuation.priceScore ?? 0) : 0,
+                imageUrl: listing.imageUrls[0] ?? null,
                 isOpportunity: true,
               },
             });

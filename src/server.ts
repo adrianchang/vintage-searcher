@@ -15,6 +15,7 @@ import {
   mergeArchetypeKeywords,
   type ArchetypeId,
 } from "./configs/archetypes";
+import { postToThreads, type ThreadsStoryItem } from "./services/threads";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -231,6 +232,69 @@ app.post("/scan", (req, res) => {
   }, undefined, testRecipients).catch((error) => {
     console.error("Scan failed:", error);
   });
+});
+
+// --- Threads post ---
+
+app.post("/threads", async (req, res) => {
+  const cronKey = req.headers["x-api-key"];
+  const envKey = process.env.SCAN_API_KEY;
+
+  if (!cronKey || cronKey !== envKey) {
+    res.status(401).json({ error: "Invalid API key" });
+    return;
+  }
+
+  const { title, intro } = req.body as { title?: string; intro?: string };
+  if (!title || !intro) {
+    res.status(400).json({ error: "title and intro are required" });
+    return;
+  }
+
+  const EN_EMAIL = "adrian.aa.chang.aa@gmail.com";
+  const EN_LANG = "en";
+  const EN_CONFIG = "en-default";
+
+  try {
+    const user = await prisma.user.findUnique({ where: { email: EN_EMAIL } });
+    if (!user) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    const deliveries = await prisma.storyDelivery.findMany({
+      where: { userId: user.id },
+      orderBy: { sentAt: "desc" },
+      take: 3,
+    });
+
+    const items: ThreadsStoryItem[] = [];
+    for (const delivery of deliveries) {
+      const evaluation = await prisma.evaluation.findUnique({ where: { url: delivery.url } });
+      if (!evaluation) continue;
+      const story = await prisma.story.findUnique({
+        where: { evaluationId_language_configId: { evaluationId: evaluation.id, language: EN_LANG, configId: EN_CONFIG } },
+      });
+      if (!story) continue;
+      items.push({
+        itemIdentification: evaluation.itemIdentification,
+        estimatedEra: evaluation.estimatedEra,
+        currentPrice: evaluation.currentPrice,
+        estimatedValue: evaluation.estimatedValue,
+        hook: story.hook,
+        brandStory: story.brandStory,
+        itemStory: story.itemStory,
+        imageUrl: evaluation.imageUrl,
+        ebayUrl: delivery.url,
+      });
+    }
+
+    res.json({ status: "ok", message: `Posting thread with ${items.length} stories` });
+
+    await postToThreads(title, intro, items);
+  } catch (err) {
+    console.error("[THREADS] Endpoint error:", err);
+  }
 });
 
 app.listen(PORT, () => {
