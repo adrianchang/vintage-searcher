@@ -62,6 +62,20 @@ function sleep(ms: number) {
   return new Promise(r => setTimeout(r, ms));
 }
 
+async function waitForContainer(containerId: string, maxAttempts = 10): Promise<void> {
+  for (let i = 0; i < maxAttempts; i++) {
+    await sleep(2000);
+    const url = new URL(`${THREADS_API}/${containerId}`);
+    url.searchParams.set("fields", "status,error_message");
+    url.searchParams.set("access_token", THREADS_ACCESS_TOKEN);
+    const res = await fetch(url.toString());
+    const json = await res.json() as { status?: string; error_message?: string };
+    if (json.status === "FINISHED") return;
+    if (json.status === "ERROR") throw new Error(`Container processing failed: ${json.error_message}`);
+  }
+  throw new Error("Container processing timed out");
+}
+
 export async function postToThreads(
   title: string,
   intro: string,
@@ -102,6 +116,7 @@ export async function postToThreads(
     }
 
     const replyContainerId = await createContainer(params);
+    if (item.imageUrl) await waitForContainer(replyContainerId);
     const replyId = await publishContainer(replyContainerId);
     console.log(`[THREADS] Reply ${i + 1} published: ${replyId}`);
   }
