@@ -13,6 +13,7 @@ import type { ScanConfig } from "./types";
 import {
   isValidArchetypeId,
   mergeArchetypeKeywords,
+  buildArchetypeConfigId,
   type ArchetypeId,
 } from "./configs/archetypes";
 import { postToThreads, type ThreadsStoryItem } from "./services/threads";
@@ -319,14 +320,19 @@ app.post("/threads", async (req, res) => {
 
   const EN_EMAIL = "adrian.aa.chang.aa@gmail.com";
   const EN_LANG = "en";
-  const EN_CONFIG = "en-default";
 
   try {
-    const user = await prisma.user.findUnique({ where: { email: EN_EMAIL } });
+    const user = await prisma.user.findUnique({
+      where: { email: EN_EMAIL },
+      include: { archetypes: true },
+    });
     if (!user) {
       res.status(404).json({ error: "User not found" });
       return;
     }
+
+    const archetypeIds = user.archetypes.map(a => a.archetypeId as ArchetypeId);
+    const configId = buildArchetypeConfigId(archetypeIds);
 
     const deliveries = await prisma.storyDelivery.findMany({
       where: { userId: user.id },
@@ -339,7 +345,7 @@ app.post("/threads", async (req, res) => {
       const evaluation = await prisma.evaluation.findUnique({ where: { url: delivery.url } });
       if (!evaluation) continue;
       const story = await prisma.story.findUnique({
-        where: { evaluationId_language_configId: { evaluationId: evaluation.id, language: EN_LANG, configId: EN_CONFIG } },
+        where: { evaluationId_language_configId: { evaluationId: evaluation.id, language: EN_LANG, configId } },
       });
       if (!story) continue;
       items.push({
