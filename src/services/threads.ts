@@ -48,7 +48,7 @@ async function createContainer(params: Record<string, string>): Promise<string> 
 }
 
 async function publishContainer(creationId: string): Promise<string> {
-  const url = new URL(`${THREADS_API}/${THREADS_USER_ID}/threads/publish`);
+  const url = new URL(`${THREADS_API}/${THREADS_USER_ID}/threads_publish`);
   url.searchParams.set("access_token", THREADS_ACCESS_TOKEN);
   url.searchParams.set("creation_id", creationId);
 
