@@ -318,8 +318,8 @@ app.post("/threads", async (req, res) => {
     return;
   }
 
-  const EN_EMAIL = "adrian.aa.chang.aa@gmail.com";
-  const EN_LANG = "en";
+  const EN_EMAIL = "adrian.aa.chang@gmail.com";
+  const EN_LANG = "zh";
 
   try {
     const user = await prisma.user.findUnique({
