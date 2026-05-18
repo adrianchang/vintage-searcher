@@ -604,26 +604,27 @@ ITEM TO WRITE ABOUT:
 
 Use Google Search to verify brand history, collector market details, and any facts you're not certain about before writing.
 
-Write a story in the spirit of those references. One flowing narrative. You are a collector talking to someone in the hobby — genuinely excited, knowledgeable, honest. Short sentences. Present tense. No passive voice. No overselling. If the story isn't there, be brief and honest rather than padding.
+Your mainStory should feel like it belongs in the same series as those three references — the same length, the same depth, the same tone. A collector talking to someone in the hobby. Knowledgeable, excited, honest. If the story isn't there, be brief and honest rather than padding.
 
-Things to consider weaving in naturally — use what's relevant, skip what isn't:
-- Brand context: the specific fact that changes how you see the piece. Not founding-year trivia. Not "quality craftsmanship." The thing a serious collector would actually care about.
-- Item specifics: what the construction, fabric, hardware, or label reveals. The "why it was built this way" angle. Be honest if it's unremarkable.
-- The arc: what killed the brand, what saved it, or what drove its revival. Makes the piece more poignant.
-- Dating details woven naturally: label changes, logo eras, sub-labels, tab variants — as part of the story, not as an authentication checklist.
-- Cultural moment: only if it genuinely adds something. How people actually wore it at the time, in context. Skip if it doesn't land.
-- Collector market: who's buying this and why — specific communities. Mention Japanese market if relevant. Mention timing/opportunity if the piece is rare but still accessible.
-- Reproduction or re-release as validation: if the original inspired true-name reproductions or modern re-releases, that signals cultural weight.
-- Discovery factor: if even seasoned collectors stumble on this, say so.
+Draw from these elements — in whatever order serves the story best, using what's relevant and skipping what isn't:
+- Brand era context: what the brand was doing at that moment in time. Not founding-year trivia — the specific chapter that makes this piece make sense.
+- One concrete detail that proves something: a construction detail, label variant, or design choice that explains why the piece matters. Choose it because it earns its place in the story, not because it authenticates the item.
+- The arc: what killed the brand, transformed it, or drove its revival. Makes the piece poignant.
+- Cultural moment: how people actually wore it, in context. Only if it genuinely adds something.
+- Japanese market: if it's been embraced there, say so — it's a signal of real collector weight.
+- Validation: reproductions, re-releases, or "even seasoned collectors still find new things." The way to say "grail" without saying it.
+- Timing: rare but still accessible, or "now is the time." Only if true.
+
+Lead with whatever is most interesting about this specific item. The order is driven by what's worth saying first.
 
 Write the story first, then fit it into the fields:
 
-hook: One sentence. The headline — the general theme or spirit of the story. Why this piece is worth knowing about. Not a spec.
+hook: One sentence. An editorial judgment — the theme or spirit of why this piece matters. Not a spec, not a detail.
 Good: "A rare 1970s tag born from Levi's playful spirit."
 Good: "One of L.L. Bean's greatest masterpieces of the '90s."
 Bad: "The loop collar disappeared from Pendleton's lineup in 1963. This one has it."
 
-mainStory: 3–5 sentences. The full narrative — brand context, the arc, construction details, cultural moment, collector market. One flowing piece. Weave together what's relevant, skip what isn't. Be honest if the piece is unremarkable.
+mainStory: One flowing paragraph, as long as the story needs — aim for the depth of the references above (typically 8–12 sentences). Brand context, construction details, arc, cultural moment, collector validation. All in one piece. Be honest if the piece is unremarkable — a shorter honest story beats a padded one.
 
 styleGuide: How to actually wear this today. Fit, color palette, the cultural aesthetic it belongs to.
 
