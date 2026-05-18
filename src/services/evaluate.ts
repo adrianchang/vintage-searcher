@@ -617,7 +617,32 @@ const STORY_ONLY_PROMPT = `{storyLanguageInstruction}
 
 You are a veteran vintage clothing collector and storyteller writing for an editorial email digest.
 
-ITEM ALREADY IDENTIFIED:
+Study these three reference stories. This is the tone, depth, and quality we want — one flowing narrative, not a form to fill out:
+
+---
+REFERENCE 1 — Brown's Beach Jacket
+
+A product with such high functionality that it has even inspired true-to-original reproductions.
+
+Born in the early 1900s, the "Brown's Beach Jacket" originally served as cold-weather gear for laborers working outdoors, including hunters, lumberjacks, and fishermen. Its core appeal lies in its rugged, tough body and outstanding cold retention. This performance is achieved through a durable double-layer construction based on a Raschel knit—popularly known as "Beach Cloth"—which features a distinct, speckled color pattern often referred to as "salt and pepper." Although it was deeply loved by many outdoor enthusiasts, it was eventually phased out by the rise of high-tech materials like down and synthetic insulation, becoming a legendary outdoor manufacturer that disappeared after the 1960s. While the brand is most famous for two major categories of items—jackets and vests—the fabric itself is a wool-based blend mixed with cotton. Because it is made of natural materials, vintage pieces often feel slightly smaller than the size indicated on the label. However, this just-right sizing has been highly embraced by the Japanese market. This rekindled appreciation has drawn immense attention to these vintage pieces, even leading to true-name reproductions that completely replicate the original brand name.
+
+---
+REFERENCE 2 — Levi's Carrot Label
+
+A rare 1970s tag born from Levi's playful spirit.
+
+Entering the 1970s, Levi's used its venture into casual wear as an opportunity to actively mass-produce a vast array of clothing. While continuing to manufacture their staple jeans and jackets, they simultaneously explored all kinds of new design possibilities. During this era, the brand's long-standing iconic Red Tab didn't just transition from "LEVI'S" to "Levi's"—a new tab featuring a graphic of a carrot, known as the "Carrot Label," also made its debut. This line features innovative materials and designs, boasting a rich variety of styles that have drawn collectors from all over the world. It is said that even seasoned vintage buyers occasionally stumble upon items from this line that they have never seen before. Levi's products born from the free-spirited mindset of 1970s America are a true treasure trove of design. Because production numbers were low, these tags are quite rare; however, because they haven't reached astronomically high prices yet, right now might just be the perfect time to buy.
+
+---
+REFERENCE 3 — L.L. Bean Anorak
+
+One of L.L. Bean's greatest masterpieces of the '90s.
+
+Influenced by the recent '90s revival boom, this masterpiece anorak parka from L.L. Bean has even seen modern re-releases. A key design highlight is the native-patterned tape detailing positioned just above the front pouch pocket. The color blocking strongly evokes the distinct atmosphere of that era. The woven label attached to the hem features the famous Katahdin Logo—a design depicting a lake and mountains that symbolize the vast nature of the brand's home state of Maine—which was used during the 1980s and 1990s. Back in the 1990s, outdoor fashion worn as everyday streetwear was highly popular in Japan. A very common sight around town was styling this anorak with an Oxford button-down, chino pants, an outdoor cap, and high-tech sneakers. This is a masterpiece of neo-vintage that represents the era when American casual style reached its absolute peak in Japan.
+
+---
+
+ITEM TO WRITE ABOUT:
 - Item: {itemIdentification}
 - Era: {estimatedEra}
 - Listed Price: ${"{currentPrice}"}
@@ -626,23 +651,26 @@ ITEM ALREADY IDENTIFIED:
 
 Use Google Search to verify brand history, collector market details, and any facts you're not certain about before writing.
 
-Write the editorial story for this item. You are a veteran collector talking to someone who's in the hobby but might not know this specific brand or detail yet. You're genuinely excited about what makes this piece special. Short sentences. Present tense. No passive voice. No overselling.
+Write a story in the spirit of those references. You are a collector talking to someone in the hobby — genuinely excited, knowledgeable, honest. Short sentences. Present tense. No passive voice. No overselling. If the brand story isn't there, be brief and honest rather than padding.
 
-hook: One or two sentences. Lead with the authenticating detail or the fact that matters most. No scene-setting. No adjectives. Just the thing itself.
-Good: "The loop collar disappeared from Pendleton's lineup in 1963. This one has it."
-Bad: "Somewhere in postwar America, workers wore shirts built to last a lifetime."
+The fields below are how we store and display the story — not rigid boxes to fill. Let the narrative flow naturally across them:
 
-brandStory: 2–3 sentences. The one thing about this brand that a serious collector would actually care about — the specific fact that changes how you see the piece. No "quality craftsmanship", no founding-year trivia for its own sake.
+hook: One sentence. A headline that captures the general theme or spirit of the story — why this piece is worth knowing about. Not a spec, not a construction detail. Think of it as the headline above a magazine story.
+Good: "A rare 1970s tag born from Levi's playful spirit."
+Good: "One of L.L. Bean's greatest masterpieces of the '90s."
+Bad: "The loop collar disappeared from Pendleton's lineup in 1963. This one has it."
 
-itemStory: 2–3 sentences on this specific piece. What the construction details, hardware, stitching, or label are actually telling you. Be honest if it's unremarkable.
+brandStory: The brand context — the specific fact that changes how you see the piece. Skip founding-year trivia. Skip "quality craftsmanship." Only what a serious collector would actually care about.
 
-historicalContext: 1–2 sentences. Only include if the cultural moment is genuinely relevant. If it doesn't add anything real, just state the era plainly.
+itemStory: This specific piece — what the construction details, hardware, stitching, or label reveal. Be honest if it's unremarkable.
 
-marketContext: 2–3 sentences. Who's buying this and why — be specific about the collector communities. No hype, no salesmanship.
+historicalContext: The cultural moment, only if it genuinely adds something. If it doesn't, state the era plainly and move on.
 
-styleGuide: 2–3 sentences. How to actually wear this piece today. Describe the fit, color palette, and the cultural aesthetic it belongs to. Be specific and honest.
+marketContext: Who's buying this and why. Specific collector communities. No hype.
 
-storyScore (0–1): How strong is the story, cultural weight, and collector desirability of this item?
+styleGuide: How to actually wear this today. Fit, color palette, the cultural aesthetic it belongs to.
+
+storyScore (0–1): How strong is the story, cultural weight, and collector desirability?
 - 0.85–1.0: Genuinely iconic. Hard authentication markers. Real collector demand.
 - 0.65–0.85: Solid piece. Known in the right circles, good story.
 - 0.45–0.65: Interesting but niche or light on provenance.
