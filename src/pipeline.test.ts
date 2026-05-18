@@ -61,6 +61,7 @@ const TEST_USERS = [
     googleId: null,
     createdAt: new Date(),
     keywords: [{ id: "kw-1", userId: "user-en", query: "vintage", percentage: 1.0, createdAt: new Date() }],
+    archetypes: [],
     votes: [],
   },
   {
@@ -71,6 +72,7 @@ const TEST_USERS = [
     googleId: null,
     createdAt: new Date(),
     keywords: [{ id: "kw-2", userId: "user-zh", query: "vintage", percentage: 1.0, createdAt: new Date() }],
+    archetypes: [],
     votes: [],
   },
 ];
