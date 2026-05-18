@@ -71,10 +71,7 @@ model Story {
   configId             String      @default("en-default")
 
   hook                 String
-  brandStory           String
-  itemStory            String
-  historicalContext    String
-  marketContext        String
+  mainStory            String
   styleGuide           String   @default("")
 
   storyScore           Float

@@ -354,8 +354,7 @@ app.post("/threads", async (req, res) => {
         currentPrice: evaluation.currentPrice,
         estimatedValue: evaluation.estimatedValue,
         hook: story.hook,
-        brandStory: story.brandStory,
-        itemStory: story.itemStory,
+        mainStory: story.mainStory,
         imageUrl: evaluation.imageUrl,
         ebayUrl: delivery.url,
       });

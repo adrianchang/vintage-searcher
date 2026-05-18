@@ -6,10 +6,7 @@ import type { IdentificationResult, ValuationOutput } from "./services/evaluate"
 
 const STORY_DEFAULTS = {
   hook: "A garment from another era.",
-  brandStory: "A brand with history.",
-  itemStory: "A piece with details.",
-  historicalContext: "A moment in time.",
-  marketContext: "Real heads know this one.",
+  mainStory: "A brand with history. A piece with details. A moment in time. Real heads know this one.",
   styleGuide: "Wear it with raw denim and a clean tee. Americana wardrobe essential.",
   storyScore: 0.8,
   storyScoreReasoning: "Strong narrative.",
@@ -191,10 +188,7 @@ function makeDeps(overrides?: Partial<ScanDeps>): ScanDeps {
       return {
         ...id,
         hook: `${prefix}${id.hook}`,
-        brandStory: `${prefix}${id.brandStory}`,
-        itemStory: `${prefix}${id.itemStory}`,
-        historicalContext: `${prefix}${id.historicalContext}`,
-        marketContext: `${prefix}${id.marketContext}`,
+        mainStory: `${prefix}${id.mainStory}`,
         styleGuide: `${prefix}${id.styleGuide}`,
         storyScoreReasoning: `${prefix}${id.storyScoreReasoning}`,
       };

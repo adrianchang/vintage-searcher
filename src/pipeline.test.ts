@@ -6,10 +6,7 @@ import type { IdentificationResult, ValuationOutput } from "./services/evaluate"
 
 const STORY_DEFAULTS = {
   hook: "Before fast fashion, this jacket outlasted everything.",
-  brandStory: "Founded in the Pacific Northwest, this brand built garments to last generations.",
-  itemStory: "The loop collar, visible in the photos, was phased out after the early 1960s.",
-  historicalContext: "Post-war American manufacturing was at its peak.",
-  marketContext: "Loop-collar Pendletons are a grail. Three collector bases chasing the same shirt.",
+  mainStory: "Founded in the Pacific Northwest, this brand built garments to last generations. The loop collar, visible in the photos, was phased out after the early 1960s. Post-war American manufacturing was at its peak. Loop-collar Pendletons are a grail — three collector bases chasing the same shirt.",
   styleGuide: "Wear it open over a white tee with raw denim. Classic Americana wardrobe anchor.",
   storyScore: 0.8,
   storyScoreReasoning: "Strong brand narrative with authenticating construction detail.",
@@ -146,10 +143,7 @@ function makeDeps(overrides?: Partial<ScanDeps>): ScanDeps {
     runIdentification: async (_listing, lang) => ({
       ...IDENTIFICATION,
       hook: lang === "zh" ? `[ZH] ${IDENTIFICATION.hook}` : IDENTIFICATION.hook,
-      brandStory: lang === "zh" ? `[ZH] ${IDENTIFICATION.brandStory}` : IDENTIFICATION.brandStory,
-      itemStory: lang === "zh" ? `[ZH] ${IDENTIFICATION.itemStory}` : IDENTIFICATION.itemStory,
-      historicalContext: lang === "zh" ? `[ZH] ${IDENTIFICATION.historicalContext}` : IDENTIFICATION.historicalContext,
-      marketContext: lang === "zh" ? `[ZH] ${IDENTIFICATION.marketContext}` : IDENTIFICATION.marketContext,
+      mainStory: lang === "zh" ? `[ZH] ${IDENTIFICATION.mainStory}` : IDENTIFICATION.mainStory,
       styleGuide: lang === "zh" ? `[ZH] ${IDENTIFICATION.styleGuide}` : IDENTIFICATION.styleGuide,
       storyScoreReasoning: lang === "zh" ? `[ZH] ${IDENTIFICATION.storyScoreReasoning}` : IDENTIFICATION.storyScoreReasoning,
     }),

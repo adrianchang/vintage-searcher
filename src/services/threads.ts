@@ -8,8 +8,7 @@ export interface ThreadsStoryItem {
   currentPrice: number;
   estimatedValue: number | null;
   hook: string;
-  brandStory: string;
-  itemStory: string;
+  mainStory: string;
   imageUrl: string | null;
   ebayUrl: string;
 }
@@ -30,8 +29,7 @@ function buildReplyText(item: ThreadsStoryItem, index: number): string {
     `${num} ${item.itemIdentification} · ${era}`,
     `"${item.hook}"`,
     price,
-    firstSentence(item.brandStory),
-    firstSentence(item.itemStory),
+    firstSentence(item.mainStory),
     item.ebayUrl,
   ].join("\n");
 }

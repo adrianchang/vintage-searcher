@@ -68,7 +68,7 @@ function resolveKeywordCounts(
 
 function buildEvaluationFromParts(
   dbEvaluation: any,
-  story: Pick<IdentificationResult, 'hook' | 'brandStory' | 'itemStory' | 'historicalContext' | 'marketContext' | 'styleGuide' | 'storyScore' | 'storyScoreReasoning'>,
+  story: Pick<IdentificationResult, 'hook' | 'mainStory' | 'styleGuide' | 'storyScore' | 'storyScoreReasoning'>,
 ): Evaluation {
   return {
     isAuthentic: dbEvaluation.isAuthentic,
@@ -85,10 +85,7 @@ function buildEvaluationFromParts(
     soldListings: JSON.parse(dbEvaluation.soldListings),
     priceScore: dbEvaluation.priceScore ?? undefined,
     hook: story.hook,
-    brandStory: story.brandStory,
-    itemStory: story.itemStory,
-    historicalContext: story.historicalContext,
-    marketContext: story.marketContext,
+    mainStory: story.mainStory,
     styleGuide: story.styleGuide,
     storyScore: story.storyScore,
     storyScoreReasoning: story.storyScoreReasoning,
@@ -269,10 +266,7 @@ export async function runScan(
               language: user.language,
               configId: user.configId,
               hook: story.hook,
-              brandStory: story.brandStory,
-              itemStory: story.itemStory,
-              historicalContext: story.historicalContext,
-              marketContext: story.marketContext,
+              mainStory: story.mainStory,
               styleGuide: story.styleGuide,
               storyScore: story.storyScore,
               storyScoreReasoning: story.storyScoreReasoning,
@@ -303,11 +297,11 @@ export async function runScan(
     // Personalize ranking if user has votes
     const likedStories = user.votes
       .filter(v => v.direction === "up").slice(0, 20)
-      .map(v => ({ itemIdentification: v.story.hook, styleGuide: v.story.styleGuide, hook: v.story.hook, marketContext: v.story.marketContext }));
+      .map(v => ({ itemIdentification: v.story.hook, styleGuide: v.story.styleGuide, hook: v.story.hook, mainStory: v.story.mainStory }));
 
     const dislikedStories = user.votes
       .filter(v => v.direction === "down").slice(0, 20)
-      .map(v => ({ itemIdentification: v.story.hook, styleGuide: v.story.styleGuide, hook: v.story.hook, marketContext: v.story.marketContext }));
+      .map(v => ({ itemIdentification: v.story.hook, styleGuide: v.story.styleGuide, hook: v.story.hook, mainStory: v.story.mainStory }));
 
     let scoredFinds = goodFinds;
     const hasStylingSignal = likedStories.length > 0 || dislikedStories.length > 0 || !!user.scoringContext;
@@ -317,7 +311,7 @@ export async function runScan(
         itemIdentification: f.evaluation.itemIdentification,
         styleGuide: f.evaluation.styleGuide,
         hook: f.evaluation.hook,
-        marketContext: f.evaluation.marketContext,
+        mainStory: f.evaluation.mainStory,
       }));
       const [personalScores, dislikeScores] = await Promise.all([
         computePersonalScores(candidates, likedStories, user.scoringContext),

@@ -4,10 +4,7 @@ import { priceScore, combinedScore, isGoodFind } from "./score";
 
 const STORY_DEFAULTS = {
   hook: "A garment from another era.",
-  brandStory: "A brand with history.",
-  itemStory: "A piece with details.",
-  historicalContext: "A moment in time.",
-  marketContext: "Real heads know this one.",
+  mainStory: "A brand with history. A piece with details. Real heads know this one.",
   styleGuide: "Wear it with raw denim and a clean tee.",
   storyScore: 0.8,
   storyScoreReasoning: "Strong narrative.",

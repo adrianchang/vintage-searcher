@@ -44,10 +44,7 @@ const LABELS: Record<string, Record<string, string>> = {
     estValue: "Est. Value",
     upside: "upside",
     listedPrice: "Listed Price",
-    theBrand: "The Brand",
-    thisPiece: "This Piece",
-    theMoment: "The Moment",
-    theMarket: "The Market",
+    theStory: "The Story",
     theStyle: "The Style",
     storyScore: "Story score",
     combined: "Combined",
@@ -65,10 +62,7 @@ const LABELS: Record<string, Record<string, string>> = {
     estValue: "估值",
     upside: "空間",
     listedPrice: "售價",
-    theBrand: "品牌故事",
-    thisPiece: "單品",
-    theMoment: "時代背景",
-    theMarket: "行情",
+    theStory: "故事",
     theStyle: "穿搭指南",
     storyScore: "故事分",
     combined: "綜合分",
@@ -274,28 +268,10 @@ function buildItemHtml(item: DigestItem, index: number, total: number, L: Record
       <!-- Price block -->
       ${priceHtml}
 
-      <!-- Brand Story -->
-      <h3 style="margin:24px 0 8px;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#888;font-family:Helvetica,Arial,sans-serif;">${L.theBrand}</h3>
+      <!-- Story -->
+      <h3 style="margin:24px 0 8px;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#888;font-family:Helvetica,Arial,sans-serif;">${L.theStory}</h3>
       <p style="margin:0 0 24px;font-size:15px;line-height:1.8;color:#333;">
-        ${escapeHtml(evaluation.brandStory)}
-      </p>
-
-      <!-- Item Story -->
-      <h3 style="margin:0 0 8px;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#888;font-family:Helvetica,Arial,sans-serif;">${L.thisPiece}</h3>
-      <p style="margin:0 0 24px;font-size:15px;line-height:1.8;color:#333;">
-        ${escapeHtml(evaluation.itemStory)}
-      </p>
-
-      <!-- Historical Context -->
-      <h3 style="margin:0 0 8px;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#888;font-family:Helvetica,Arial,sans-serif;">${L.theMoment}</h3>
-      <p style="margin:0 0 24px;font-size:15px;line-height:1.8;color:#333;">
-        ${escapeHtml(evaluation.historicalContext)}
-      </p>
-
-      <!-- Market Context -->
-      <h3 style="margin:0 0 8px;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#c8a96e;font-family:Helvetica,Arial,sans-serif;">${L.theMarket}</h3>
-      <p style="margin:0 0 24px;font-size:15px;line-height:1.8;color:#333;">
-        ${escapeHtml(evaluation.marketContext)}
+        ${escapeHtml(evaluation.mainStory)}
       </p>
 
       <!-- Style Guide -->

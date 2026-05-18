@@ -39,19 +39,14 @@ Set identificationConfidence (0-1): how sure are you about WHAT this item is? Hi
 STEP 3 — TELL THE STORY
 Write the editorial story for this item. You are a veteran collector talking to someone who's in the hobby but might not know this specific brand or detail yet. You're genuinely excited about what makes this piece special — like showing a fellow skater a rare deck they haven't seen before and telling them exactly why it's worth getting hyped about. You assume they understand what good vintage is. You don't need to explain the hobby. But you do get to share the specific thing that makes this one interesting — the construction detail, the era marker, the reason collectors care. Short sentences. Present tense. No passive voice. No overselling.
 
-hook: One or two sentences. Lead with the authenticating detail or the fact that matters most. No scene-setting. No adjectives. Just the thing itself.
-Good: "The loop collar disappeared from Pendleton's lineup in 1963. This one has it."
-Bad: "Somewhere in postwar America, workers wore shirts built to last a lifetime."
+hook: One sentence. The headline — the general theme or spirit of the story. Why this piece is worth knowing about.
+Good: "A rare 1970s tag born from Levi's playful spirit."
+Good: "One of L.L. Bean's greatest masterpieces of the '90s."
+Bad: "The loop collar disappeared from Pendleton's lineup in 1963. This one has it."
 
-brandStory: 2–3 sentences. The one thing about this brand that a serious collector would actually care about — the specific fact that changes how you see the piece. If you don't know it, fall back to concise brand history. No "quality craftsmanship", no founding-year trivia for its own sake. Use Google Search to get the details right.
+mainStory: 3–5 sentences. One flowing narrative — brand context and the arc (what killed it, revived it, or made it legendary), what the construction and label reveal, the cultural moment if genuinely relevant, who's buying it and why. Weave together what matters, skip what doesn't. Be honest if the piece is unremarkable. Use Google Search to get the details right.
 
-itemStory: 2–3 sentences on this specific piece. What the construction details, hardware, stitching, or label are actually telling you. What makes this example stand out — or not. Be honest if it's unremarkable.
-
-historicalContext: 1–2 sentences. Only include this if the cultural moment is genuinely relevant to the piece. No forced connections. If it doesn't add anything real, just state the era plainly.
-
-marketContext: 2–3 sentences. Who's buying this and why — be specific about the collector communities. If it's genuinely sought after, name them. If it's a sleeper, say why it hasn't caught on yet. Don't call everything a grail — most things aren't. No hype, no salesmanship — just what you'd tell a friend before they hit Buy.
-
-styleGuide: 2–3 sentences. How to actually wear this piece today. Describe the fit, color palette, and the cultural aesthetic it belongs to — workwear, Americana, prep, skate, surf, streetwear, etc. Who pulls this off naturally? What wardrobe does it slot into? Be specific and honest — not every piece is for everyone.
+styleGuide: 2–3 sentences. How to actually wear this today. Fit, color palette, the cultural aesthetic it belongs to. Be specific and honest.
 
 storyScore (0–1): How strong is the story, cultural weight, and collector desirability of this item?
 - 0.85–1.0: Genuinely iconic. Hard authentication markers. Real collector demand with receipts.
@@ -178,10 +173,7 @@ export interface IdentificationResult {
   redFlags: string[];
   // Story fields
   hook: string;
-  brandStory: string;
-  itemStory: string;
-  historicalContext: string;
-  marketContext: string;
+  mainStory: string;
   styleGuide: string;
   storyScore: number;
   storyScoreReasoning: string;
@@ -304,7 +296,7 @@ async function searchForComps(
 }
 
 const STORY_LANGUAGE_INSTRUCTIONS: Record<string, string> = {
-  zh: "Write ALL story fields (hook, brandStory, itemStory, historicalContext, marketContext, styleGuide, storyScoreReasoning) in Traditional Chinese (繁體中文). Keep the tone casual, cool, and insider — like a GQ editor texting a friend who collects vintage. Short punchy sentences.",
+  zh: "Write ALL story fields (hook, mainStory, styleGuide, storyScoreReasoning) in Traditional Chinese (繁體中文). Keep the tone casual, cool, and insider — like a GQ editor texting a friend who collects vintage. Short punchy sentences.",
 };
 
 function buildIdentificationPrompt(listing: Listing, lang?: string, promptAppend?: string): string {
@@ -495,10 +487,7 @@ const IDENTIFICATION_SCHEMA = {
     estimatedEra: { type: "string" },
     redFlags: { type: "array", items: { type: "string" } },
     hook: { type: "string" },
-    brandStory: { type: "string" },
-    itemStory: { type: "string" },
-    historicalContext: { type: "string" },
-    marketContext: { type: "string" },
+    mainStory: { type: "string" },
     styleGuide: { type: "string" },
     storyScore: { type: "number" },
     storyScoreReasoning: { type: "string" },
@@ -506,8 +495,7 @@ const IDENTIFICATION_SCHEMA = {
   required: [
     "isAuthentic", "itemIdentification", "itemIdentificationJapanese",
     "identificationConfidence", "estimatedEra", "redFlags",
-    "hook", "brandStory", "itemStory", "historicalContext", "marketContext",
-    "styleGuide", "storyScore", "storyScoreReasoning",
+    "hook", "mainStory", "styleGuide", "storyScore", "storyScoreReasoning",
   ],
 };
 
@@ -594,23 +582,19 @@ export async function runIdentification(listing: Listing, lang?: string, promptA
 // Story fields only — no image fetching, no Google Search.
 // Used for per-(language, configId) story variants after the base Evaluation is cached.
 export type StoryResult = Pick<IdentificationResult,
-  "hook" | "brandStory" | "itemStory" | "historicalContext" | "marketContext" |
-  "styleGuide" | "storyScore" | "storyScoreReasoning"
+  "hook" | "mainStory" | "styleGuide" | "storyScore" | "storyScoreReasoning"
 >;
 
 const STORY_SCHEMA = {
   type: "object",
   properties: {
     hook: { type: "string" },
-    brandStory: { type: "string" },
-    itemStory: { type: "string" },
-    historicalContext: { type: "string" },
-    marketContext: { type: "string" },
+    mainStory: { type: "string" },
     styleGuide: { type: "string" },
     storyScore: { type: "number" },
     storyScoreReasoning: { type: "string" },
   },
-  required: ["hook", "brandStory", "itemStory", "historicalContext", "marketContext", "styleGuide", "storyScore", "storyScoreReasoning"],
+  required: ["hook", "mainStory", "styleGuide", "storyScore", "storyScoreReasoning"],
 };
 
 const STORY_ONLY_PROMPT = `{storyLanguageInstruction}
@@ -651,27 +635,31 @@ ITEM TO WRITE ABOUT:
 
 Use Google Search to verify brand history, collector market details, and any facts you're not certain about before writing.
 
-Write a story in the spirit of those references. You are a collector talking to someone in the hobby — genuinely excited, knowledgeable, honest. Short sentences. Present tense. No passive voice. No overselling. If the brand story isn't there, be brief and honest rather than padding.
+Write a story in the spirit of those references. One flowing narrative. You are a collector talking to someone in the hobby — genuinely excited, knowledgeable, honest. Short sentences. Present tense. No passive voice. No overselling. If the story isn't there, be brief and honest rather than padding.
 
-The fields below are how we store and display the story — not rigid boxes to fill. Let the narrative flow naturally across them:
+Things to consider weaving in naturally — use what's relevant, skip what isn't:
+- Brand context: the specific fact that changes how you see the piece. Not founding-year trivia. Not "quality craftsmanship." The thing a serious collector would actually care about.
+- Item specifics: what the construction, fabric, hardware, or label reveals. The "why it was built this way" angle. Be honest if it's unremarkable.
+- The arc: what killed the brand, what saved it, or what drove its revival. Makes the piece more poignant.
+- Dating details woven naturally: label changes, logo eras, sub-labels, tab variants — as part of the story, not as an authentication checklist.
+- Cultural moment: only if it genuinely adds something. How people actually wore it at the time, in context. Skip if it doesn't land.
+- Collector market: who's buying this and why — specific communities. Mention Japanese market if relevant. Mention timing/opportunity if the piece is rare but still accessible.
+- Reproduction or re-release as validation: if the original inspired true-name reproductions or modern re-releases, that signals cultural weight.
+- Discovery factor: if even seasoned collectors stumble on this, say so.
 
-hook: One sentence. A headline that captures the general theme or spirit of the story — why this piece is worth knowing about. Not a spec, not a construction detail. Think of it as the headline above a magazine story.
+Write the story first, then fit it into the fields:
+
+hook: One sentence. The headline — the general theme or spirit of the story. Why this piece is worth knowing about. Not a spec.
 Good: "A rare 1970s tag born from Levi's playful spirit."
 Good: "One of L.L. Bean's greatest masterpieces of the '90s."
 Bad: "The loop collar disappeared from Pendleton's lineup in 1963. This one has it."
 
-brandStory: The brand context — the specific fact that changes how you see the piece. Skip founding-year trivia. Skip "quality craftsmanship." Only what a serious collector would actually care about.
-
-itemStory: This specific piece — what the construction details, hardware, stitching, or label reveal. Be honest if it's unremarkable.
-
-historicalContext: The cultural moment, only if it genuinely adds something. If it doesn't, state the era plainly and move on.
-
-marketContext: Who's buying this and why. Specific collector communities. No hype.
+mainStory: 3–5 sentences. The full narrative — brand context, the arc, construction details, cultural moment, collector market. One flowing piece. Weave together what's relevant, skip what isn't. Be honest if the piece is unremarkable.
 
 styleGuide: How to actually wear this today. Fit, color palette, the cultural aesthetic it belongs to.
 
 storyScore (0–1): How strong is the story, cultural weight, and collector desirability?
-- 0.85–1.0: Genuinely iconic. Hard authentication markers. Real collector demand.
+- 0.85–1.0: Genuinely iconic. Strong story. Real collector demand.
 - 0.65–0.85: Solid piece. Known in the right circles, good story.
 - 0.45–0.65: Interesting but niche or light on provenance.
 - Below 0.45: Generic. The story isn't there.
@@ -721,7 +709,7 @@ type StorySnapshot = {
   itemIdentification: string;
   styleGuide: string;
   hook: string;
-  marketContext: string;
+  mainStory: string;
 };
 
 async function batchScoreAgainstStories(

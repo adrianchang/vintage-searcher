@@ -25,10 +25,7 @@ export interface Evaluation {
   soldListings: { title: string; price: number | null; url: string | null }[];
   // Story fields
   hook: string;
-  brandStory: string;
-  itemStory: string;
-  historicalContext: string;
-  marketContext: string;
+  mainStory: string;
   storyScore: number;
   storyScoreReasoning: string;
   styleGuide: string;
