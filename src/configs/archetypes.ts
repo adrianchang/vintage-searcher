@@ -234,6 +234,10 @@ In the styleGuide field, speak honestly to how vintage sportswear fits into curr
  *   buildArchetypeConfigId(["ivy","biker"])   → "biker+ivy"  (sorted)
  */
 export function buildArchetypeConfigId(archetypeIds: ArchetypeId[]): string {
+  // "en-default" is a misnomer — it means "no archetypes" not "English language".
+  // Language is stored separately on Story. Renaming requires a prod DB migration
+  // (UPDATE "Story" SET "configId" = 'default' WHERE "configId" = 'en-default')
+  // plus updating the schema default. Not worth the risk until there's a real need.
   if (archetypeIds.length === 0) return "en-default";
   return [...archetypeIds].sort().join("+");
 }
