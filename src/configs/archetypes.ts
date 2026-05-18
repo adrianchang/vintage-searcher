@@ -62,7 +62,7 @@ In the styleGuide field, speak to how this fits into a rugged, utilitarian Ameri
       { query: "vintage tweed jacket", percentage: 0.25 },
       { query: "vintage crewneck sweater", percentage: 0.22 },
       { query: "vintage sack suit", percentage: 0.15 },
-      { query: "vintage sport coat", percentage: 0.10 },
+      { query: "vintage Harris Tweed jacket", percentage: 0.10 },
     ],
     promptContext: `This item will be shown to a collector focused on Ivy League and traditional American prep style. Pay particular attention to:
 - Natural-shoulder construction, sack silhouette, and 3/2-roll lapels on jackets
