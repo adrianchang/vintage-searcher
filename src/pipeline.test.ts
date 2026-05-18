@@ -2,15 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { runScan, type ScanDeps } from "./scan";
 import { filterListings } from "./services/filter";
 import type { Listing, Evaluation, ScanConfig } from "./types";
-import type { IdentificationResult, ValuationOutput } from "./services/evaluate";
-
-const STORY_DEFAULTS = {
-  hook: "Before fast fashion, this jacket outlasted everything.",
-  mainStory: "Founded in the Pacific Northwest, this brand built garments to last generations. The loop collar, visible in the photos, was phased out after the early 1960s. Post-war American manufacturing was at its peak. Loop-collar Pendletons are a grail — three collector bases chasing the same shirt.",
-  styleGuide: "Wear it open over a white tee with raw denim. Classic Americana wardrobe anchor.",
-  storyScore: 0.8,
-  storyScoreReasoning: "Strong brand narrative with authenticating construction detail.",
-};
+import type { IdentificationResult, ValuationOutput, StoryResult } from "./services/evaluate";
 
 const LISTING: Listing = {
   url: "https://www.ebay.com/itm/pipe-001",
@@ -23,13 +15,20 @@ const LISTING: Listing = {
 };
 
 const IDENTIFICATION: IdentificationResult = {
-  ...STORY_DEFAULTS,
   isAuthentic: true,
   itemIdentification: "Pendleton Board Shirt, loop collar, wool, 1960s",
   itemIdentificationJapanese: "ペンドルトン ループカラー ボードシャツ 60s",
   identificationConfidence: 0.9,
   estimatedEra: "1960s",
   redFlags: ["Condition not fully visible"],
+};
+
+const STORY: StoryResult = {
+  hook: "Before fast fashion, this jacket outlasted everything.",
+  mainStory: "Founded in the Pacific Northwest, Pendleton built garments for the outdoors. The loop collar was phased out after the early 1960s — this one has it. Loop-collar board shirts are a grail for three separate collector communities.",
+  styleGuide: "Wear it open over a white tee with raw denim. Classic Americana wardrobe anchor.",
+  storyScore: 0.8,
+  storyScoreReasoning: "Strong brand narrative with authenticating construction detail.",
 };
 
 const VALUATION: ValuationOutput = {
@@ -140,14 +139,12 @@ function makeDeps(overrides?: Partial<ScanDeps>): ScanDeps {
     prisma: mockPrisma as any,
     fetchListings: async () => [LISTING],
     filterListings,
-    runIdentification: async (_listing, lang) => ({
-      ...IDENTIFICATION,
-      hook: lang === "zh" ? `[ZH] ${IDENTIFICATION.hook}` : IDENTIFICATION.hook,
-      mainStory: lang === "zh" ? `[ZH] ${IDENTIFICATION.mainStory}` : IDENTIFICATION.mainStory,
-      styleGuide: lang === "zh" ? `[ZH] ${IDENTIFICATION.styleGuide}` : IDENTIFICATION.styleGuide,
-      storyScoreReasoning: lang === "zh" ? `[ZH] ${IDENTIFICATION.storyScoreReasoning}` : IDENTIFICATION.storyScoreReasoning,
-    }),
+    runIdentification: async () => IDENTIFICATION,
     runValuation: async () => VALUATION,
+    runStory: async (_dbEval, _listing, lang) => ({
+      ...STORY,
+      hook: lang === "zh" ? `[ZH] ${STORY.hook}` : STORY.hook,
+    }),
     ...overrides,
   };
 }
@@ -205,11 +202,11 @@ describe("Pipeline: fetch → filter → store → evaluate → store", () => {
 
     const enData = mockPrisma.story.create.mock.calls[0][0].data;
     expect(enData.language).toBe("en");
-    expect(enData.hook).toBe(IDENTIFICATION.hook);
+    expect(enData.hook).toBe(STORY.hook);
 
     const zhData = mockPrisma.story.create.mock.calls[1][0].data;
     expect(zhData.language).toBe("zh");
-    expect(zhData.hook).toBe(`[ZH] ${IDENTIFICATION.hook}`);
+    expect(zhData.hook).toBe(`[ZH] ${STORY.hook}`);
   });
 
   it("low storyScore items are still evaluated and ranked", async () => {

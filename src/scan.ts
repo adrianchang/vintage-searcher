@@ -5,10 +5,11 @@ import { combinedScore } from "./services/score";
 import {
   runIdentification as defaultRunIdentification,
   runValuation as defaultRunValuation,
-  runStory,
+  runStory as defaultRunStory,
   computePersonalScores,
   computeDislikeScores,
   type IdentificationResult,
+  type StoryResult,
   type ValuationOutput,
 } from "./services/evaluate";
 import { DEFAULT_KEYWORDS } from "./configs/digests";
@@ -34,6 +35,7 @@ export interface ScanDeps {
   filterListings: (listings: Listing[]) => Promise<Listing[]>;
   runIdentification?: typeof defaultRunIdentification;
   runValuation?: typeof defaultRunValuation;
+  runStory?: typeof defaultRunStory;
 }
 
 // Distribute total listings across keywords using percentage weights.
@@ -68,7 +70,7 @@ function resolveKeywordCounts(
 
 function buildEvaluationFromParts(
   dbEvaluation: any,
-  story: Pick<IdentificationResult, 'hook' | 'mainStory' | 'styleGuide' | 'storyScore' | 'storyScoreReasoning'>,
+  story: StoryResult,
 ): Evaluation {
   return {
     isAuthentic: dbEvaluation.isAuthentic,
@@ -101,6 +103,7 @@ export async function runScan(
   const { prisma } = deps;
   const identify = deps.runIdentification ?? defaultRunIdentification;
   const valuate = deps.runValuation ?? defaultRunValuation;
+  const generateStory = deps.runStory ?? defaultRunStory;
 
   console.log(`Starting vintage scan on ${config.platform}...`);
 
@@ -257,7 +260,7 @@ export async function runScan(
         try {
           // Text-only story generation — no image fetching, no Google Search.
           // Uses facts already stored in dbEvaluation from Phase 1.
-          const story = await runStory(dbEvaluation, listing, user.language, user.promptAppend);
+          const story = await generateStory(dbEvaluation, listing, user.language, user.promptAppend);
           const baseScore = combinedScore(buildEvaluationFromParts(dbEvaluation, story));
 
           existingStory = await prisma.story.create({

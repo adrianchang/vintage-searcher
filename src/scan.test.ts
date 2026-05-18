@@ -2,15 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { runScan, type ScanDeps } from "./scan";
 import { filterListings } from "./services/filter";
 import type { Listing, Evaluation, ScanConfig } from "./types";
-import type { IdentificationResult, ValuationOutput } from "./services/evaluate";
-
-const STORY_DEFAULTS = {
-  hook: "A garment from another era.",
-  mainStory: "A brand with history. A piece with details. A moment in time. Real heads know this one.",
-  styleGuide: "Wear it with raw denim and a clean tee. Americana wardrobe essential.",
-  storyScore: 0.8,
-  storyScoreReasoning: "Strong narrative.",
-};
+import type { IdentificationResult, ValuationOutput, StoryResult } from "./services/evaluate";
 
 const MOCK_LISTINGS: Listing[] = [
   {
@@ -44,7 +36,6 @@ const MOCK_LISTINGS: Listing[] = [
 
 const MOCK_IDENTIFICATIONS: Record<string, IdentificationResult> = {
   "https://www.ebay.com/itm/test-001": {
-    ...STORY_DEFAULTS,
     isAuthentic: true,
     itemIdentification: "Pendleton Board Shirt, loop collar, wool, 1960s",
     itemIdentificationJapanese: "ペンドルトン ループカラー ボードシャツ 60s",
@@ -53,7 +44,6 @@ const MOCK_IDENTIFICATIONS: Record<string, IdentificationResult> = {
     redFlags: ["Condition not fully visible"],
   },
   "https://www.ebay.com/itm/test-002": {
-    ...STORY_DEFAULTS,
     isAuthentic: true,
     itemIdentification: "1950s rayon bowling shirt, chain stitch embroidery",
     itemIdentificationJapanese: "50年代 レーヨン ボウリングシャツ チェーンステッチ",
@@ -181,23 +171,23 @@ function makeDeps(overrides?: Partial<ScanDeps>): ScanDeps {
     prisma: mockPrisma as any,
     fetchListings: async (_platform, _count, _queries) => MOCK_LISTINGS,
     filterListings,
-    runIdentification: async (listing: Listing, lang?: string) => {
+    runIdentification: async (listing: Listing) => {
       const id = MOCK_IDENTIFICATIONS[listing.url];
       if (!id) throw new Error(`No mock identification for ${listing.url}`);
-      const prefix = lang === "zh" ? "[ZH] " : "";
-      return {
-        ...id,
-        hook: `${prefix}${id.hook}`,
-        mainStory: `${prefix}${id.mainStory}`,
-        styleGuide: `${prefix}${id.styleGuide}`,
-        storyScoreReasoning: `${prefix}${id.storyScoreReasoning}`,
-      };
+      return id;
     },
     runValuation: async (listing: Listing) => {
       const val = MOCK_VALUATIONS[listing.url];
       if (!val) throw new Error(`No mock valuation for ${listing.url}`);
       return val;
     },
+    runStory: async (): Promise<StoryResult> => ({
+      hook: "A garment from another era.",
+      mainStory: "A brand with history. A piece with details. Real heads know this one.",
+      styleGuide: "Wear it with raw denim and a clean tee.",
+      storyScore: 0.8,
+      storyScoreReasoning: "Strong narrative.",
+    }),
     ...overrides,
   };
 }
@@ -239,12 +229,14 @@ describe("runScan", () => {
   });
 
   it("should still evaluate low-storyScore items (ranking replaces threshold)", async () => {
-    const weakId: IdentificationResult = {
-      ...MOCK_IDENTIFICATIONS["https://www.ebay.com/itm/test-001"]!,
-      storyScore: 0.2,
-    };
     await runScan(config, makeDeps({
-      runIdentification: async () => weakId,
+      runStory: async (): Promise<StoryResult> => ({
+        hook: "Weak story item.",
+        mainStory: "Not much to say here.",
+        styleGuide: "Wear it however.",
+        storyScore: 0.2,
+        storyScoreReasoning: "Generic piece, no real story.",
+      }),
     }));
 
     expect(mockPrisma.evaluation.create.mock.calls.length).toBeGreaterThan(0);

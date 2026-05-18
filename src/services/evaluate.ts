@@ -36,27 +36,7 @@ Set estimatedEra to the decade or range (e.g. "1970s", "1960s-1970s").
 Put authenticating details (tags, hardware, stitching, red flags) in the redFlags array and let identificationConfidence reflect your certainty.
 Set identificationConfidence (0-1): how sure are you about WHAT this item is? High if tags/labels are clear and construction details match. Low if you're guessing based on limited photos.
 
-STEP 3 — TELL THE STORY
-Write the editorial story for this item. You are a veteran collector talking to someone who's in the hobby but might not know this specific brand or detail yet. You're genuinely excited about what makes this piece special — like showing a fellow skater a rare deck they haven't seen before and telling them exactly why it's worth getting hyped about. You assume they understand what good vintage is. You don't need to explain the hobby. But you do get to share the specific thing that makes this one interesting — the construction detail, the era marker, the reason collectors care. Short sentences. Present tense. No passive voice. No overselling.
-
-hook: One sentence. The headline — the general theme or spirit of the story. Why this piece is worth knowing about.
-Good: "A rare 1970s tag born from Levi's playful spirit."
-Good: "One of L.L. Bean's greatest masterpieces of the '90s."
-Bad: "The loop collar disappeared from Pendleton's lineup in 1963. This one has it."
-
-mainStory: 3–5 sentences. One flowing narrative — brand context and the arc (what killed it, revived it, or made it legendary), what the construction and label reveal, the cultural moment if genuinely relevant, who's buying it and why. Weave together what matters, skip what doesn't. Be honest if the piece is unremarkable. Use Google Search to get the details right.
-
-styleGuide: 2–3 sentences. How to actually wear this today. Fit, color palette, the cultural aesthetic it belongs to. Be specific and honest.
-
-storyScore (0–1): How strong is the story, cultural weight, and collector desirability of this item?
-- 0.85–1.0: Genuinely iconic. Hard authentication markers. Real collector demand with receipts.
-- 0.65–0.85: Solid piece. Known in the right circles, good story, real but not exceptional demand.
-- 0.45–0.65: Interesting but niche or light on provenance. Someone specific wants this, not many.
-- Below 0.45: Generic. The story isn't there.
-
-storyScoreReasoning: One sentence — what pushed the score where it landed.
-
-{storyLanguageInstruction}`;
+`;
 
 const VALUATION_PROMPT = `SPECIAL INSTRUCTION: Think silently if needed. THINK LONG AND HARD ABOUT THIS
 
@@ -171,12 +151,6 @@ export interface IdentificationResult {
   identificationConfidence: number;
   estimatedEra: string;
   redFlags: string[];
-  // Story fields
-  hook: string;
-  mainStory: string;
-  styleGuide: string;
-  storyScore: number;
-  storyScoreReasoning: string;
 }
 
 interface ValuationResult {
@@ -299,14 +273,11 @@ const STORY_LANGUAGE_INSTRUCTIONS: Record<string, string> = {
   zh: "Write ALL story fields (hook, mainStory, styleGuide, storyScoreReasoning) in Traditional Chinese (繁體中文). Keep the tone casual, cool, and insider — like a GQ editor texting a friend who collects vintage. Short punchy sentences.",
 };
 
-function buildIdentificationPrompt(listing: Listing, lang?: string, promptAppend?: string): string {
-  const langInstruction = STORY_LANGUAGE_INSTRUCTIONS[lang ?? ""] ?? "";
-  const append = [langInstruction, promptAppend].filter(Boolean).join("\n\n");
+function buildIdentificationPrompt(listing: Listing): string {
   return IDENTIFICATION_PROMPT
     .replace("{title}", listing.title)
     .replace("{price}", listing.price.toString())
-    .replace("{description}", listing.description)
-    .replace("{storyLanguageInstruction}", append);
+    .replace("{description}", listing.description);
 }
 
 const LANGUAGE_INSTRUCTIONS: Record<string, string> = {
@@ -486,16 +457,10 @@ const IDENTIFICATION_SCHEMA = {
     identificationConfidence: { type: "number" },
     estimatedEra: { type: "string" },
     redFlags: { type: "array", items: { type: "string" } },
-    hook: { type: "string" },
-    mainStory: { type: "string" },
-    styleGuide: { type: "string" },
-    storyScore: { type: "number" },
-    storyScoreReasoning: { type: "string" },
   },
   required: [
     "isAuthentic", "itemIdentification", "itemIdentificationJapanese",
     "identificationConfidence", "estimatedEra", "redFlags",
-    "hook", "mainStory", "styleGuide", "storyScore", "storyScoreReasoning",
   ],
 };
 
@@ -563,17 +528,17 @@ export async function runValuation(
   return { ...valuation, references };
 }
 
-export async function runIdentification(listing: Listing, lang?: string, promptAppend?: string): Promise<IdentificationResult> {
+export async function runIdentification(listing: Listing): Promise<IdentificationResult> {
   const timestamp = () => new Date().toISOString();
   const imageParts = await fetchListingImages(listing, timestamp);
-  const identificationPrompt = buildIdentificationPrompt(listing, lang, promptAppend);
+  const identificationPrompt = buildIdentificationPrompt(listing);
   const { result: identification } = await callGemini<IdentificationResult>({
     prompt: identificationPrompt,
     imageParts,
     schema: IDENTIFICATION_SCHEMA,
     tools: [{ googleSearch: {} }],
     timestamp,
-    phaseLabel: `Phase 1: Identification (${lang ?? "en"})`,
+    phaseLabel: "Phase 1: Identification",
   });
   console.log(`[${timestamp()}]   Identified as: ${identification.itemIdentification} (${(identification.identificationConfidence * 100).toFixed(0)}% confidence)`);
   return identification;
@@ -581,9 +546,13 @@ export async function runIdentification(listing: Listing, lang?: string, promptA
 
 // Story fields only — no image fetching, no Google Search.
 // Used for per-(language, configId) story variants after the base Evaluation is cached.
-export type StoryResult = Pick<IdentificationResult,
-  "hook" | "mainStory" | "styleGuide" | "storyScore" | "storyScoreReasoning"
->;
+export interface StoryResult {
+  hook: string;
+  mainStory: string;
+  styleGuide: string;
+  storyScore: number;
+  storyScoreReasoning: string;
+}
 
 const STORY_SCHEMA = {
   type: "object",
