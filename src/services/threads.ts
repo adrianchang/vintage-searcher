@@ -113,12 +113,13 @@ export async function postToThreads(
   console.log(`[THREADS] Main carousel post published: ${mainPostId}`);
 
   // One reply for the first story
-  await sleep(1000);
+  await sleep(5000);
   const replyContainerId = await createContainer({
     media_type: "TEXT",
     text: buildReplyText(items[0]),
     reply_to_id: mainPostId,
   });
+  await waitForContainer(replyContainerId);
   const replyId = await publishContainer(replyContainerId);
   console.log(`[THREADS] Reply published: ${replyId}`);
 
