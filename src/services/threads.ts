@@ -13,11 +13,6 @@ export interface ThreadsStoryItem {
   ebayUrl: string;
 }
 
-function firstSentence(text: string): string {
-  const match = text.match(/^.*?[.!?](?:\s|$)/);
-  return match ? match[0].trim() : text;
-}
-
 function buildReplyText(item: ThreadsStoryItem, index: number): string {
   const num = ["①", "②", "③"][index] ?? `${index + 1}.`;
   const era = item.estimatedEra ?? "Vintage";
@@ -29,7 +24,7 @@ function buildReplyText(item: ThreadsStoryItem, index: number): string {
     `${num} ${item.itemIdentification} · ${era}`,
     `"${item.hook}"`,
     price,
-    firstSentence(item.mainStory),
+    item.mainStory,
     item.ebayUrl,
   ].join("\n");
 }
@@ -88,33 +83,40 @@ export async function postToThreads(
     return;
   }
 
-  const mainText = `${title}\n\n${intro}\n\n#vintage #vintagefinds`;
+  const mainText = `${title}\n\n${intro}`;
 
-  // Main post
-  const mainContainerId = await createContainer({ media_type: "TEXT", text: mainText });
+  // Create one IMAGE child container per item for the carousel
+  const childIds: string[] = [];
+  for (const item of items) {
+    const childId = await createContainer({
+      media_type: "IMAGE",
+      image_url: item.imageUrl!,
+      is_carousel_item: "true",
+    });
+    await waitForContainer(childId);
+    childIds.push(childId);
+    console.log(`[THREADS] Carousel child ready: ${childId}`);
+  }
+
+  // Main post: carousel with all images + caption
+  const mainContainerId = await createContainer({
+    media_type: "CAROUSEL",
+    children: childIds.join(","),
+    text: mainText,
+    topic_tag: "古著",
+  });
+  await waitForContainer(mainContainerId);
   const mainPostId = await publishContainer(mainContainerId);
-  console.log(`[THREADS] Main post published: ${mainPostId}`);
+  console.log(`[THREADS] Main carousel post published: ${mainPostId}`);
 
-  // One reply per story
+  // One text reply per story
   for (let i = 0; i < items.length; i++) {
     await sleep(1000);
-    const item = items[i];
-    const text = buildReplyText(item, i);
-
-    const params: Record<string, string> = {
-      text,
+    const replyContainerId = await createContainer({
+      media_type: "TEXT",
+      text: buildReplyText(items[i], i),
       reply_to_id: mainPostId,
-    };
-
-    if (item.imageUrl) {
-      params.media_type = "IMAGE";
-      params.image_url = item.imageUrl;
-    } else {
-      params.media_type = "TEXT";
-    }
-
-    const replyContainerId = await createContainer(params);
-    if (item.imageUrl) await waitForContainer(replyContainerId);
+    });
     const replyId = await publishContainer(replyContainerId);
     console.log(`[THREADS] Reply ${i + 1} published: ${replyId}`);
   }
