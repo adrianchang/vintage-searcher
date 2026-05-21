@@ -13,33 +13,19 @@ export interface ThreadsStoryItem {
   ebayUrl: string;
 }
 
-const THREADS_CHAR_LIMIT = 500;
-
-function truncateStory(story: string, available: number): string {
-  if (story.length <= available) return story;
-  const cut = story.slice(0, available);
-  const lastSentence = cut.search(/[.!?][^.!?]*$/);
-  return lastSentence > 0 ? cut.slice(0, lastSentence + 1) : cut.trimEnd() + "…";
-}
-
-function buildReplyText(item: ThreadsStoryItem, index: number): string {
-  const num = ["①", "②", "③"][index] ?? `${index + 1}.`;
+function buildReplyText(item: ThreadsStoryItem): string {
   const era = item.estimatedEra ?? "Vintage";
   const price = item.estimatedValue
     ? `Listed $${item.currentPrice.toFixed(0)} → Est. $${item.estimatedValue.toFixed(0)}`
     : `Listed $${item.currentPrice.toFixed(0)}`;
 
-  const header = [
-    `${num} ${item.itemIdentification} · ${era}`,
+  return [
+    `${item.itemIdentification} · ${era}`,
     `"${item.hook}"`,
     price,
+    item.mainStory,
     item.ebayUrl,
   ].join("\n");
-
-  const available = THREADS_CHAR_LIMIT - header.length - 1; // -1 for the \n separator
-  return available > 0
-    ? `${header}\n${truncateStory(item.mainStory, available)}`
-    : header;
 }
 
 async function createContainer(params: Record<string, string>): Promise<string> {
@@ -122,17 +108,15 @@ export async function postToThreads(
   const mainPostId = await publishContainer(mainContainerId);
   console.log(`[THREADS] Main carousel post published: ${mainPostId}`);
 
-  // One text reply per story
-  for (let i = 0; i < items.length; i++) {
-    await sleep(1000);
-    const replyContainerId = await createContainer({
-      media_type: "TEXT",
-      text: buildReplyText(items[i], i),
-      reply_to_id: mainPostId,
-    });
-    const replyId = await publishContainer(replyContainerId);
-    console.log(`[THREADS] Reply ${i + 1} published: ${replyId}`);
-  }
+  // One reply for the first story
+  await sleep(1000);
+  const replyContainerId = await createContainer({
+    media_type: "TEXT",
+    text: buildReplyText(items[0]),
+    reply_to_id: mainPostId,
+  });
+  const replyId = await publishContainer(replyContainerId);
+  console.log(`[THREADS] Reply published: ${replyId}`);
 
-  console.log(`[THREADS] Thread posted with ${items.length} replies`);
+  console.log(`[THREADS] Thread posted`);
 }
