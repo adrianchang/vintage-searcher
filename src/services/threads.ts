@@ -31,9 +31,13 @@ function buildReplyText(item: ThreadsStoryItem): string {
 async function createContainer(params: Record<string, string>): Promise<string> {
   const url = new URL(`${THREADS_API}/${THREADS_USER_ID}/threads`);
   url.searchParams.set("access_token", THREADS_ACCESS_TOKEN);
-  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
 
-  const res = await fetch(url.toString(), { method: "POST" });
+  const body = new URLSearchParams(params);
+  const res = await fetch(url.toString(), {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: body.toString(),
+  });
   const json = await res.json() as { id?: string; error?: { message: string } };
   if (!res.ok || !json.id) throw new Error(`Threads container error: ${json.error?.message ?? res.status}`);
   return json.id;
