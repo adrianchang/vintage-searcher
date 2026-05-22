@@ -19,13 +19,19 @@ function buildReplyText(item: ThreadsStoryItem): string {
     ? `Listed $${item.currentPrice.toFixed(0)} → Est. $${item.estimatedValue.toFixed(0)}`
     : `Listed $${item.currentPrice.toFixed(0)}`;
 
-  return [
+  const header = [
     `${item.itemIdentification} · ${era}`,
     `"${item.hook}"`,
     price,
-    item.mainStory,
     item.ebayUrl,
   ].join("\n");
+
+  const available = 500 - header.length - 1; // -1 for the \n before story
+  const story = item.mainStory.length <= available
+    ? item.mainStory
+    : item.mainStory.slice(0, available - 3) + "...";
+
+  return `${header}\n${story}`;
 }
 
 async function createContainer(params: Record<string, string>): Promise<string> {
