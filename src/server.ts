@@ -336,7 +336,7 @@ app.post("/threads", async (req, res) => {
 
     const deliveries = await prisma.storyDelivery.findMany({
       where: { userId: user.id },
-      orderBy: { sentAt: "desc" },
+      orderBy: { sentAt: "asc" },
       take: 3,
     });
 
