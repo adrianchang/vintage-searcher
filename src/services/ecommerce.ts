@@ -42,6 +42,7 @@ async function fetchEbay(limit: number, queries: SearchQueryInput[]): Promise<Li
 
   console.log(`Fetching up to ${limit} listings from eBay...`);
 
+  const toFullRes = (url: string) => url.replace(/s-l\d+\.jpg/, "s-l1600.jpg");
   const listings: Listing[] = [];
 
   for (const { query, count } of queries) {
@@ -64,8 +65,6 @@ async function fetchEbay(limit: number, queries: SearchQueryInput[]): Promise<Li
         for (const item of response.itemSummaries) {
           if (listings.length >= limit) break;
 
-          // Collect all image URLs — upgrade eBay thumbnails to full resolution
-          const toFullRes = (url: string) => url.replace(/s-l\d+\.jpg/, "s-l1600.jpg");
           const imageUrls: string[] = [];
           if (item.image?.imageUrl) {
             imageUrls.push(toFullRes(item.image.imageUrl));
@@ -108,6 +107,31 @@ async function fetchEbay(limit: number, queries: SearchQueryInput[]): Promise<Li
   }
 
   console.log(`Fetched ${listings.length} total listings from eBay`);
+
+  // Enrich all listings in parallel with full image sets from getItem
+  await Promise.all(
+    listings.map(async (listing) => {
+      const itemId = listing.rawData.itemId;
+      if (!itemId) return;
+      try {
+        const item = await eBay.buy.browse.getItem(`v1|${itemId}|0`);
+        const imageUrls: string[] = [];
+        if (item.image?.imageUrl) imageUrls.push(toFullRes(item.image.imageUrl));
+        if (item.additionalImages) {
+          for (const img of item.additionalImages) {
+            if (img.imageUrl) imageUrls.push(toFullRes(img.imageUrl));
+          }
+        }
+        if (imageUrls.length > listing.imageUrls.length) {
+          listing.imageUrls = imageUrls;
+        }
+      } catch {
+        // keep search images on failure
+      }
+    }),
+  );
+
+  console.log(`Enriched image sets for ${listings.length} listings`);
   return listings;
 }
 
