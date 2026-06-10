@@ -110,11 +110,12 @@ type ImagePart = { inlineData: { data: string; mimeType: string } };
 async function fetchListingImages(
   listing: Listing,
   timestamp: () => string,
+  maxImages: number,
 ): Promise<ImagePart[]> {
-  console.log(`[${timestamp()}]   Fetching ${Math.min(listing.imageUrls.length, 4)} images...`);
+  console.log(`[${timestamp()}]   Fetching ${Math.min(listing.imageUrls.length, maxImages)} images...`);
   const imageParts: ImagePart[] = [];
 
-  for (const url of listing.imageUrls.slice(0, 4)) {
+  for (const url of listing.imageUrls.slice(0, maxImages)) {
     try {
       const response = await fetch(url);
       if (!response.ok) {
@@ -530,7 +531,7 @@ export async function runValuation(
 
 export async function runIdentification(listing: Listing): Promise<IdentificationResult> {
   const timestamp = () => new Date().toISOString();
-  const imageParts = await fetchListingImages(listing, timestamp);
+  const imageParts = await fetchListingImages(listing, timestamp, 8);
   const identificationPrompt = buildIdentificationPrompt(listing);
   const { result: identification } = await callGemini<IdentificationResult>({
     prompt: identificationPrompt,
@@ -544,7 +545,6 @@ export async function runIdentification(listing: Listing): Promise<Identificatio
   return identification;
 }
 
-// Story fields only — no image fetching, no Google Search.
 // Used for per-(language, configId) story variants after the base Evaluation is cached.
 export interface StoryResult {
   hook: string;
@@ -601,6 +601,8 @@ ITEM TO WRITE ABOUT:
 - Listed Price: ${"{currentPrice}"}
 - Identification Confidence: {identificationConfidence}%
 - Authentication Notes: {redFlags}
+
+Photos of the actual item are attached. Use them to ground what you write — the real color, cut, and condition — especially in the styleGuide. Never contradict what the photos show.
 
 Use Google Search to verify brand history, collector market details, and any facts you're not certain about before writing.
 
@@ -660,7 +662,7 @@ export async function runStory(
   promptAppend?: string,
 ): Promise<StoryResult> {
   const timestamp = () => new Date().toISOString();
-  const imageParts = await fetchListingImages(listing, timestamp);
+  const imageParts = await fetchListingImages(listing, timestamp, 2);
   const prompt = buildStoryPrompt(dbEvaluation, lang, promptAppend);
   const { result } = await callGemini<StoryResult>({
     prompt,

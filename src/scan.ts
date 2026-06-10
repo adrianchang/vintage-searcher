@@ -258,8 +258,6 @@ export async function runScan(
 
       if (!existingStory) {
         try {
-          // Text-only story generation — no image fetching, no Google Search.
-          // Uses facts already stored in dbEvaluation from Phase 1.
           const story = await generateStory(dbEvaluation, listing, user.language, user.promptAppend);
           const baseScore = combinedScore(buildEvaluationFromParts(dbEvaluation, story));
 
