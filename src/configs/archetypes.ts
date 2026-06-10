@@ -9,7 +9,8 @@ export type ArchetypeId =
   | "biker"
   | "reggae"
   | "british-mod"
-  | "sportswear";
+  | "sportswear"
+  | "rockabilly";
 
 export const ARCHETYPE_IDS: readonly ArchetypeId[] = [
   "americana",
@@ -21,6 +22,7 @@ export const ARCHETYPE_IDS: readonly ArchetypeId[] = [
   "reggae",
   "british-mod",
   "sportswear",
+  "rockabilly",
 ];
 
 export interface Archetype {
@@ -198,6 +200,27 @@ In the styleGuide field, speak to the sharp, cool, understated nature of this ae
 
 In the styleGuide field, speak to the specific mod aesthetic — slim and precise, built around movement and subcultural clarity. Who wears this in a way that feels lived-in rather than costume?`,
     scoringContext: `The user collects British mod clothing — Harrington jackets (especially Baracuta G9), vintage Fred Perry polos, Ben Sherman shirts, and slim 1960s British tailoring. They are precise about provenance: British manufacture marks matter, as does the specific label evolution of Fred Perry and Baracuta across eras. They value items connected to the original 1960s mod scene and the late 1970s/early 1980s mod revival. Score highly for authenticated British-made pieces with clear era markers; score low for non-British manufacture, later reproductions, or items that gesture at mod style without genuine subcultural roots.`,
+  },
+
+  rockabilly: {
+    id: "rockabilly",
+    label: "Rockabilly / 1950s",
+    keywords: [
+      { query: "vintage bowling shirt", percentage: 0.30 },
+      { query: "vintage 50s jacket", percentage: 0.22 },
+      { query: "vintage gabardine shirt", percentage: 0.20 },
+      { query: "vintage chain stitch shirt", percentage: 0.15 },
+      { query: "vintage rayon shirt", percentage: 0.13 },
+    ],
+    promptContext: `This item will be shown to a collector focused on 1950s rockabilly and greaser style. Pay particular attention to:
+- Chain stitch embroidery on bowling shirts: motif quality, thread color contrast, and the specific brands (Rockmount, Champ, California Ranchwear, H Bar C)
+- Gabardine fabric: the tight twill weave, two-tone color blocking, contrast piping, and western-cut styling typical of 1950s leisure and stage wear
+- Rayon construction: the weight, drape, and print patterns of authentic 1950s rayon shirts vs. later reproductions
+- 1950s denim markers: Levi's, Lee, and Wrangler in period-correct cuts — watch for donut buttons, hidden rivets, and chain stitch hems
+- Greaser silhouette cues: cuffed jeans, motorcycle-influenced details, loop collars, and two-tone styling
+
+In the styleGuide field, speak to how this fits into the rockabilly/greaser aesthetic today — the fine line between authentic collector wear and costume.`,
+    scoringContext: `The user collects 1950s rockabilly and greaser clothing. They prize chain stitch bowling shirts (especially Rockmount, Champ, California Ranchwear), gabardine western-cut shirts with contrast piping, and authentic 1950s denim in period-correct cuts. Construction details matter: chain stitch embroidery, gabardine twill, rayon fabric, loop collars. They can tell a genuine 50s piece from a repro. Score highly for pieces with strong 1950s construction markers and recognizable rockabilly provenance; score low for anything that reads as costume or lacks clear era authenticity.`,
   },
 
   sportswear: {
