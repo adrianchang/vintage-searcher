@@ -274,3 +274,64 @@ describe("runScan", () => {
     expect(JSON.parse(firstEvalData.soldListings)).toBeInstanceOf(Array);
   });
 });
+
+describe("runScan size gate", () => {
+  const sizedUser = {
+    ...TEST_USERS[0],
+    topSize: "M",
+    waistSize: null,
+    pitToPitInches: null,
+  };
+
+  // test-001 fits an M; test-002 is confidently measured way too big
+  const identifyWithSizing = async (listing: Listing): Promise<IdentificationResult> => {
+    const id = MOCK_IDENTIFICATIONS[listing.url];
+    if (!id) throw new Error(`No mock identification for ${listing.url}`);
+    const sizing = listing.url.endsWith("test-001")
+      ? { garmentType: "top", labeledSize: "M", pitToPitInches: 21.5, waistInches: null, evidenceType: "tape_photo", evidenceQuote: "tape across chest reads 21.5" }
+      : { garmentType: "top", labeledSize: "XXL", pitToPitInches: 27, waistInches: null, evidenceType: "tape_photo", evidenceQuote: "tape across chest reads 27" };
+    return { ...id, sizing };
+  };
+
+  it("persists normalized size fields on the evaluation", async () => {
+    mockPrisma.user.findMany.mockResolvedValue([sizedUser] as any);
+    await runScan(config, makeDeps({ runIdentification: identifyWithSizing }));
+
+    const evalData = mockPrisma._store.evaluations["https://www.ebay.com/itm/test-001"];
+    expect(evalData.garmentType).toBe("top");
+    expect(evalData.pitToPitInches).toBe(21.5);
+    expect(evalData.sizeEvidence).toBe("tape_photo");
+    expect(evalData.sizeConfidence).toBe(0.7);
+  });
+
+  it("drops confident size mismatches from the digest", async () => {
+    mockPrisma.user.findMany.mockResolvedValue([sizedUser] as any);
+    await runScan(config, makeDeps({ runIdentification: identifyWithSizing }));
+
+    const deliveredUrls = mockPrisma.storyDelivery.create.mock.calls.map(c => c[0].data.url);
+    expect(deliveredUrls).toContain("https://www.ebay.com/itm/test-001");
+    expect(deliveredUrls).not.toContain("https://www.ebay.com/itm/test-002");
+  });
+
+  it("keeps unknown-size items (penalty, not exclusion)", async () => {
+    mockPrisma.user.findMany.mockResolvedValue([sizedUser] as any);
+    await runScan(config, makeDeps({
+      runIdentification: async (listing) => ({
+        ...MOCK_IDENTIFICATIONS[listing.url]!,
+        sizing: { garmentType: "top", labeledSize: null, evidenceType: "none" },
+      }),
+    }));
+
+    const deliveredUrls = mockPrisma.storyDelivery.create.mock.calls.map(c => c[0].data.url);
+    expect(deliveredUrls).toContain("https://www.ebay.com/itm/test-001");
+    expect(deliveredUrls).toContain("https://www.ebay.com/itm/test-002");
+  });
+
+  it("leaves users without a size profile untouched", async () => {
+    await runScan(config, makeDeps({ runIdentification: identifyWithSizing }));
+
+    const deliveredUrls = mockPrisma.storyDelivery.create.mock.calls.map(c => c[0].data.url);
+    // Both users (no size profile) get both items, oversized or not
+    expect(deliveredUrls.filter(u => u.endsWith("test-002")).length).toBe(2);
+  });
+});

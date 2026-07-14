@@ -2,6 +2,7 @@ import { createHmac } from "crypto";
 import { Resend } from "resend";
 import type { Listing, Evaluation } from "../types";
 import { combinedScore, priceScore } from "./score";
+import { formatGarmentSize, type SizeFit } from "./size";
 
 const FROM_ADDRESS = process.env.EMAIL_FROM || "finds@vintagefinds.email";
 const RESEND_API_KEY = process.env.RESEND_API_KEY || "";
@@ -17,6 +18,7 @@ export interface DigestItem {
   evaluation: Evaluation;
   score: number;
   storyId: string;
+  sizeFit?: SizeFit; // set only when the user has a size profile
 }
 
 function buildVoteToken(email: string, storyId: string, direction: string): string {
@@ -49,6 +51,7 @@ const LABELS: Record<string, Record<string, string>> = {
     storyScore: "Story score",
     combined: "Combined",
     viewOnEbay: "View on eBay →",
+    sizeUnverified: "Size unverified — check measurements before buying",
     footer: "You're receiving this because you signed up for daily vintage finds.<br>Prices and availability change — always verify before purchasing.",
   },
   zh: {
@@ -67,6 +70,7 @@ const LABELS: Record<string, Record<string, string>> = {
     storyScore: "故事分",
     combined: "綜合分",
     viewOnEbay: "前往 eBay 查看 →",
+    sizeUnverified: "尺寸未確認 — 購買前請確認實際尺寸",
     footer: "你收到這封信，因為你訂閱了每日古著精選。<br>價格與庫存隨時變動，購買前請自行確認。",
   },
 };
@@ -196,6 +200,18 @@ function buildItemHtml(item: DigestItem, index: number, total: number, L: Record
   const isUndervalued = evaluation.margin != null && evaluation.estimatedValue != null && pScore > 0.2;
   const isLastItem = index === total - 1;
 
+  const sizeSummary = formatGarmentSize({
+    labeledSize: evaluation.labeledSize ?? null,
+    pitToPitInches: evaluation.pitToPitInches ?? null,
+    waistInches: evaluation.waistInches ?? null,
+  });
+  const sizeLineText = item.sizeFit === "unknown"
+    ? (sizeSummary ? `${sizeSummary} · ${L.sizeUnverified}` : L.sizeUnverified)
+    : sizeSummary;
+  const sizeHtml = sizeLineText
+    ? `<p style="margin:12px 0 0;font-size:12px;color:#888;font-family:Helvetica,Arial,sans-serif;">📏 ${escapeHtml(sizeLineText)}</p>`
+    : "";
+
   const redFlagsHtml = evaluation.redFlags.length > 0
     ? `<tr>
         <td style="padding-top:16px;">
@@ -278,6 +294,7 @@ function buildItemHtml(item: DigestItem, index: number, total: number, L: Record
 
       <!-- Price block -->
       ${priceHtml}
+      ${sizeHtml}
 
       <!-- Story -->
       <h3 style="margin:24px 0 8px;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#888;font-family:Helvetica,Arial,sans-serif;">${L.theStory}</h3>

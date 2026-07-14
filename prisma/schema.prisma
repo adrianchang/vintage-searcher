@@ -17,6 +17,12 @@ model User {
   googleId  String?  @unique
   email     String?  @unique
   language  String   @default("en")
+
+  // Size profile (men's/unisex) — all optional; null means no size matching
+  topSize        String? // "XS".."XXL"
+  waistSize      Int?    // tag waist, inches
+  pitToPitInches Float?  // optional refinement, overrides topSize
+
   createdAt DateTime @default(now())
 
   keywords   UserKeyword[]
@@ -56,6 +62,14 @@ model Evaluation {
   soldListings   String   @default("[]")  // JSON array
   priceScore     Float?
   imageUrl       String?
+
+  // Size extraction (null on rows evaluated before size matching existed)
+  garmentType    String? // top | outerwear | bottom | dress | footwear | accessory | other
+  labeledSize    String?
+  pitToPitInches Float?  // flat, inches
+  waistInches    Float?  // tag waist, inches
+  sizeConfidence Float?
+  sizeEvidence   String? // tape_photo | description_text | seller_specifics | tag_only | none
 
   isOpportunity  Boolean
   createdAt      DateTime @default(now())

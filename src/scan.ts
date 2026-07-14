@@ -12,6 +12,13 @@ import {
   type StoryResult,
   type ValuationOutput,
 } from "./services/evaluate";
+import {
+  normalizeSizeExtraction,
+  computeSizeFit,
+  hasSizeProfile,
+  SIZE_UNKNOWN_PENALTY,
+  type UserSizeProfile,
+} from "./services/size";
 import { DEFAULT_KEYWORDS } from "./configs/digests";
 import {
   buildArchetypeConfigId,
@@ -86,6 +93,11 @@ function buildEvaluationFromParts(
     references: JSON.parse(dbEvaluation.references),
     soldListings: JSON.parse(dbEvaluation.soldListings),
     priceScore: dbEvaluation.priceScore ?? undefined,
+    garmentType: dbEvaluation.garmentType ?? null,
+    labeledSize: dbEvaluation.labeledSize ?? null,
+    pitToPitInches: dbEvaluation.pitToPitInches ?? null,
+    waistInches: dbEvaluation.waistInches ?? null,
+    sizeConfidence: dbEvaluation.sizeConfidence ?? null,
     hook: story.hook,
     mainStory: story.mainStory,
     styleGuide: story.styleGuide,
@@ -141,6 +153,11 @@ export async function runScan(
       configId: buildArchetypeConfigId(archetypeIds),
       promptAppend: buildArchetypePromptAppend(archetypeIds),
       scoringContext: buildArchetypeScoringContext(archetypeIds),
+      sizeProfile: {
+        topSize: user.topSize,
+        waistSize: user.waistSize,
+        pitToPitInches: user.pitToPitInches,
+      } satisfies UserSizeProfile,
     };
   });
 
@@ -217,6 +234,12 @@ export async function runScan(
 
             evalCount++;
             const hasSoldData = (valuation.soldListings?.length ?? 0) > 0;
+            // Validate the raw sizing block: unit coercion, hallucination
+            // cross-check against the listing text, confidence derivation
+            const size = normalizeSizeExtraction(
+              identification.sizing,
+              `${listing.title} ${listing.description}`,
+            );
 
             dbEvaluation = await prisma.evaluation.create({
               data: {
@@ -235,6 +258,12 @@ export async function runScan(
                 soldListings: JSON.stringify(valuation.soldListings ?? []),
                 priceScore: hasSoldData ? (valuation.priceScore ?? 0) : 0,
                 imageUrl: listing.imageUrls[0] ?? null,
+                garmentType: size.garmentType,
+                labeledSize: size.labeledSize,
+                pitToPitInches: size.pitToPitInches,
+                waistInches: size.waistInches,
+                sizeConfidence: size.sizeConfidence,
+                sizeEvidence: size.sizeEvidence,
                 isOpportunity: true,
               },
             });
@@ -290,7 +319,36 @@ export async function runScan(
       }
     }
 
-    if (goodFinds.length === 0) {
+    // Size gate: hard-exclude confirmed mismatches only; unknown sizes get a
+    // score penalty further down (never deleted — story is everything).
+    let sizedFinds = goodFinds;
+    if (hasSizeProfile(user.sizeProfile)) {
+      sizedFinds = [];
+      for (const find of goodFinds) {
+        const e = find.evaluation;
+        const { fit, detail } = computeSizeFit(
+          {
+            garmentType: e.garmentType ?? null,
+            labeledSize: e.labeledSize ?? null,
+            pitToPitInches: e.pitToPitInches ?? null,
+            waistInches: e.waistInches ?? null,
+            sizeConfidence: e.sizeConfidence ?? null,
+            estimatedEra: e.estimatedEra,
+          },
+          user.sizeProfile,
+        );
+        if (fit === "mismatch") {
+          console.log(`  Size mismatch (dropped): ${e.itemIdentification} — ${detail}`);
+          continue;
+        }
+        sizedFinds.push({ ...find, sizeFit: fit });
+      }
+      if (sizedFinds.length < goodFinds.length) {
+        console.log(`  Size gate: ${sizedFinds.length}/${goodFinds.length} kept`);
+      }
+    }
+
+    if (sizedFinds.length === 0) {
       console.log(`  No candidates`);
       continue;
     }
@@ -304,11 +362,11 @@ export async function runScan(
       .filter(v => v.direction === "down").slice(0, 20)
       .map(v => ({ itemIdentification: v.story.hook, styleGuide: v.story.styleGuide, hook: v.story.hook, mainStory: v.story.mainStory }));
 
-    let scoredFinds = goodFinds;
+    let scoredFinds = sizedFinds;
     const hasStylingSignal = likedStories.length > 0 || dislikedStories.length > 0 || !!user.scoringContext;
     if (hasStylingSignal) {
       console.log(`  Personalizing: ${likedStories.length} liked, ${dislikedStories.length} disliked${user.scoringContext ? " + archetype profile" : ""}`);
-      const candidates = goodFinds.map(f => ({
+      const candidates = sizedFinds.map(f => ({
         itemIdentification: f.evaluation.itemIdentification,
         styleGuide: f.evaluation.styleGuide,
         hook: f.evaluation.hook,
@@ -318,15 +376,22 @@ export async function runScan(
         computePersonalScores(candidates, likedStories, user.scoringContext),
         computeDislikeScores(candidates, dislikedStories),
       ]);
-      scoredFinds = goodFinds.map((find, i) => ({
+      scoredFinds = sizedFinds.map((find, i) => ({
         ...find,
         score: combinedScore(find.evaluation, personalScores[i], dislikeScores[i]),
       }));
     }
 
+    // Items whose size couldn't be determined rank lower, same pattern as the era penalty
+    scoredFinds = scoredFinds.map(find =>
+      find.sizeFit === "unknown"
+        ? { ...find, score: find.score * SIZE_UNKNOWN_PENALTY }
+        : find,
+    );
+
     const TOP_N = 3;
     const toSend = [...scoredFinds].sort((a, b) => b.score - a.score).slice(0, TOP_N);
-    console.log(`  Sending top ${toSend.length} of ${goodFinds.length} candidates`);
+    console.log(`  Sending top ${toSend.length} of ${sizedFinds.length} candidates`);
     await sendDigestEmail(toSend, user.email, user.language);
 
     // Record deliveries so these listings are never resent to this user

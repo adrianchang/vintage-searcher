@@ -1,5 +1,6 @@
 import { GoogleGenAI, type GenerateContentResponse } from "@google/genai";
 import type { Listing, Evaluation } from "../types";
+import type { RawSizeExtraction } from "./size";
 
 
 const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "not-set" });
@@ -9,6 +10,7 @@ const IDENTIFICATION_PROMPT = `You are a veteran vintage clothing collector and 
 Listing Title: {title}
 Listed Price: ${"{price}"}
 Description: {description}
+Seller Item Specifics: {itemSpecifics}
 
 You approach this the way an experienced collector would at a flea market — photos first, description second.
 
@@ -35,6 +37,15 @@ Also provide itemIdentificationJapanese: the Japanese equivalent search query fo
 Set estimatedEra to the decade or range (e.g. "1970s", "1960s-1970s").
 Put authenticating details (tags, hardware, stitching, red flags) in the redFlags array and let identificationConfidence reflect your certainty.
 Set identificationConfidence (0-1): how sure are you about WHAT this item is? High if tags/labels are clear and construction details match. Low if you're guessing based on limited photos.
+
+STEP 3 — SIZING
+Fill the sizing object. Report only what you can actually see or read — never estimate a measurement from a label size.
+- garmentType: one of "top" (shirts, knits, sweaters), "outerwear" (jackets, coats), "bottom" (pants, jeans, shorts), "dress", "footwear", "accessory", "other".
+- labeledSize: the size printed on the tag or stated by the seller (e.g. "L", "32x30", "42R"). null if none.
+- pitToPitInches: the garment measured FLAT armpit-to-armpit, in inches. Convert cm to inches (divide by 2.54). If a full chest circumference is given, halve it. Look for: a tape measure laid across the chest in a photo, "pit to pit"/"p2p"/"chest" measurements in the description, or a numeric chest measurement in the item specifics. null if no real measurement exists.
+- waistInches: the waist as a tag-style circumference in inches (a flat-measured waist doubled; cm divided by 2.54). Same sources as above. null if no real measurement exists.
+- evidenceType: where the STRONGEST measurement came from — "tape_photo" (read off a tape measure in a photo), "description_text" (stated in the listing text), "seller_specifics" (structured item specifics), "tag_only" (only a label size is known — pitToPitInches and waistInches MUST be null), or "none".
+- evidenceQuote: the exact text you read the measurement from (description snippet or specifics line), or a short note of what the tape photo showed. null if none.
 
 `;
 
@@ -152,6 +163,7 @@ export interface IdentificationResult {
   identificationConfidence: number;
   estimatedEra: string;
   redFlags: string[];
+  sizing?: RawSizeExtraction;
 }
 
 interface ValuationResult {
@@ -274,11 +286,18 @@ const STORY_LANGUAGE_INSTRUCTIONS: Record<string, string> = {
   zh: "Write ALL story fields (hook, mainStory, styleGuide, storyScoreReasoning) in Traditional Chinese (繁體中文). Keep the tone casual, cool, and insider — like a GQ editor texting a friend who collects vintage. Short punchy sentences.",
 };
 
+function formatItemSpecifics(listing: Listing): string {
+  const aspects = listing.rawData.aspects as { name: string; value: string }[] | undefined;
+  if (!aspects || aspects.length === 0) return "(none provided)";
+  return aspects.map((a) => `${a.name}: ${a.value}`).join(" | ");
+}
+
 function buildIdentificationPrompt(listing: Listing): string {
   return IDENTIFICATION_PROMPT
     .replace("{title}", listing.title)
     .replace("{price}", listing.price.toString())
-    .replace("{description}", listing.description);
+    .replace("{description}", listing.description)
+    .replace("{itemSpecifics}", formatItemSpecifics(listing));
 }
 
 const LANGUAGE_INSTRUCTIONS: Record<string, string> = {
@@ -458,10 +477,29 @@ const IDENTIFICATION_SCHEMA = {
     identificationConfidence: { type: "number" },
     estimatedEra: { type: "string" },
     redFlags: { type: "array", items: { type: "string" } },
+    sizing: {
+      type: "object",
+      properties: {
+        garmentType: {
+          type: "string",
+          enum: ["top", "outerwear", "bottom", "dress", "footwear", "accessory", "other"],
+        },
+        // Measurements/labels are optional — omit when unknown
+        labeledSize: { type: "string" },
+        pitToPitInches: { type: "number" },
+        waistInches: { type: "number" },
+        evidenceType: {
+          type: "string",
+          enum: ["tape_photo", "description_text", "seller_specifics", "tag_only", "none"],
+        },
+        evidenceQuote: { type: "string" },
+      },
+      required: ["garmentType", "evidenceType"],
+    },
   },
   required: [
     "isAuthentic", "itemIdentification", "itemIdentificationJapanese",
-    "identificationConfidence", "estimatedEra", "redFlags",
+    "identificationConfidence", "estimatedEra", "redFlags", "sizing",
   ],
 };
 
@@ -531,7 +569,8 @@ export async function runValuation(
 
 export async function runIdentification(listing: Listing): Promise<IdentificationResult> {
   const timestamp = () => new Date().toISOString();
-  const imageParts = await fetchListingImages(listing, timestamp, 8);
+  // 12 images (up from 8): tape-measure shots usually come late in the set
+  const imageParts = await fetchListingImages(listing, timestamp, 12);
   const identificationPrompt = buildIdentificationPrompt(listing);
   const { result: identification } = await callGemini<IdentificationResult>({
     prompt: identificationPrompt,

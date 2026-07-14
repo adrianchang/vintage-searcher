@@ -30,6 +30,12 @@ export interface Evaluation {
   storyScoreReasoning: string;
   styleGuide: string;
   priceScore?: number;
+  // Size extraction (optional — null/absent on evaluations predating size matching)
+  garmentType?: string | null;
+  labeledSize?: string | null;
+  pitToPitInches?: number | null;
+  waistInches?: number | null;
+  sizeConfidence?: number | null;
 }
 
 // Config for the scanner

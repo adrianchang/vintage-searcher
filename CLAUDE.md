@@ -45,10 +45,10 @@ The core pipeline, triggered via `POST /scan` (server, maxListings 20; 10 in tes
 
 1. **Fetch** — `ecommerce.ts` searches eBay via Browse API (price $0–500, condition New→Good, sorted newest first), then enriches each listing with full image sets via `getItem` (parallel). Image URLs are upscaled to `s-l1600.jpg`; listing URLs normalized to `https://www.ebay.com/itm/{id}`.
 2. **Filter** — `filter.ts` drops obvious junk (skip keywords like "reproduction"/"lot of", min price $10, min 2 images, seller-defined variation listings)
-3. **Identify** — `evaluate.ts:runIdentification` sends up to 8 images + listing data to Gemini with the `googleSearch` tool (Phase 1). Produces English + Japanese search labels. Cached in `Evaluation` table by URL — runs once per listing ever.
+3. **Identify** — `evaluate.ts:runIdentification` sends up to 12 images + listing data (including seller item specifics) to Gemini with the `googleSearch` tool (Phase 1). Produces English + Japanese search labels plus a `sizing` block (garment type, labeled size, pit-to-pit/waist measurements with evidence type + quote). Cached in `Evaluation` table by URL — runs once per listing ever.
 4. **Value** — `evaluate.ts:runValuation` runs 4 parallel Vertex AI Search (searchLite) queries for comps — English sold/active + Japanese sold (落札)/active — then Gemini visits the URLs via the `urlContext` tool to extract real prices (JPY converted at ~150/USD). Also cached.
 5. **Story** — `evaluate.ts:runStory` generates editorial hook/mainStory/styleGuide per (language, archetypeConfigId). Sends the first 2 listing images (visual grounding for styleGuide) and uses the `googleSearch` tool, with three reference stories in the prompt setting tone/length. Cached in `Story` table.
-6. **Score** — `score.ts:combinedScore` weights price + story scores. Personalized via vote history and archetype profile.
+6. **Score** — `score.ts:combinedScore` weights price + story scores. Personalized via vote history and archetype profile. If the user has a size profile, a size gate runs first: confirmed size mismatches are dropped, unknown sizes get a ×0.85 score penalty (see Size Matching below).
 7. **Email** — top 3 per user sent via Resend (`email.ts`); deliveries recorded in `StoryDelivery` so items are never resent.
 
 Keyword weights are distributed across `maxListings` using the largest-remainder method (`scan.ts:resolveKeywordCounts`). **Gotcha:** if `maxListings` is small relative to the number of active queries, low-weight queries silently get count=0 and are never searched. Safe at current settings (20 listings / max 15 queries) — add a floor of 1 if you change either.
@@ -68,6 +68,16 @@ Personalization scoring (`computePersonalScores` / `computeDislikeScores`) batch
 - Personalized (when votes or archetype profile exist): `personal × 0.4 + story × 0.3 + price × 0.3`
 - Dislike similarity applied as a multiplier penalty: `score × (1 - dislikeSimilarity)`
 - Era penalty: items from 2010s or later get ×0.7
+- Size-unknown penalty (only when the user has a size profile): ×0.85, applied in `scan.ts` after personalization
+
+### Size Matching (`src/services/size.ts`)
+
+Men's/unisex only by design. Everything converges on inches — flat pit-to-pit for tops, tag waist for bottoms. All tolerances/chart values are named constants in this one module.
+
+- **Extraction** happens in Phase 1 identification (tape-measure photos, description text, eBay item specifics, tag labels). `normalizeSizeExtraction` validates the raw block in code: unit coercion (cm→in, circumference→flat), a regex cross-check that description-sourced measurements actually appear in the listing text (hallucination guard), and confidence derived from evidence source — never taken from the model. Persisted on `Evaluation` (`garmentType`, `labeledSize`, `pitToPitInches`, `waistInches`, `sizeConfidence`, `sizeEvidence`; null on pre-feature rows).
+- **User profile** on `User`: `topSize` (XS–XXL), `waistSize`, optional `pitToPitInches` refinement. Set via `/subscribe` (signup page has an optional size section with in/cm toggle). All nullable — no profile means no size logic at all.
+- **Matching** (`computeSizeFit`, called per-user in `scan.ts`): labels convert to pit-to-pit intervals via a chart with a −1" vintage shift for pre-90s eras; matching is interval overlap with asymmetric tolerance (slightly big beats slightly small; outerwear gets extra room). Verdicts: `match` / `mismatch` (hard-dropped, but only when `sizeConfidence ≥ 0.7` for measured values or the label gap is 2"+) / `unknown` (×0.85 penalty + "size unverified" note in the email) / `not_applicable` (footwear, dresses, or user lacks that dimension — neutral). The gate never hard-drops on weak evidence: story is everything, mismatches must be confident.
+- `ecommerce.ts` getItem enrichment also captures `localizedAspects` into `rawData.aspects` and swaps the truncated `shortDescription` for the full stripped item description — both feed the identification prompt.
 
 ### Archetypes (`src/configs/archetypes.ts`)
 
@@ -87,7 +97,7 @@ Users pick up to 3 archetypes at signup. Each archetype has:
 | Endpoint | Auth | Purpose |
 |---|---|---|
 | `GET /` | — | Serves `public/signup.html` |
-| `POST /subscribe` | — | Upserts user by email; atomically replaces `UserKeyword` + `UserArchetype` (max 3 archetypes); never touches votes/deliveries |
+| `POST /subscribe` | — | Upserts user by email; atomically replaces `UserKeyword` + `UserArchetype` (max 3 archetypes); accepts optional `topSize`/`waistSize`/`pitToPitInches` (absent = unchanged, null = cleared); never touches votes/deliveries |
 | `GET /vote` | HMAC token | Records thumbs up/down from email links; upserts (last click wins) |
 | `POST /scan` | `x-api-key` | Kicks off `runScan` async; `?test=true` limits to 10 listings + test recipients |
 | `POST /threads` | `x-api-key` | Posts last 3 deliveries to Threads |

@@ -108,7 +108,9 @@ async function fetchEbay(limit: number, queries: SearchQueryInput[]): Promise<Li
 
   console.log(`Fetched ${listings.length} total listings from eBay`);
 
-  // Enrich all listings in parallel with full image sets from getItem
+  // Enrich all listings in parallel via getItem: full image sets, seller
+  // item specifics (size etc.), and the full description (search only
+  // returns a truncated shortDescription).
   await Promise.all(
     listings.map(async (listing) => {
       const itemId = listing.rawData.itemId;
@@ -125,14 +127,39 @@ async function fetchEbay(limit: number, queries: SearchQueryInput[]): Promise<Li
         if (imageUrls.length > listing.imageUrls.length) {
           listing.imageUrls = imageUrls;
         }
+        if (item.localizedAspects) {
+          listing.rawData.aspects = (item.localizedAspects as { name?: string; value?: string }[])
+            .filter((a) => a.name && a.value)
+            .map((a) => ({ name: a.name!, value: a.value! }));
+        }
+        const fullDescription = stripHtml(item.description || "");
+        if (fullDescription.length > listing.description.length) {
+          listing.description = fullDescription.slice(0, MAX_DESCRIPTION_CHARS);
+        }
       } catch {
-        // keep search images on failure
+        // keep search data on failure
       }
     }),
   );
 
   console.log(`Enriched image sets for ${listings.length} listings`);
   return listings;
+}
+
+const MAX_DESCRIPTION_CHARS = 4000;
+
+function stripHtml(html: string): string {
+  return html
+    .replace(/<(?:style|script)[^>]*>[\s\S]*?<\/(?:style|script)>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 // Mock data for testing without API keys
@@ -147,11 +174,15 @@ const MOCK_LISTINGS: Listing[] = [
       "https://i.ebayimg.com/images/g/mock1-label.jpg",
       "https://i.ebayimg.com/images/g/mock1-detail.jpg",
     ],
-    description: "Vintage Pendleton board shirt from the 1960s. Made in USA. Loop collar. Blue plaid pattern. Size Medium. Good vintage condition with minor wear.",
+    description: "Vintage Pendleton board shirt from the 1960s. Made in USA. Loop collar. Blue plaid pattern. Size Medium. Pit to pit 21 inches. Good vintage condition with minor wear.",
     rawData: {
       itemId: "123456789001",
       condition: "Pre-owned",
       seller: { username: "vintagethriftfinds", feedbackScore: 234 },
+      aspects: [
+        { name: "Size", value: "M" },
+        { name: "Chest Size", value: "42 in" },
+      ],
     },
   },
   {
@@ -181,11 +212,15 @@ const MOCK_LISTINGS: Listing[] = [
       "https://i.ebayimg.com/images/g/mock3-selvedge.jpg",
       "https://i.ebayimg.com/images/g/mock3-stitching.jpg",
     ],
-    description: "Authentic vintage Levis 501 jeans with Big E red tab. Selvedge denim with redline. Single stitch throughout. Some fading and wear consistent with age.",
+    description: "Authentic vintage Levis 501 jeans with Big E red tab. Selvedge denim with redline. Single stitch throughout. Measured waist 31 inches. Some fading and wear consistent with age.",
     rawData: {
       itemId: "123456789003",
       condition: "Pre-owned",
       seller: { username: "denim_collector_tx", feedbackScore: 892 },
+      aspects: [
+        { name: "Size", value: "32x30" },
+        { name: "Waist Size", value: "32 in" },
+      ],
     },
   },
   {

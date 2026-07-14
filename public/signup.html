@@ -414,6 +414,105 @@
       border-radius: 2px;
     }
 
+    /* Size profile */
+
+    .optional-note {
+      font-weight: normal;
+      text-transform: none;
+      letter-spacing: 0;
+      color: #aaa;
+      font-style: italic;
+    }
+
+    .size-btn-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 18px;
+    }
+
+    .size-btn {
+      flex: 1;
+      padding: 11px 0;
+      border: 1.5px solid #ccc;
+      border-radius: 3px;
+      background: transparent;
+      font-family: Helvetica, Arial, sans-serif;
+      font-size: 12px;
+      letter-spacing: 1px;
+      color: #888;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .size-btn:hover { border-color: #888; color: #555; }
+
+    .size-btn.active {
+      border-color: #2c2c2c;
+      background: #2c2c2c;
+      color: #fff;
+    }
+
+    .size-fields {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 28px;
+    }
+
+    .size-field { flex: 1; }
+
+    .size-field label {
+      display: block;
+      font-family: Helvetica, Arial, sans-serif;
+      font-size: 10px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: #aaa;
+      margin-bottom: 6px;
+    }
+
+    .size-field .field-wrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .size-field input {
+      width: 100%;
+      min-width: 0;
+      padding: 11px 12px;
+      border: 1.5px solid #ccc;
+      border-radius: 3px;
+      background: transparent;
+      font-family: Helvetica, Arial, sans-serif;
+      font-size: 14px;
+      color: #2c2c2c;
+    }
+
+    .size-field input:focus { outline: none; border-color: #2c2c2c; }
+
+    .unit-toggle {
+      display: flex;
+      border: 1.5px solid #ccc;
+      border-radius: 3px;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    .unit-toggle button {
+      padding: 11px 10px;
+      border: none;
+      background: transparent;
+      font-family: Helvetica, Arial, sans-serif;
+      font-size: 11px;
+      color: #888;
+      cursor: pointer;
+    }
+
+    .unit-toggle button.active {
+      background: #2c2c2c;
+      color: #fff;
+    }
+
     /* ═══════════════════════════════════════════════════════
        STEP 3 — REVEAL
     ═══════════════════════════════════════════════════════ */
@@ -685,6 +784,34 @@
         <button class="lang-btn" data-lang="zh" onclick="selectLang('zh')">中文</button>
       </div>
 
+      <label class="form-label">Your size <span class="optional-note">optional — we'll skip pieces that won't fit</span></label>
+      <div class="size-btn-row" id="topSizeRow">
+        <button class="size-btn" type="button" data-size="XS">XS</button>
+        <button class="size-btn" type="button" data-size="S">S</button>
+        <button class="size-btn" type="button" data-size="M">M</button>
+        <button class="size-btn" type="button" data-size="L">L</button>
+        <button class="size-btn" type="button" data-size="XL">XL</button>
+        <button class="size-btn" type="button" data-size="XXL">XXL</button>
+      </div>
+      <div class="size-fields">
+        <div class="size-field">
+          <label for="waistInput">Waist (in)</label>
+          <div class="field-wrap">
+            <input type="number" id="waistInput" min="24" max="50" placeholder="32" inputmode="numeric">
+          </div>
+        </div>
+        <div class="size-field">
+          <label for="p2pInput">Pit-to-pit — know your measurement?</label>
+          <div class="field-wrap">
+            <input type="number" id="p2pInput" step="0.5" placeholder="21" inputmode="decimal">
+            <div class="unit-toggle" id="p2pUnitToggle">
+              <button type="button" data-unit="in" class="active">in</button>
+              <button type="button" data-unit="cm">cm</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <button class="primary-btn" id="submitBtn" type="button" onclick="subscribe()">
         Start my daily edit — it's free
       </button>
@@ -755,6 +882,8 @@
     let selectedIds    = [];    // up to 3 archetype ids
     let showEverything = false; // the "show me everything" toggle
     let selectedLang   = 'en';
+    let selectedTopSize = null; // "XS".."XXL" or null
+    let p2pUnit        = 'in';  // pit-to-pit input unit
 
     // ─── Step 1: card selection ──────────────────────────────────────────────
 
@@ -907,6 +1036,44 @@
       });
     }
 
+    // ─── Size profile (optional) ─────────────────────────────────────────────
+
+    document.querySelectorAll('#topSizeRow .size-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        // Click again to deselect
+        selectedTopSize = selectedTopSize === btn.dataset.size ? null : btn.dataset.size;
+        document.querySelectorAll('#topSizeRow .size-btn').forEach(b => {
+          b.classList.toggle('active', b.dataset.size === selectedTopSize);
+        });
+      });
+    });
+
+    document.querySelectorAll('#p2pUnitToggle button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        p2pUnit = btn.dataset.unit;
+        document.querySelectorAll('#p2pUnitToggle button').forEach(b => {
+          b.classList.toggle('active', b.dataset.unit === p2pUnit);
+        });
+      });
+    });
+
+    // Returns {topSize?, waistSize?, pitToPitInches?} — only fields the user
+    // actually filled in, converted to inches.
+    function buildSizePayload() {
+      const payload = {};
+      if (selectedTopSize) payload.topSize = selectedTopSize;
+
+      const waist = parseFloat(document.getElementById('waistInput').value);
+      if (!isNaN(waist) && waist > 0) payload.waistSize = waist;
+
+      let p2p = parseFloat(document.getElementById('p2pInput').value);
+      if (!isNaN(p2p) && p2p > 0) {
+        if (p2pUnit === 'cm') p2p = Math.round((p2p / 2.54) * 10) / 10;
+        payload.pitToPitInches = p2p;
+      }
+      return payload;
+    }
+
     async function subscribe() {
       const email   = document.getElementById('emailInput').value.trim();
       const errorEl = document.getElementById('errorMsg');
@@ -925,7 +1092,7 @@
 
       // Build payload
       const archetypeIds = showEverything ? [] : [...selectedIds];
-      const payload = { email, language: selectedLang, archetypeIds };
+      const payload = { email, language: selectedLang, archetypeIds, ...buildSizePayload() };
 
       try {
         const res  = await fetch('/subscribe', {

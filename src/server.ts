@@ -17,6 +17,7 @@ import {
   type ArchetypeId,
 } from "./configs/archetypes";
 import { postToThreads, type ThreadsStoryItem } from "./services/threads";
+import { parseTopSizeLabel, coercePitToPitInches, coerceWaistInches } from "./services/size";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -46,16 +47,63 @@ app.get("/", (_req, res) => {
 const MAX_ARCHETYPES = 3;
 
 app.post("/subscribe", async (req, res) => {
-  const { email, language, archetypeIds } = req.body as {
+  const { email, language, archetypeIds, topSize, waistSize, pitToPitInches } = req.body as {
     email?: string;
     language?: string;
     archetypeIds?: unknown;
+    topSize?: unknown;
+    waistSize?: unknown;
+    pitToPitInches?: unknown;
   };
 
   // --- Validate email ---
   if (!email || !email.includes("@")) {
     res.status(400).json({ error: "Valid email required" });
     return;
+  }
+
+  // --- Validate size profile (all optional; null clears, absent leaves unchanged) ---
+  // Values are normalized through the same coercion used for listings, so
+  // cm inputs and flat waist measurements are handled server-side too.
+  const sizeUpdate: { topSize?: string | null; waistSize?: number | null; pitToPitInches?: number | null } = {};
+
+  if (topSize !== undefined) {
+    if (topSize === null || topSize === "") {
+      sizeUpdate.topSize = null;
+    } else {
+      const parsed = typeof topSize === "string" ? parseTopSizeLabel(topSize) : null;
+      if (!parsed) {
+        res.status(400).json({ error: "topSize must be one of XS, S, M, L, XL, XXL" });
+        return;
+      }
+      sizeUpdate.topSize = parsed;
+    }
+  }
+
+  if (waistSize !== undefined) {
+    if (waistSize === null || waistSize === "") {
+      sizeUpdate.waistSize = null;
+    } else {
+      const coerced = coerceWaistInches(Number(waistSize));
+      if (coerced == null) {
+        res.status(400).json({ error: "waistSize must be a plausible waist measurement" });
+        return;
+      }
+      sizeUpdate.waistSize = Math.round(coerced);
+    }
+  }
+
+  if (pitToPitInches !== undefined) {
+    if (pitToPitInches === null || pitToPitInches === "") {
+      sizeUpdate.pitToPitInches = null;
+    } else {
+      const coerced = coercePitToPitInches(Number(pitToPitInches));
+      if (coerced == null) {
+        res.status(400).json({ error: "pitToPitInches must be a plausible pit-to-pit measurement" });
+        return;
+      }
+      sizeUpdate.pitToPitInches = coerced;
+    }
   }
 
   // --- Validate archetypeIds ---
@@ -87,8 +135,8 @@ app.post("/subscribe", async (req, res) => {
     // Upsert the user — never touch votes, deliveries, or story history.
     const user = await prisma.user.upsert({
       where: { email },
-      update: { language: lang },
-      create: { name: email, email, language: lang },
+      update: { language: lang, ...sizeUpdate },
+      create: { name: email, email, language: lang, ...sizeUpdate },
     });
 
     // Build keyword list: merge archetype keywords, or fall back to defaults when none selected.
