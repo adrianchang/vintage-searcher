@@ -236,9 +236,10 @@ export async function runScan(
             const hasSoldData = (valuation.soldListings?.length ?? 0) > 0;
             // Validate the raw sizing block: unit coercion, hallucination
             // cross-check against the listing text, confidence derivation
+            const aspects = (listing.rawData.aspects as { name: string; value: string }[] | undefined) ?? [];
             const size = normalizeSizeExtraction(
               identification.sizing,
-              `${listing.title} ${listing.description}`,
+              [listing.title, listing.description, ...aspects.map(a => `${a.name}: ${a.value}`)].join(" "),
             );
 
             dbEvaluation = await prisma.evaluation.create({
@@ -264,6 +265,7 @@ export async function runScan(
                 waistInches: size.waistInches,
                 sizeConfidence: size.sizeConfidence,
                 sizeEvidence: size.sizeEvidence,
+                sizeRaw: JSON.stringify(identification.sizing ?? {}),
                 isOpportunity: true,
               },
             });

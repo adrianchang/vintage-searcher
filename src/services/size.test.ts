@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   coercePitToPitInches,
   coerceWaistInches,
+  quoteSupportsMeasurement,
   parseTopSizeLabel,
   parseWaistLabel,
   isVintageEra,
@@ -90,6 +91,23 @@ describe("descriptionSupportsMeasurement", () => {
   });
 });
 
+describe("quoteSupportsMeasurement", () => {
+  const text = "Nice shirt. Laid flat it measures 56 cm across. Size L tag.";
+  it("verifies a quote that appears in the text with a matching number", () => {
+    expect(quoteSupportsMeasurement("measures 56 cm across", text, 22)).toBe(true);
+  });
+  it("rejects a quote that is not in the text", () => {
+    expect(quoteSupportsMeasurement("pit to pit 22 inches", text, 22)).toBe(false);
+  });
+  it("rejects a quote without a number matching the reported value", () => {
+    expect(quoteSupportsMeasurement("Size L tag", text, 22)).toBe(false);
+  });
+  it("rejects empty/short quotes", () => {
+    expect(quoteSupportsMeasurement(null, text, 22)).toBe(false);
+    expect(quoteSupportsMeasurement("56", text, 22)).toBe(false);
+  });
+});
+
 describe("normalizeSizeExtraction", () => {
   it("verifies description evidence against listing text", () => {
     const result = normalizeSizeExtraction(
@@ -100,12 +118,46 @@ describe("normalizeSizeExtraction", () => {
     expect(result.sizeConfidence).toBeCloseTo(0.75);
   });
 
-  it("downgrades unverifiable description measurements (hallucination guard)", () => {
+  it("discards unverifiable description measurements (hallucination guard)", () => {
     const result = normalizeSizeExtraction(
       { garmentType: "top", labeledSize: null, pitToPitInches: 22, evidenceType: "description_text" },
       "Vintage shirt, great condition",
     );
-    expect(result.sizeConfidence).toBeLessThan(0.4);
+    expect(result.pitToPitInches).toBeNull();
+    expect(result.sizeEvidence).toBe("none");
+    expect(result.sizeConfidence).toBe(0);
+  });
+
+  it("falls back to the tag when a fabricated measurement is discarded (flight-jacket case)", () => {
+    // Real prod case: model reported 27"/44" as description_text while quoting
+    // "Size: X-Large" — a quote with no matching number must not verify.
+    const result = normalizeSizeExtraction(
+      { garmentType: "outerwear", labeledSize: "X-LARGE", pitToPitInches: 27, waistInches: 44, evidenceType: "description_text", evidenceQuote: "Size: X-Large" },
+      "Authentic CWU-45/P flight jacket. Size: X-Large. 100% Nomex.",
+    );
+    expect(result.pitToPitInches).toBeNull();
+    expect(result.waistInches).toBeNull();
+    expect(result.sizeEvidence).toBe("tag_only");
+    expect(result.labeledSize).toBe("X-LARGE");
+    expect(result.sizeConfidence).toBe(0.3);
+  });
+
+  it("verifies via the evidence quote when no measurement keyword is present", () => {
+    const result = normalizeSizeExtraction(
+      { garmentType: "top", labeledSize: null, pitToPitInches: 22, evidenceType: "description_text", evidenceQuote: "measures 22 inches across the front" },
+      "Beautiful vintage shirt. Measures 22 inches across the front when laid flat.",
+    );
+    expect(result.pitToPitInches).toBe(22);
+    expect(result.sizeConfidence).toBe(0.75);
+  });
+
+  it("corroborates seller_specifics measurements against the aspects text", () => {
+    const result = normalizeSizeExtraction(
+      { garmentType: "top", labeledSize: "M", pitToPitInches: 21, evidenceType: "seller_specifics", evidenceQuote: "Chest Size: 42 in" },
+      "Vintage shirt title Chest Size: 42 in Size: M", // scan.ts appends aspects to the text
+    );
+    expect(result.pitToPitInches).toBe(21); // 42 circumference → 21 flat
+    expect(result.sizeConfidence).toBe(0.6);
   });
 
   it("drops measurements when evidence is tag_only (back-derived guesses)", () => {
@@ -174,15 +226,37 @@ describe("computeSizeFit — tops", () => {
     expect(fit).toBe("unknown");
   });
 
-  it("matches a vintage L label for a modern M user", () => {
-    const { fit } = computeSizeFit({ ...base, labeledSize: "L", sizeConfidence: 0.3, estimatedEra: "1960s" }, mUser);
-    expect(fit).toBe("match");
+  it("matches labels within ±1 size (vintage-adjusted)", () => {
+    // vintage L → effective M → distance 0
+    expect(computeSizeFit({ ...base, labeledSize: "L", sizeConfidence: 0.3, estimatedEra: "1960s" }, mUser).fit).toBe("match");
+    // modern L → distance 1 ("slightly bigger")
+    expect(computeSizeFit({ ...base, labeledSize: "L", sizeConfidence: 0.3 }, mUser).fit).toBe("match");
+    // modern S → distance 1 ("slightly smaller")
+    expect(computeSizeFit({ ...base, labeledSize: "S", sizeConfidence: 0.3 }, mUser).fit).toBe("match");
+    // vintage XL → effective L → distance 1
+    expect(computeSizeFit({ ...base, garmentType: "outerwear", labeledSize: "XL", sizeConfidence: 0.3, estimatedEra: "1970s" }, mUser).fit).toBe("match");
   });
 
-  it("mismatches a wildly off label", () => {
+  it("mismatches labels 2+ sizes away — tags are trusted", () => {
+    // modern XL for an M user: 2 sizes up, excluded
+    expect(computeSizeFit({ ...base, labeledSize: "XL", sizeConfidence: 0.3 }, mUser).fit).toBe("mismatch");
+    // modern XS for an M user: 2 sizes down, excluded
+    expect(computeSizeFit({ ...base, labeledSize: "XS", sizeConfidence: 0.3 }, mUser).fit).toBe("mismatch");
+    // vintage S → effective XS → 2 down, excluded
+    expect(computeSizeFit({ ...base, labeledSize: "S", sizeConfidence: 0.3, estimatedEra: "1960s" }, mUser).fit).toBe("mismatch");
     const xsUser: UserSizeProfile = { topSize: "XS", waistSize: null, pitToPitInches: null };
-    const { fit } = computeSizeFit({ ...base, labeledSize: "XXL", sizeConfidence: 0.3 }, xsUser);
-    expect(fit).toBe("mismatch");
+    expect(computeSizeFit({ ...base, labeledSize: "XXL", sizeConfidence: 0.3 }, xsUser).fit).toBe("mismatch");
+  });
+
+  it("treats unparseable labels as unknown", () => {
+    const { fit } = computeSizeFit({ ...base, labeledSize: "One Size", sizeConfidence: 0.3 }, mUser);
+    expect(fit).toBe("unknown");
+  });
+
+  it("derives the user's size index from their p2p for label matching", () => {
+    const measuredUser: UserSizeProfile = { topSize: null, waistSize: null, pitToPitInches: 23 }; // ≈ L
+    expect(computeSizeFit({ ...base, labeledSize: "XS", sizeConfidence: 0.3 }, measuredUser).fit).toBe("mismatch");
+    expect(computeSizeFit({ ...base, labeledSize: "M", sizeConfidence: 0.3 }, measuredUser).fit).toBe("match");
   });
 
   it("is unknown with no size info at all", () => {
@@ -227,6 +301,13 @@ describe("computeSizeFit — bottoms", () => {
   it("matches a vintage tag waist one up (runs small)", () => {
     const { fit } = computeSizeFit({ ...base, labeledSize: "33x30", sizeConfidence: 0.3, estimatedEra: "1970s" }, mUser);
     expect(fit).toBe("match");
+  });
+
+  it("mismatches a distant tag waist, unknowns the borderline", () => {
+    // 36 modern for a 32 user: 4" off → excluded
+    expect(computeSizeFit({ ...base, labeledSize: "36x32", sizeConfidence: 0.3 }, mUser).fit).toBe("mismatch");
+    // 34 modern for a 32 user: 2" off → borderline → unknown (penalty)
+    expect(computeSizeFit({ ...base, labeledSize: "34x32", sizeConfidence: 0.3 }, mUser).fit).toBe("unknown");
   });
 
   it("is not_applicable when the user gave no waist", () => {

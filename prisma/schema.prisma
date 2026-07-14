@@ -70,6 +70,7 @@ model Evaluation {
   waistInches    Float?  // tag waist, inches
   sizeConfidence Float?
   sizeEvidence   String? // tape_photo | description_text | seller_specifics | tag_only | none
+  sizeRaw        String  @default("{}") // raw Gemini sizing block (pre-normalization, incl. evidenceQuote) — audit trail
 
   isOpportunity  Boolean
   createdAt      DateTime @default(now())

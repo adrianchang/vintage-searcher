@@ -88,8 +88,18 @@ const OUTERWEAR_EXTRA_ROOM = 1.25;
 const VINTAGE_LABEL_SHIFT = -1;
 const VINTAGE_WAIST_SHIFT = -1;
 
-// Widening applied when the garment side is a label guess, not a measurement.
+// Widening applied to chart ranges in labelToPitToPitRange (used by the
+// measurement-vs-label contradiction check).
 const LABEL_UNCERTAINTY = 1;
+
+// Label matching is by size distance — tags are discrete facts, not uncertain
+// measurements. Within ±1 size of the user (vintage-adjusted) matches;
+// 2+ sizes away is a confident mismatch.
+const LABEL_MATCH_DISTANCE = 1;
+
+// Bottoms tag waist (vintage-adjusted) vs user waist, in inches.
+const WAIST_LABEL_MATCH = 1.5;    // |diff| ≤ → match
+const WAIST_LABEL_MISMATCH = 3;   // |diff| ≥ → mismatch (between → unknown)
 
 // Wear tolerance around the user's target — asymmetric because slightly
 // bigger wears better than slightly smaller.
@@ -104,30 +114,27 @@ const POINT_SLACK = 0.75;
 // (same pattern as the era penalty in score.ts).
 export const SIZE_UNKNOWN_PENALTY = 0.85;
 
-// A measured mismatch only hard-excludes above this confidence;
-// below it the item degrades to "unknown" (penalty, never deletion).
-const MISMATCH_MIN_CONFIDENCE = 0.7;
-
-// Label-derived intervals must be disjoint by this much before we call
-// mismatch — labels are guesses on both sides.
-const LABEL_MISMATCH_GAP = 2;
+// A measured mismatch only hard-excludes when the measurement survived
+// corroboration. All verified evidence sources score ≥ 0.5; the
+// label-contradiction cap (0.3) and legacy null rows (0) stay below —
+// those degrade to "unknown" (penalty, never deletion).
+const MISMATCH_MIN_CONFIDENCE = 0.5;
 
 // Plausible extracted values; anything outside gets unit-coerced or dropped.
 const P2P_PLAUSIBLE: Range = { lo: 14, hi: 32 };
 const WAIST_PLAUSIBLE: Range = { lo: 24, hi: 50 };
 
-// Base confidence per evidence source. description_text gets a bump when the
-// deterministic regex cross-check finds the number, and a cut when it doesn't
-// (likely hallucination).
+// Base confidence per evidence source. Text-sourced measurements
+// (description_text, seller_specifics) only reach these values after
+// corroboration against the listing text — uncorroborated ones are discarded
+// entirely (see normalizeSizeExtraction). tape_photo can't be text-verified.
 const EVIDENCE_CONFIDENCE: Record<SizeEvidenceType, number> = {
   tape_photo: 0.7,
-  description_text: 0.6,
-  seller_specifics: 0.5,
+  description_text: 0.75,
+  seller_specifics: 0.6,
   tag_only: 0.3,
   none: 0,
 };
-const DESCRIPTION_VERIFIED_BONUS = 0.15;
-const DESCRIPTION_UNVERIFIED_CONFIDENCE = 0.35;
 
 // ─── Small helpers ───────────────────────────────────────────────────────────
 
@@ -184,6 +191,29 @@ export function parseTopSizeLabel(label: string | null | undefined): TopSize | n
   return null;
 }
 
+/** Chart index of a label (XS=0 … XXL=5); numeric chest/suit labels map via the chart. */
+export function topSizeIndex(label: string | null | undefined): number | null {
+  const size = parseTopSizeLabel(label);
+  if (size) return TOP_SIZES.indexOf(size);
+  if (!label) return null;
+  const m = label.match(/\b(3[4-9]|4\d|5[0-4])\s*[RSL]?\b/);
+  if (m) return nearestSizeIndex((parseInt(m[1], 10) + 3) / 2);
+  return null;
+}
+
+function nearestSizeIndex(pitToPit: number): number {
+  let best = 0;
+  let bestDist = Infinity;
+  TOP_SIZES.forEach((s, i) => {
+    const d = Math.abs(mid(TOP_SIZE_CHART[s]) - pitToPit);
+    if (d < bestDist) {
+      bestDist = d;
+      best = i;
+    }
+  });
+  return best;
+}
+
 /** Parse a waist number out of a bottoms label: "32x30", "W32 L30", "32". */
 export function parseWaistLabel(label: string | null | undefined): number | null {
   if (!label) return null;
@@ -228,11 +258,37 @@ export function descriptionSupportsMeasurement(
   reportedInches: number,
 ): boolean {
   for (const match of text.matchAll(MEASUREMENT_CONTEXT)) {
-    const value = parseFloat(match[1].replace(",", "."));
-    if (!Number.isFinite(value)) continue;
-    for (const candidate of [value, value / 2.54, value / 2, value * 2]) {
-      if (Math.abs(candidate - reportedInches) <= 0.75) return true;
-    }
+    if (numberMatchesReported(match[1], reportedInches)) return true;
+  }
+  return false;
+}
+
+function numberMatchesReported(numberText: string, reportedInches: number): boolean {
+  const value = parseFloat(numberText.replace(",", "."));
+  if (!Number.isFinite(value)) return false;
+  for (const candidate of [value, value / 2.54, value / 2, value * 2, value / 2.54 / 2]) {
+    if (Math.abs(candidate - reportedInches) <= 0.75) return true;
+  }
+  return false;
+}
+
+/**
+ * Strongest corroboration: the model's evidence quote must appear in the
+ * listing text AND contain a number matching the reported measurement.
+ * (The number requirement matters — quoting "Size: X-Large" while reporting
+ * an invented 27" must not verify.)
+ */
+export function quoteSupportsMeasurement(
+  quote: string | null | undefined,
+  text: string,
+  reportedInches: number,
+): boolean {
+  if (!quote) return false;
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9.]+/g, " ").trim();
+  const q = norm(quote);
+  if (q.length < 4 || !norm(text).includes(q)) return false;
+  for (const match of quote.matchAll(/\d{2,3}(?:[.,]\d)?/g)) {
+    if (numberMatchesReported(match[0], reportedInches)) return true;
   }
   return false;
 }
@@ -265,6 +321,22 @@ export function normalizeSizeExtraction(
     waist = null;
   }
 
+  // Text-sourced measurements must be corroborated by the listing text: the
+  // model's evidence quote (with a matching number) or a measurement-context
+  // number. Uncorroborated ones are treated as invented and discarded — the
+  // item falls back to its tag size rather than matching on fiction.
+  if ((evidence === "description_text" || evidence === "seller_specifics") &&
+      (pitToPit != null || waist != null)) {
+    const reported = pitToPit ?? waist!;
+    const corroborated =
+      quoteSupportsMeasurement(raw?.evidenceQuote, listingText, reported) ||
+      descriptionSupportsMeasurement(listingText, reported);
+    if (!corroborated) {
+      pitToPit = null;
+      waist = null;
+    }
+  }
+
   const hasMeasurement = pitToPit != null || waist != null;
   if (!hasMeasurement) {
     evidence = labeledSize ? "tag_only" : "none";
@@ -279,13 +351,6 @@ export function normalizeSizeExtraction(
   }
 
   let confidence = EVIDENCE_CONFIDENCE[evidence];
-
-  if (evidence === "description_text") {
-    const reported = pitToPit ?? waist!;
-    confidence = descriptionSupportsMeasurement(listingText, reported)
-      ? Math.min(0.9, confidence + DESCRIPTION_VERIFIED_BONUS)
-      : DESCRIPTION_UNVERIFIED_CONFIDENCE;
-  }
 
   // Label consistency: vintage running ~1 size small is expected; a gap of
   // several sizes means something was misread — degrade below the hard-exclude
@@ -369,6 +434,16 @@ function userWaistBand(user: UserSizeProfile): Range | null {
   };
 }
 
+/** The user's chart index for label-distance matching (from topSize or their p2p). */
+function userTopSizeIndex(user: UserSizeProfile): number | null {
+  if (user.topSize) {
+    const size = parseTopSizeLabel(user.topSize);
+    if (size) return TOP_SIZES.indexOf(size);
+  }
+  if (user.pitToPitInches != null) return nearestSizeIndex(user.pitToPitInches);
+  return null;
+}
+
 function fitPoint(value: number, band: Range, confidence: number, what: string): SizeFitResult {
   if (within(value, band)) {
     return { fit: "match", detail: `${what} ${value}" within [${band.lo}, ${band.hi}]` };
@@ -379,16 +454,23 @@ function fitPoint(value: number, band: Range, confidence: number, what: string):
   return { fit: "unknown", detail: `${what} ${value}" outside band but low confidence (${confidence})` };
 }
 
-function fitInterval(garment: Range, band: Range, what: string): SizeFitResult {
-  const overlaps = garment.lo <= band.hi && garment.hi >= band.lo;
-  if (overlaps) {
-    return { fit: "match", detail: `${what} [${garment.lo}, ${garment.hi}] overlaps [${band.lo}, ${band.hi}]` };
-  }
-  const gap = garment.lo > band.hi ? garment.lo - band.hi : band.lo - garment.hi;
-  if (gap >= LABEL_MISMATCH_GAP) {
-    return { fit: "mismatch", detail: `${what} [${garment.lo}, ${garment.hi}] disjoint from [${band.lo}, ${band.hi}] by ${round1(gap)}"` };
-  }
-  return { fit: "unknown", detail: `${what} borderline (gap ${round1(gap)}")` };
+/**
+ * Tags are trusted as labels: match within ±LABEL_MATCH_DISTANCE sizes of the
+ * user (after the vintage shift), confident mismatch beyond. No confidence
+ * involved — the only modeled uncertainty is vintage drift.
+ */
+function fitLabelDistance(
+  garmentIndex: number,
+  userIndex: number,
+  label: string,
+  vintage: boolean,
+): SizeFitResult {
+  const effective = garmentIndex - (vintage ? 1 : 0);
+  const dist = Math.abs(effective - userIndex);
+  const what = `label "${label}"${vintage ? " (vintage, runs one size small)" : ""}`;
+  return dist <= LABEL_MATCH_DISTANCE
+    ? { fit: "match", detail: `${what} within ${dist} size(s) of user` }
+    : { fit: "mismatch", detail: `${what} is ${dist} sizes from user` };
 }
 
 /**
@@ -422,27 +504,34 @@ export function computeSizeFit(
       return fitPoint(garment.pitToPitInches, band, confidence, "pit-to-pit");
     }
     if (garment.labeledSize) {
-      const range = labelToPitToPitRange(garment.labeledSize, garment.estimatedEra);
-      if (range) return fitInterval(range, band, `label "${garment.labeledSize}"`);
+      const garmentIndex = topSizeIndex(garment.labeledSize);
+      const userIndex = userTopSizeIndex(user);
+      if (garmentIndex != null && userIndex != null) {
+        return fitLabelDistance(garmentIndex, userIndex, garment.labeledSize, isVintageEra(garment.estimatedEra));
+      }
     }
     return { fit: "unknown", detail: "no size information on garment" };
   }
 
   if (garmentType === "bottom") {
     const band = userWaistBand(user);
-    if (!band) return { fit: "not_applicable", detail: "user has no waist size" };
+    if (!band || user.waistSize == null) return { fit: "not_applicable", detail: "user has no waist size" };
 
     if (garment.waistInches != null) {
       return fitPoint(garment.waistInches, band, confidence, "waist");
     }
     const tagWaist = parseWaistLabel(garment.labeledSize);
     if (tagWaist != null) {
-      const shift = isVintageEra(garment.estimatedEra) ? VINTAGE_WAIST_SHIFT : 0;
-      const range = {
-        lo: tagWaist + shift - LABEL_UNCERTAINTY,
-        hi: tagWaist + shift + LABEL_UNCERTAINTY,
-      };
-      return fitInterval(range, band, `tag waist ${tagWaist}`);
+      const adjusted = tagWaist + (isVintageEra(garment.estimatedEra) ? VINTAGE_WAIST_SHIFT : 0);
+      const diff = Math.abs(adjusted - user.waistSize);
+      const what = `tag waist ${tagWaist}${adjusted !== tagWaist ? ` (vintage-adjusted ${adjusted})` : ""}`;
+      if (diff <= WAIST_LABEL_MATCH) {
+        return { fit: "match", detail: `${what} within ${diff}" of user ${user.waistSize}` };
+      }
+      if (diff >= WAIST_LABEL_MISMATCH) {
+        return { fit: "mismatch", detail: `${what} is ${diff}" from user ${user.waistSize}` };
+      }
+      return { fit: "unknown", detail: `${what} borderline (${diff}" from user)` };
     }
     return { fit: "unknown", detail: "no size information on garment" };
   }
