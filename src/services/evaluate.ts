@@ -39,13 +39,21 @@ Put authenticating details (tags, hardware, stitching, red flags) in the redFlag
 Set identificationConfidence (0-1): how sure are you about WHAT this item is? High if tags/labels are clear and construction details match. Low if you're guessing based on limited photos.
 
 STEP 3 — SIZING
-Fill the sizing object. Report only what you can actually see or read — never estimate a measurement from a label size.
-- garmentType: one of "top" (shirts, knits, sweaters), "outerwear" (jackets, coats), "bottom" (pants, jeans, shorts), "dress", "footwear", "accessory", "other".
-- labeledSize: the size printed on the tag or stated by the seller (e.g. "L", "32x30", "42R"). null if none.
-- pitToPitInches: the garment measured FLAT armpit-to-armpit, in inches. Convert cm to inches (divide by 2.54). If a full chest circumference is given, halve it. Look for: a tape measure laid across the chest in a photo, "pit to pit"/"p2p"/"chest" measurements in the description, or a numeric chest measurement in the item specifics. null if no real measurement exists.
-- waistInches: the waist as a tag-style circumference in inches (a flat-measured waist doubled; cm divided by 2.54). Same sources as above. null if no real measurement exists.
-- evidenceType: where the STRONGEST measurement came from — "tape_photo" (read off a tape measure in a photo), "description_text" (stated in the listing text), "seller_specifics" (structured item specifics), "tag_only" (only a label size is known — pitToPitInches and waistInches MUST be null), or "none".
-- evidenceQuote: the exact text you read the measurement from (description snippet or specifics line), or a short note of what the tape photo showed. null if none.
+Fill the sizing object. Two INDEPENDENT processes, each with a photo channel and a text channel. Report each channel separately and only what you can actually see or read. NEVER derive a measurement from a size label.
+
+garmentType: one of "top" (shirts, knits, sweaters), "outerwear" (jackets, coats), "bottom" (pants, jeans, shorts), "dress", "footwear", "accessory", "other".
+
+TAG process — the size label:
+- tagFromPhoto: the size printed on a tag/label/patch visible in the photos (e.g. "L", "32x30", "42R"). Only if clearly legible. Omit if not.
+- tagFromText: the size stated in the title, description, or item specifics. Omit if not stated.
+- tagTextQuote: the exact text tagFromText was read from (e.g. "Size: X-Large"). Omit if no tagFromText.
+
+MEASUREMENT process — real measured dimensions:
+- photoPitToPitInches: read off a tape measure in a photo, ONLY if the tape clearly spans armpit-to-armpit (not length, not shoulder). Convert cm to inches (÷2.54). Omit if no such photo.
+- photoWaistInches: tape across the waistband — report as circumference (double a flat measurement; cm ÷2.54). Omit if none.
+- textPitToPitInches: flat armpit-to-armpit stated in the listing text (halve a full chest circumference; cm ÷2.54). Omit if not stated.
+- textWaistInches: waist circumference stated in the listing text. Omit if not stated.
+- textMeasurementQuote: the exact text the measurements were read from (e.g. "pit to pit: 22in"). Omit if no text measurements.
 
 `;
 
@@ -484,17 +492,17 @@ const IDENTIFICATION_SCHEMA = {
           type: "string",
           enum: ["top", "outerwear", "bottom", "dress", "footwear", "accessory", "other"],
         },
-        // Measurements/labels are optional — omit when unknown
-        labeledSize: { type: "string" },
-        pitToPitInches: { type: "number" },
-        waistInches: { type: "number" },
-        evidenceType: {
-          type: "string",
-          enum: ["tape_photo", "description_text", "seller_specifics", "tag_only", "none"],
-        },
-        evidenceQuote: { type: "string" },
+        // All channels optional — omit when not observed
+        tagFromPhoto: { type: "string" },
+        tagFromText: { type: "string" },
+        tagTextQuote: { type: "string" },
+        photoPitToPitInches: { type: "number" },
+        photoWaistInches: { type: "number" },
+        textPitToPitInches: { type: "number" },
+        textWaistInches: { type: "number" },
+        textMeasurementQuote: { type: "string" },
       },
-      required: ["garmentType", "evidenceType"],
+      required: ["garmentType"],
     },
   },
   required: [

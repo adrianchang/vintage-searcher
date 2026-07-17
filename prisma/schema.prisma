@@ -68,9 +68,9 @@ model Evaluation {
   labeledSize    String?
   pitToPitInches Float?  // flat, inches
   waistInches    Float?  // tag waist, inches
-  sizeConfidence Float?
-  sizeEvidence   String? // tape_photo | description_text | seller_specifics | tag_only | none
-  sizeRaw        String  @default("{}") // raw Gemini sizing block (pre-normalization, incl. evidenceQuote) — audit trail
+  sizeConfidence Float?  // legacy (pre-resolution rows only) — no longer written
+  sizeEvidence   String? // resolution: tag+measurement | tag | measurement | contradicted | none
+  sizeRaw        String  @default("{}") // raw four-channel Gemini sizing block (pre-resolution) — audit trail
 
   isOpportunity  Boolean
   createdAt      DateTime @default(now())

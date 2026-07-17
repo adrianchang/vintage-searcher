@@ -13,7 +13,7 @@ import {
   type ValuationOutput,
 } from "./services/evaluate";
 import {
-  normalizeSizeExtraction,
+  resolveGarmentSize,
   computeSizeFit,
   hasSizeProfile,
   SIZE_UNKNOWN_PENALTY,
@@ -234,12 +234,14 @@ export async function runScan(
 
             evalCount++;
             const hasSoldData = (valuation.soldListings?.length ?? 0) > 0;
-            // Validate the raw sizing block: unit coercion, hallucination
-            // cross-check against the listing text, confidence derivation
+            // Resolve the raw four-channel sizing block: text corroboration,
+            // channel reconciliation, tag-vs-measurement agreement. Anything
+            // contradicted is discarded — only confirmed sizing is persisted.
             const aspects = (listing.rawData.aspects as { name: string; value: string }[] | undefined) ?? [];
-            const size = normalizeSizeExtraction(
+            const size = resolveGarmentSize(
               identification.sizing,
               [listing.title, listing.description, ...aspects.map(a => `${a.name}: ${a.value}`)].join(" "),
+              identification.estimatedEra ?? null,
             );
 
             dbEvaluation = await prisma.evaluation.create({
@@ -263,8 +265,7 @@ export async function runScan(
                 labeledSize: size.labeledSize,
                 pitToPitInches: size.pitToPitInches,
                 waistInches: size.waistInches,
-                sizeConfidence: size.sizeConfidence,
-                sizeEvidence: size.sizeEvidence,
+                sizeEvidence: size.resolution,
                 sizeRaw: JSON.stringify(identification.sizing ?? {}),
                 isOpportunity: true,
               },
@@ -334,7 +335,6 @@ export async function runScan(
             labeledSize: e.labeledSize ?? null,
             pitToPitInches: e.pitToPitInches ?? null,
             waistInches: e.waistInches ?? null,
-            sizeConfidence: e.sizeConfidence ?? null,
             estimatedEra: e.estimatedEra,
           },
           user.sizeProfile,
