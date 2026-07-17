@@ -19,16 +19,18 @@ function eraPenalty(era: string | null | undefined): number {
   return 1;
 }
 
-// Base: 80% story, 20% price. Personalized: 40% personal favor, 30% story, 30% price.
-// dislikeSimilarity (0-1) is applied as a multiplier penalty: score × (1 - dislikeSimilarity).
-export function combinedScore(evaluation: Evaluation, personalFavorScore?: number, dislikeSimilarity?: number): number {
+// Base: 80% story, 20% price. Personalized: 40% taste score, 30% story, 30% price.
+// The taste score is contrastive (1 = resembles the user's liked items,
+// 0 = resembles their dislikes or nothing they've liked) — dislikes are folded
+// in there, never as a separate multiplier (a multiplicative dislike penalty
+// let out-of-distribution junk outrank great in-genre items).
+export function combinedScore(evaluation: Evaluation, tasteScore?: number): number {
   const story = evaluation.storyScore;
   const price = priceScore(evaluation);
   const penalty = eraPenalty(evaluation.estimatedEra);
-  const base = personalFavorScore != null
-    ? (personalFavorScore * 0.4 + story * 0.3 + price * 0.3) * penalty
+  return tasteScore != null
+    ? (tasteScore * 0.4 + story * 0.3 + price * 0.3) * penalty
     : (story * 0.8 + price * 0.2) * penalty;
-  return dislikeSimilarity != null ? base * (1 - dislikeSimilarity) : base;
 }
 
 export function isGoodFind(evaluation: Evaluation): boolean {

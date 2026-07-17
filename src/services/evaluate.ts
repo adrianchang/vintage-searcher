@@ -731,38 +731,61 @@ type StorySnapshot = {
   mainStory: string;
 };
 
-async function batchScoreAgainstStories(
-  candidates: StorySnapshot[],
-  referenceStories: StorySnapshot[],
-  promptInstruction: string,
+function buildTasteContextBlock(
+  likedStories: StorySnapshot[],
+  dislikedStories: StorySnapshot[],
   styleContext?: string,
-): Promise<Record<number, number>> {
-  if (candidates.length === 0) return {};
-  if (referenceStories.length === 0 && !styleContext) return {};
+): string {
+  const summarize = (stories: StorySnapshot[]) =>
+    stories.slice(0, 15).map((s, i) => `${i + 1}. ${s.itemIdentification} — ${s.styleGuide}`).join("\n");
 
-  const candidateList = candidates.map((c, i) =>
-    `${i + 1}. ${c.itemIdentification} — ${c.styleGuide} | ${c.hook}`
-  ).join("\n");
-
-  let contextBlock: string;
-  if (referenceStories.length > 0) {
-    const referenceSummary = referenceStories.slice(0, 15).map((s, i) =>
-      `${i + 1}. ${s.itemIdentification} — ${s.styleGuide}`
-    ).join("\n");
-    contextBlock = `${promptInstruction}\n${referenceSummary}`;
-    if (styleContext) contextBlock += `\n\nCOLLECTOR PROFILE:\n${styleContext}`;
-  } else {
+  if (likedStories.length === 0 && dislikedStories.length === 0) {
     // Cold-start: no vote history, score purely against archetype profile
-    contextBlock = `COLLECTOR PROFILE (use this to infer the user's taste):\n${styleContext}\n\nScore each candidate 0–1 on how well it matches this collector's aesthetic profile:
+    return `COLLECTOR PROFILE (use this to infer the user's taste):\n${styleContext}\n\nScore each candidate 0–1 on how well it matches this collector's aesthetic profile:
 - 0.9–1.0: Perfect match for their stated aesthetic
 - 0.7–0.9: Strong match
 - 0.4–0.7: Some overlap but different vibe
 - 0.0–0.4: Doesn't match their aesthetic`;
   }
 
-  const prompt = `You are scoring aesthetic and style similarity for a vintage clothing enthusiast.
+  const parts: string[] = ["THIS COLLECTOR'S VOTING HISTORY:"];
+  if (likedStories.length > 0) parts.push(`Items they LIKED (upvoted):\n${summarize(likedStories)}`);
+  if (dislikedStories.length > 0) parts.push(`Items they DISLIKED (downvoted):\n${summarize(dislikedStories)}`);
+  if (styleContext) parts.push(`COLLECTOR PROFILE:\n${styleContext}`);
 
-${contextBlock}
+  parts.push(`Their likes and dislikes may be the SAME garment category — the signal is what DIFFERS between the two lists (era, authenticity, brand caliber, construction quality), not the category itself. Being a jacket like their disliked jackets means nothing if it's equally like their liked jackets; judge which side of their history each candidate sits closer to.
+
+Score each candidate 0–1:
+- 0.9–1.0: matches the pattern of their liked items and avoids what distinguishes their disliked ones
+- 0.7–0.9: closer to their likes than their dislikes
+- 0.4–0.7: mixed signals — resembles both sides
+- 0.0–0.4: closer to their dislikes, or unlike anything they've liked`);
+
+  return parts.join("\n\n");
+}
+
+/**
+ * Contrastive taste scoring: one call that sees liked AND disliked items
+ * together and scores each candidate by which side of the user's voting
+ * history it resembles (1 = their taste, 0 = their dislikes / nothing
+ * they've ever liked). Falls back to archetype-profile scoring on cold start.
+ */
+export async function computeTasteScores(
+  candidates: StorySnapshot[],
+  likedStories: StorySnapshot[],
+  dislikedStories: StorySnapshot[],
+  styleContext?: string,
+): Promise<Record<number, number>> {
+  if (candidates.length === 0) return {};
+  if (likedStories.length === 0 && dislikedStories.length === 0 && !styleContext) return {};
+
+  const candidateList = candidates.map((c, i) =>
+    `${i + 1}. ${c.itemIdentification} — ${c.styleGuide} | ${c.hook}`
+  ).join("\n");
+
+  const prompt = `You are scoring how well vintage clothing candidates match one collector's demonstrated taste.
+
+${buildTasteContextBlock(likedStories, dislikedStories, styleContext)}
 
 Candidates to score:
 ${candidateList}
@@ -792,53 +815,13 @@ Return scores as a JSON array in the same order as the candidates.`;
       (result.scores ?? []).forEach((s, i) => {
         scores[i] = Math.min(1, Math.max(0, s));
       });
-      console.log(`  Personalization scores: [${Object.values(scores).map(s => s.toFixed(2)).join(", ")}]`);
+      console.log(`  Taste scores: [${Object.values(scores).map(s => s.toFixed(2)).join(", ")}]`);
       return scores;
     } catch (error) {
-      console.error(`Batch score computation failed (attempt ${attempt + 1}):`, error instanceof Error ? error.message : error);
+      console.error(`Taste score computation failed (attempt ${attempt + 1}):`, error instanceof Error ? error.message : error);
       if (attempt === MAX_RETRIES - 1) return {};
     }
   }
   return {};
-}
-
-// Scores candidates against liked stories (0=no match, 1=perfect match).
-// styleContext enables cold-start personalization when likedStories is empty.
-export async function computePersonalScores(
-  candidates: StorySnapshot[],
-  likedStories: StorySnapshot[],
-  styleContext?: string,
-): Promise<Record<number, number>> {
-  return batchScoreAgainstStories(
-    candidates,
-    likedStories,
-    `The user has liked these items (their taste profile). Score each candidate 0–1 on how well it matches this person's aesthetic:
-- 0.9–1.0: Near-identical aesthetic, era, and culture to their liked items
-- 0.7–0.9: Strong overlap in taste
-- 0.4–0.7: Some overlap but different vibe
-- 0.0–0.4: Different aesthetic entirely
-
-Liked items:`,
-    styleContext,
-  );
-}
-
-// Scores candidates against disliked stories (0=nothing in common, 1=very similar to disliked items).
-// This score is used as a penalty: finalScore = baseScore × (1 - dislikeSimilarity).
-export async function computeDislikeScores(
-  candidates: StorySnapshot[],
-  dislikedStories: StorySnapshot[],
-): Promise<Record<number, number>> {
-  return batchScoreAgainstStories(
-    candidates,
-    dislikedStories,
-    `The user has disliked these items. Score each candidate 0–1 on how similar it is to what this person dislikes:
-- 0.9–1.0: Very similar aesthetic, era, and culture to their disliked items
-- 0.7–0.9: Strong overlap with what they dislike
-- 0.4–0.7: Some overlap but different enough
-- 0.0–0.4: Clearly different from what they dislike
-
-Disliked items:`,
-  );
 }
 

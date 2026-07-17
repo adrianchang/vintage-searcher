@@ -60,14 +60,14 @@ All calls go through `callGemini` using model `gemini-3.1-flash-lite`, structure
 - 3 retries with exponential backoff on 429/network errors
 - Grounding reference URLs are extracted from response metadata (redirects resolved)
 
-Personalization scoring (`computePersonalScores` / `computeDislikeScores`) batch-scores candidates against the user's last 40 votes (up to 20 liked + 20 disliked) and/or the archetype `scoringContext` for cold-start.
+Personalization scoring (`computeTasteScores`) is **contrastive**: one call per user per scan that sees up to 20 liked AND 20 disliked items together (from the last 40 votes) and scores each candidate 0–1 by which side of the voting history it resembles. Likes and dislikes are usually the same garment category, so the prompt explicitly directs the model to judge what *differs* between the lists (era, authenticity, brand caliber), not category similarity. Falls back to the archetype `scoringContext` on cold start.
 
 ### Scoring (`src/services/score.ts`)
 
 - Base: `story × 0.8 + price × 0.2`
-- Personalized (when votes or archetype profile exist): `personal × 0.4 + story × 0.3 + price × 0.3`
-- Dislike similarity applied as a multiplier penalty: `score × (1 - dislikeSimilarity)`
+- Personalized (when votes or archetype profile exist): `taste × 0.4 + story × 0.3 + price × 0.3` — taste is the contrastive score (dislikes are folded in; there is deliberately NO separate dislike multiplier — it let out-of-distribution junk outrank great in-genre items by evading the penalty)
 - Era penalty: items from 2010s or later get ×0.7
+- Quality floor (`scan.ts` QUALITY_FLOOR = 0.4): items whose *base* score fails the story test are never sent, regardless of how personalization would reorder them
 - Size-unknown penalty (only when the user has a size profile): ×0.85, applied in `scan.ts` after personalization
 
 ### Size Matching (`src/services/size.ts`)

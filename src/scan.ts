@@ -6,8 +6,7 @@ import {
   runIdentification as defaultRunIdentification,
   runValuation as defaultRunValuation,
   runStory as defaultRunStory,
-  computePersonalScores,
-  computeDislikeScores,
+  computeTasteScores,
   type IdentificationResult,
   type StoryResult,
   type ValuationOutput,
@@ -27,6 +26,11 @@ import {
   type ArchetypeId,
 } from "./configs/archetypes";
 import type { Listing, Evaluation, ScanConfig } from "./types";
+
+// Items whose base score (story/price/era, no personalization) falls below
+// this never ship — personalized ranking reorders good items, it must not
+// resurrect ones that failed the story test.
+const QUALITY_FLOOR = 0.4;
 
 export type ScanProgress = {
   stage: 'fetch' | 'filter' | 'evaluate' | 'done' | 'error';
@@ -350,7 +354,17 @@ export async function runScan(
       }
     }
 
-    if (sizedFinds.length === 0) {
+    // Quality floor: personalization reorders, it must never resurrect items
+    // that failed the story test outright (base score = story/price/era only).
+    const qualifiedFinds = sizedFinds.filter(find => {
+      if (find.score < QUALITY_FLOOR) {
+        console.log(`  Below quality floor (${(find.score * 100).toFixed(0)}% < ${QUALITY_FLOOR * 100}%): ${find.evaluation.itemIdentification}`);
+        return false;
+      }
+      return true;
+    });
+
+    if (qualifiedFinds.length === 0) {
       console.log(`  No candidates`);
       continue;
     }
@@ -364,23 +378,22 @@ export async function runScan(
       .filter(v => v.direction === "down").slice(0, 20)
       .map(v => ({ itemIdentification: v.story.hook, styleGuide: v.story.styleGuide, hook: v.story.hook, mainStory: v.story.mainStory }));
 
-    let scoredFinds = sizedFinds;
+    let scoredFinds = qualifiedFinds;
     const hasStylingSignal = likedStories.length > 0 || dislikedStories.length > 0 || !!user.scoringContext;
     if (hasStylingSignal) {
       console.log(`  Personalizing: ${likedStories.length} liked, ${dislikedStories.length} disliked${user.scoringContext ? " + archetype profile" : ""}`);
-      const candidates = sizedFinds.map(f => ({
+      const candidates = qualifiedFinds.map(f => ({
         itemIdentification: f.evaluation.itemIdentification,
         styleGuide: f.evaluation.styleGuide,
         hook: f.evaluation.hook,
         mainStory: f.evaluation.mainStory,
       }));
-      const [personalScores, dislikeScores] = await Promise.all([
-        computePersonalScores(candidates, likedStories, user.scoringContext),
-        computeDislikeScores(candidates, dislikedStories),
-      ]);
-      scoredFinds = sizedFinds.map((find, i) => ({
+      // One contrastive call: scores each candidate by which side of the
+      // user's voting history (likes vs dislikes) it resembles.
+      const tasteScores = await computeTasteScores(candidates, likedStories, dislikedStories, user.scoringContext);
+      scoredFinds = qualifiedFinds.map((find, i) => ({
         ...find,
-        score: combinedScore(find.evaluation, personalScores[i], dislikeScores[i]),
+        score: combinedScore(find.evaluation, tasteScores[i]),
       }));
     }
 
@@ -393,7 +406,7 @@ export async function runScan(
 
     const TOP_N = 3;
     const toSend = [...scoredFinds].sort((a, b) => b.score - a.score).slice(0, TOP_N);
-    console.log(`  Sending top ${toSend.length} of ${sizedFinds.length} candidates`);
+    console.log(`  Sending top ${toSend.length} of ${qualifiedFinds.length} candidates`);
     await sendDigestEmail(toSend, user.email, user.language);
 
     // Record deliveries so these listings are never resent to this user

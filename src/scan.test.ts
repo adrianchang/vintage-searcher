@@ -244,6 +244,20 @@ describe("runScan", () => {
     expect(mockPrisma.evaluation.create.mock.calls.length).toBeGreaterThan(0);
   });
 
+  it("should not deliver items below the quality floor", async () => {
+    await runScan(config, makeDeps({
+      runStory: async (): Promise<StoryResult> => ({
+        hook: "Weak story item.",
+        mainStory: "Not much to say here.",
+        styleGuide: "Wear it however.",
+        storyScore: 0.2, // base ≈ 0.29 with these price scores → below 0.4 floor
+        storyScoreReasoning: "Generic piece, no real story.",
+      }),
+    }));
+
+    expect(mockPrisma.storyDelivery.create).not.toHaveBeenCalled();
+  });
+
   it("should continue scanning when a single evaluation fails", async () => {
     let callCount = 0;
     await runScan(config, makeDeps({
