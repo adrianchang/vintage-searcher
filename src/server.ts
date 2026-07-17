@@ -16,7 +16,7 @@ import {
   buildArchetypeConfigId,
   type ArchetypeId,
 } from "./configs/archetypes";
-import { postToThreads, type ThreadsStoryItem } from "./services/threads";
+import { postToThreads, resolveThreadsToken, type ThreadsStoryItem } from "./services/threads";
 import { parseTopSizeLabel, coercePitToPitInches, coerceWaistInches } from "./services/size";
 
 const app = express();
@@ -275,6 +275,10 @@ app.post("/scan", (req, res) => {
   console.log(`Scan triggered${isTest ? " [TEST MODE]" : ""}`);
   res.json({ status: "ok", message: "Scan started" });
 
+  // Piggyback on the daily scan to keep the Threads token perpetually
+  // refreshed — long-lived tokens die at ~60 days and can't be revived.
+  resolveThreadsToken(prisma).catch(() => {});
+
   runScan(activeScanConfig, {
     prisma,
     fetchListings,
@@ -366,6 +370,14 @@ app.post("/threads", async (req, res) => {
     return;
   }
 
+  // Fail loudly BEFORE acknowledging — a dead token used to make this
+  // endpoint return "ok" and then silently drop the post.
+  const threadsToken = await resolveThreadsToken(prisma);
+  if (!threadsToken) {
+    res.status(500).json({ error: "Threads access token invalid or missing — re-mint via Meta portal User Token Generator and set THREADS_ACCESS_TOKEN" });
+    return;
+  }
+
   const EN_EMAIL = "adrian.aa.chang@gmail.com";
   const EN_LANG = "zh";
 
@@ -411,7 +423,7 @@ app.post("/threads", async (req, res) => {
 
     res.json({ status: "ok", message: `Posting thread with ${items.length} stories` });
 
-    await postToThreads(title, intro, items);
+    await postToThreads(title, intro, items, threadsToken);
   } catch (err) {
     console.error("[THREADS] Endpoint error:", err);
   }

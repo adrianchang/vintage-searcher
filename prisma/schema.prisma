@@ -131,6 +131,14 @@ model UserArchetype {
   @@unique([userId, archetypeId])
 }
 
+// Self-refreshing credentials (e.g. the Threads access token) — key/value,
+// seeded from env vars, kept alive by the daily pipeline
+model AppCredential {
+  key       String   @id
+  value     String
+  updatedAt DateTime @default(now()) @updatedAt
+}
+
 // Managed by connect-pg-simple (express-session), not by Prisma
 model session {
   sid    String   @id @db.VarChar

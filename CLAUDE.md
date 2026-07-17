@@ -119,7 +119,9 @@ The Prisma client is generated into `src/generated/prisma` (checked into git, cu
 
 ### Threads Posting (`src/services/threads.ts`)
 
-`postToThreads(title, intro, items)` posts a carousel (one image per item, topic_tag 古著) + one text reply with the first item's story (truncated to fit the 500-char limit). Containers are polled until `FINISHED` before publishing. Uses `THREADS_USER_ID` + `THREADS_ACCESS_TOKEN` env vars (long-lived token, expires ~60 days, set on Render). Token refresh via `/threads/auth` → `/threads/callback`.
+`postToThreads(title, intro, items, accessToken)` posts a carousel (one image per item, topic_tag 古著) + one text reply with the first item's story (truncated to fit the 500-char limit). Containers are polled until `FINISHED` before publishing.
+
+**Token lifecycle (self-refreshing):** the long-lived token (~60-day expiry, refreshable only while still valid) lives in the `AppCredential` table, seeded from the `THREADS_ACCESS_TOKEN` env var. `resolveThreadsToken(prisma)` validates it (`/me`), refreshes it when >24h old (`refresh_access_token`, +60 days), and persists the result; the `/scan` handler calls it fire-and-forget so the daily cron keeps the token alive forever. `POST /threads` resolves + validates the token BEFORE returning "ok" (a dead token used to fail silently after the 200 response). If the token ever fully dies (service down 60+ days), re-mint via the Meta portal **User Token Generator** (not the `/threads/auth` OAuth flow) for the brand account and update the env var — the store re-seeds automatically. `THREADS_USER_ID` stays an env var.
 
 ### Email Template (`src/services/email.ts`)
 
