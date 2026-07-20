@@ -31,15 +31,18 @@ Languages: en + zh (Traditional). Distribution: email (Resend) + Threads (@vinta
 
 ~30 real people (33 rows minus obvious typos), joined Feb–Jul 2026 at a steady trickle, now ~4–12/month. Mix of en/zh. Archetype selections skew: americana, military, european-workwear, ivy — classic menswear vintage. One power user (Mason: 70 votes) proves the engaged ceiling; a handful of light voters; the rest read silently.
 
-## 4. The direction question (OPEN — decide deliberately)
+## 4. Direction (converging — updated 2026-07-20)
 
-Three candidate directions, not mutually exclusive but demanding different investment:
+**The CUJ (Adrian, 2026-07-20):** subscribers open the email to see clothes → they look at the **pictures** → if an image catches them, they read the story → maybe click the eBay button. *Images are the decision moment.* Stories deepen interest; they don't create it.
 
-- **A. Taste engine as the product.** Personal curation as the identity. Requires the instrumentation layer (below) so the engine feeds on implicit signal from all subscribers, not just voters. Mason is the proof-of-concept.
-- **B. Threads-first media brand.** The stories are the asset; the digest is the conversion funnel. Argues for automating a daily Threads post from the pipeline and treating follower growth as the top metric. Evidence: posts convert.
-- **C. Monetize the click.** eBay Partner Network affiliate links on every button — revenue AND click/purchase tracking in one move (EPN reports both). Cheapest path to the measurement layer of A.
+Implications the direction now rests on:
 
-Current stance (2026-07-19): direction deliberately parked. Instrumentation (below) is step zero for **all three** — you can't steer blind — and C's EPN links may be the cheapest way to get part of it.
+1. **Personalization is the gold, and it must become visual.** The taste engine currently compares story prose, but votes/clicks are reactions to images — signal and representation are mismatched. Plan: Phase 1 emits a cached **visual signature** per listing (palette → texture → silhouette → patina → standout detail, one dense line) + picks the **hero shot** from the 12 photos; contrastive scoring compares signatures. Zero extra API calls. Later upgrade path: real image embeddings.
+2. **Daily themes — hard, fetch-level, orthogonal-axis.** Theme defines the day's candidate universe (the eBay queries themselves); personalization ranks within it. Themes live on axes orthogonal to archetypes (color, era, construction detail, provenance, price band) so theme and taste compose rather than collide. Soft/tiebreaker theming rejected — defeats the purpose. Side benefit: one shared query set per day is *cheaper* than per-archetype fan-out. Pipeline restructuring required; design open (theme selection, cadence).
+3. **Themes are the probe, clicks are the sensor.** Not everyone is Mason — most users will never vote, but they'll click. Themes deliberately push variety past the engine's bubble (structured exploration); clicks capture reactions effortlessly; `EngagementEvent` stores the probe-response pairs. A click on an off-taste theme item carries the most learning (surprise = signal). Sequencing: accumulate click data (running now, logging-only — scoring untouched) → build theme mechanism → then feed clicks into taste scoring as weak likes.
+4. **English Threads community: parked.** zh Threads converts and stays; the English market is bigger but contested — revisit after the personalization moat is real.
+
+Earlier A/B/C framing (taste-engine / Threads-media / monetize-click) resolves as: **A is the direction**, B stays a channel, C (EPN) slots into `/go` whenever monetization matters.
 
 ## 5. Metrics that matter
 
