@@ -255,6 +255,54 @@ app.get("/vote", async (req, res) => {
   }
 });
 
+// --- Click-through redirect (eBay button in emails) ---
+
+app.get("/go", async (req, res) => {
+  const { e: email, s: storyId, t: token } = req.query as Record<string, string>;
+
+  if (!email || !storyId || !token) {
+    res.status(400).send("Invalid link");
+    return;
+  }
+
+  // Same HMAC scheme as vote links ("click" pseudo-direction)
+  const expected = crypto.createHmac("sha256", VOTE_SECRET)
+    .update(`${email}:${storyId}:click`)
+    .digest("hex")
+    .slice(0, 32);
+
+  if (token !== expected) {
+    res.status(403).send("Invalid token");
+    return;
+  }
+
+  try {
+    const story = await prisma.story.findUnique({
+      where: { id: storyId },
+      include: { evaluation: true },
+    });
+    if (!story) {
+      res.status(404).send("Listing not found");
+      return;
+    }
+
+    // Record the click without delaying the redirect
+    prisma.user.upsert({
+      where: { email },
+      update: {},
+      create: { name: email, email },
+    })
+      .then(user => prisma.engagementEvent.create({ data: { userId: user.id, storyId, type: "click" } }))
+      .then(() => console.log(`[CLICK] ${email} → ${story.evaluation.url}`))
+      .catch(err => console.error("[CLICK] Failed to record:", err));
+
+    res.redirect(302, story.evaluation.url);
+  } catch (err) {
+    console.error("[CLICK] Error:", err);
+    res.status(500).send("Something went wrong");
+  }
+});
+
 // --- Scan (API key required) ---
 
 app.post("/scan", (req, res) => {

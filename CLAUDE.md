@@ -99,6 +99,7 @@ Users pick up to 3 archetypes at signup. Each archetype has:
 | `GET /` | — | Serves `public/signup.html` |
 | `POST /subscribe` | — | Upserts user by email; atomically replaces `UserKeyword` + `UserArchetype` (max 3 archetypes); accepts optional `topSize`/`waistSize`/`pitToPitInches` (absent = unchanged, null = cleared); never touches votes/deliveries |
 | `GET /vote` | HMAC token | Records thumbs up/down from email links; upserts (last click wins) |
+| `GET /go` | HMAC token | eBay-button click redirect: records an `EngagementEvent` (type `click`), then 302s to the listing URL |
 | `POST /scan` | `x-api-key` | Kicks off `runScan` async; `?test=true` limits to 10 listings + test recipients |
 | `POST /threads` | `x-api-key` | Posts last 3 deliveries to Threads |
 | `GET /threads/auth` → `GET /threads/callback` | — | Threads OAuth; callback page displays the long-lived token to copy into Render env vars |
@@ -125,7 +126,7 @@ The Prisma client is generated into `src/generated/prisma` (checked into git, cu
 
 ### Email Template (`src/services/email.ts`)
 
-HTML digest email, localized en/zh. Layout per item: era tag → image → eBay button (full-width) → hook quote → price block → story → style guide → feedback card (thumbs up/down). Vote URLs are HMAC-signed (`VOTE_SECRET`). Without `RESEND_API_KEY` set, emails are logged instead of sent.
+HTML digest email, localized en/zh. Layout per item: era tag → image → eBay button (full-width) → hook quote → price block → size line → story → style guide → feedback card (thumbs up/down). Vote URLs are HMAC-signed (`VOTE_SECRET`); the eBay button routes through `GET /go` (same HMAC scheme, "click" pseudo-direction) so click-throughs are recorded as `EngagementEvent` rows before redirecting. Without `RESEND_API_KEY` set, emails are logged instead of sent.
 
 ## Environment Variables
 

@@ -54,10 +54,11 @@ Funnel: **delivered → opened → clicked through to eBay → voted → (bought
 ## 6. Roadmap candidates (near-term, roughly ordered)
 
 1. **Instrumentation package** — the agreed step zero:
+   - ✅ eBay-button click tracking (2026-07-19): button routes through signed `GET /go` → `EngagementEvent` row → 302 to listing. Per-user, per-story purchase-intent signal in our own DB; the redirect is also where future EPN affiliate links slot in.
    - Purge/handle bounce addresses (3 known bad)
    - Unsubscribe link + List-Unsubscribe header (deliverability + honest churn signal)
-   - Resend click tracking on + `/resend/webhook` endpoint storing per-user open/click events in the DB
-   - Feed clicks into taste scoring as implicit votes (a clicked item ≈ weak upvote)
+   - `/resend/webhook` endpoint storing open/bounce/complaint events in `EngagementEvent` (Resend signs events; tags on send make them self-identifying)
+   - Feed clicks into taste scoring as implicit votes (a clicked item ≈ weak upvote) — deliberately after a week of real click data
 2. **Mason verdict (2026-07-23, scheduled)** — decide whether contrastive scoring stands or needs the fallbacks in taste_discussion.md
 3. **Threads cadence** — automate a daily/near-daily post from the scan pipeline (title/intro generated, human-approvable); measure signups per post
 4. **eBay Partner Network** — apply, swap listing URLs for affiliate links (pairs naturally with #1's click tracking)

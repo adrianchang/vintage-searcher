@@ -29,6 +29,7 @@ model User {
   votes      Vote[]
   deliveries StoryDelivery[]
   archetypes UserArchetype[]
+  engagement EngagementEvent[]
 }
 
 model UserKeyword {
@@ -95,6 +96,7 @@ model Story {
 
   createdAt            DateTime    @default(now())
   votes                Vote[]
+  engagement           EngagementEvent[]
 
   @@unique([evaluationId, language, configId])
 }
@@ -129,6 +131,21 @@ model UserArchetype {
   createdAt   DateTime @default(now())
 
   @@unique([userId, archetypeId])
+}
+
+// Implicit engagement signal: /go redirect clicks now; Resend webhook events
+// (open/bounce/complaint) later — one table for everything the taste engine
+// may eventually read alongside votes.
+model EngagementEvent {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  storyId   String?
+  story     Story?   @relation(fields: [storyId], references: [id])
+  type      String   // "click" (future: "open", "bounce", "complaint")
+  createdAt DateTime @default(now())
+
+  @@index([userId, type])
 }
 
 // Self-refreshing credentials (e.g. the Threads access token) — key/value,

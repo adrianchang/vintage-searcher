@@ -34,6 +34,15 @@ function buildVoteUrl(email: string, storyId: string, direction: "up" | "down"):
   return `${APP_URL}/vote?${params.toString()}`;
 }
 
+// eBay button goes through /go so the click is recorded (EngagementEvent)
+// before a 302 to the listing. Signed like vote links; "click" can never
+// collide with a vote direction.
+export function buildClickUrl(email: string, storyId: string): string {
+  const token = buildVoteToken(email, storyId, "click");
+  const params = new URLSearchParams({ e: email, s: storyId, t: token });
+  return `${APP_URL}/go?${params.toString()}`;
+}
+
 const LABELS: Record<string, Record<string, string>> = {
   en: {
     dailyEdit: "The Daily Edit",
@@ -276,11 +285,11 @@ function buildItemHtml(item: DigestItem, index: number, total: number, L: Record
       <!-- Image -->
       ${imageUrl ? `<img src="${imageUrl}" alt="${escapeHtml(listing.title)}" width="600" style="width:100%;max-width:600px;height:auto;display:block;border-radius:4px;margin-bottom:20px;aspect-ratio:4/3;object-fit:cover;">` : ""}
 
-      <!-- eBay CTA (top) -->
+      <!-- eBay CTA (top) — routed through /go for click tracking -->
       <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
         <tr>
           <td>
-            <a href="${listing.url}" style="display:block;padding:14px 28px;background:#2c2c2c;color:#fff;text-decoration:none;font-size:13px;letter-spacing:1px;font-family:Helvetica,Arial,sans-serif;border-radius:2px;text-align:center;">
+            <a href="${buildClickUrl(recipient, item.storyId)}" style="display:block;padding:14px 28px;background:#2c2c2c;color:#fff;text-decoration:none;font-size:13px;letter-spacing:1px;font-family:Helvetica,Arial,sans-serif;border-radius:2px;text-align:center;">
               ${L.viewOnEbay}
             </a>
           </td>
