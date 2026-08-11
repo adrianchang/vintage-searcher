@@ -31,7 +31,11 @@ Languages: en + zh (Traditional). Distribution: email (Resend) + Threads (@vinta
 
 ~30 real people (33 rows minus obvious typos), joined Feb–Jul 2026 at a steady trickle, now ~4–12/month. Mix of en/zh. Archetype selections skew: americana, military, european-workwear, ivy — classic menswear vintage. One power user (Mason: 70 votes) proves the engaged ceiling; a handful of light voters; the rest read silently.
 
-## 4. Direction (converging — updated 2026-07-20)
+## 4. Direction — PARKED (2026-08-10)
+
+> **Status: parked.** The deep-personalization exploration below (visual signatures, hard themes, the cosplay/character detour) did not converge on a concrete next build — the Tinder-swipe prototype (2026-08-08/09) was built to test the costume/identity direction and **didn't feel great in practice**. No better concrete idea yet. Default activity until then: **grow the existing email product** (subscribers, deliverability, Threads cadence) rather than new personalization R&D. Revisit this section when a sharper idea shows up — the thinking below is preserved, not discarded.
+
+### 4a. Original CUJ-driven direction (2026-07-20)
 
 **The CUJ (Adrian, 2026-07-20):** subscribers open the email to see clothes → they look at the **pictures** → if an image catches them, they read the story → maybe click the eBay button. *Images are the decision moment.* Stories deepen interest; they don't create it.
 
@@ -44,6 +48,40 @@ Implications the direction now rests on:
 
 Earlier A/B/C framing (taste-engine / Threads-media / monetize-click) resolves as: **A is the direction**, B stays a channel, C (EPN) slots into `/go` whenever monetization matters.
 
+### 4b. "Are we just eBay + personalization?" reckoning (2026-07-31)
+
+Forced test: eBay itself could copy "personalization on top of our inventory" — it's a feature, not a moat, and eBay has far more purchase-signal than we'll ever have. Counter: eBay's personalization has a **structural ceiling**, not just an effort gap — one engine serving every category can't go deep on any single vertical the way a narrow, opinionated product can. Defined three levels of fashion personalization:
+
+- **Level 1** (eBay/Amazon): collaborative filtering — "people who clicked X also clicked Y." No understanding of *why*.
+- **Level 2** (roughly where we are): vibe/aesthetic similarity via story-prose comparison (Stitch Fix territory) — better, but an opaque black-box judgment.
+- **Level 3** (nobody's built this for fashion): interpretable, faceted taste — structured collector facets (era, construction/authenticity markers, material, silhouette, narrative-arc type) instead of prose; **learned per-user facet weights** so recommendations are explainable ("picked because you respond to union-label pieces with visible repair"); visual taste scored at the construction-detail level, not just color/silhouette; **fit fused with taste** — learned per-brand/era sizing drift specific to the user, not static tolerances; a **legible, evolving taste profile shown back to the user** as its own product surface; themes used as *active* taste-mapping probes, not just discovery.
+
+Foundational piece identified: structured facets + learned per-user weights (bullet 1+2) — everything else sits on top of that. Not built.
+
+### 4c. Preference-signal research pass (2026-08-01)
+
+Surveyed how other products elicit preference, since votes alone weren't yielding enough signal (~25 of 30 subscribers never voted):
+
+- **Stitch Fix Style Shuffle** — a standalone swipe game (thumbs on outfit photos), separate from any single delivery; 75% of users play it, feeding real-time taste models. For us: a page built from the 3,600+ already-evaluated listings could solve new-subscriber cold start in minutes.
+- **Cold-start academic literature** — pairwise ("which of these two?") beats single-item rating for informativeness; active learning picks the most informative next question. Maps directly onto the contrastive taste scorer, which already wants A-vs-B pairs.
+- **Newsletter one-click polls** — lift both engagement and deliverability (beehiiv/Litmus/Inbox Collective). Cheapest form for us: a "which won today?" pick among the 3 delivered items.
+- **TikTok** — zero onboarding, pure behavioral inference; a like can be performative, real behavior doesn't lie. Validates leaning on clicks over votes; email's ceiling on implicit signal is lower than video (no dwell/watch time).
+- **Grailed/Depop "grail list" pattern** — collectors already think in standing hunts. A "reply with what you're hunting" mechanic → parsed into direct eBay queries; email replies are also the single strongest deliverability signal there is.
+
+Ranked recommendation (not built): (1) this-or-that pairwise block in the digest, (2) grail-list via reply, (3) Style Shuffle-style cold-start page, (4) "best of today" poll.
+
+### 4d. The costume/cosplay thesis (2026-08-02 to 2026-08-08) — tested, parked
+
+Core reframe (Adrian): clothing's real product is identity performance — "we're all cosplaying to be someone." Vintage is uniquely suited to this because every piece already carries a pre-built character (a union label is a workman, a Baracuta G9 is a 1960s London kid) — the story engine has effectively been doing costume-department research since day one, just aimed at the garment instead of the wearer. Reframed archetypes as **roles**, not style categories (Ivy = the young professor, Biker = the outlaw).
+
+Explored and set aside as too gamey / disconnected from real recommendations: swiping on full "characters" (persona + scene) rather than single garments; a progressive "character sheet" reveal instead of a taste-profile paragraph; swipe contradictions spawning a second persona rather than the user choosing "multiple selves" mode upfront.
+
+Refined via the retail sales-associate mechanism (Adrian, 2026-08-08): the actual dopamine trigger is **successfully imagining a better version of yourself, with help** — not gamification, not aesthetics alone. Decomposed what a good associate does: completes the picture (full outfit, not one item), narrates a scene not a spec ("Friday night, you walk in wearing this" vs. "raw denim, selvedge"), implies a social payoff (an imagined audience reacting), reads and tailors the pitch to be plausible for *this* person, grants permission/confidence (pre-empts self-doubt), anchors it visually (the mirror). Our edge vs. a live associate: no real-time responsiveness, but weeks of longitudinal knowledge no in-store associate has.
+
+Cheap, mostly-already-built path identified but not shipped: the existing `styleGuide` field already attempts the associate's job but in third-person instructional voice ("this pairs well with…") rather than second-person scene/permission voice ("you, walking in wearing this…") — rewriting the voice, paired with a full-outfit visual as the "mirror," might unlock much of the effect without new infrastructure. Left open: does the imagined "you" need to feel earned/specific (tied to known archetype/size/history) to land, or does strong generic second-person copy get most of the way there cheaply? **Untested.**
+
+**Outcome:** a Tinder-swipe prototype was built to test the identity/costume direction directly. It didn't feel great. Parked pending a better concrete idea — the `styleGuide`-voice rewrite and the pairwise/grail-list mechanics from 4c remain candidate next experiments if/when this reopens.
+
 ## 5. Metrics that matter
 
 Funnel: **delivered → opened → clicked through to eBay → voted → (bought)**
@@ -55,6 +93,8 @@ Funnel: **delivered → opened → clicked through to eBay → voted → (bought
 - Currently unmeasured: clicks (no tracking), unsubscribes (no mechanism!), purchases
 
 ## 6. Roadmap candidates (near-term, roughly ordered)
+
+**Current focus (2026-08-10): growing the existing email product** — subscriber growth, deliverability, Threads cadence. Personalization/instrumentation items below are on hold, not deleted, until the direction in §4 unparks.
 
 1. **Instrumentation package** — the agreed step zero:
    - ✅ eBay-button click tracking (2026-07-19): button routes through signed `GET /go` → `EngagementEvent` row → 302 to listing. Per-user, per-story purchase-intent signal in our own DB; the redirect is also where future EPN affiliate links slot in.
@@ -83,3 +123,5 @@ Funnel: **delivered → opened → clicked through to eBay → voted → (bought
 | 2026-07-16 | Contrastive taste score replaces like/dislike dual-call; dislike multiplier deleted; 0.4 quality floor | Swimsuit incident; full forensics in taste_discussion.md |
 | 2026-07-17 | Threads token self-refreshes from DB; outward actions verified, never trusted | Silent-failure postmortem |
 | 2026-07-19 | Email channel validated (53% open); direction parked pending instrumentation | This document |
+| 2026-08-05 | Mason Lee unsubscribed (email cleared, history preserved) | User request; taste-scoring vote history kept for record |
+| 2026-08-10 | Deep-personalization direction (visual signatures, hard themes, cosplay/costume) parked; focus shifts to email growth | Tinder-swipe prototype tested the costume direction and didn't feel great; no better concrete idea yet |
