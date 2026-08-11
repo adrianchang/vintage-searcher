@@ -11,6 +11,8 @@ export interface Listing {
 
 // LLM evaluation output
 export interface Evaluation {
+  id: string;
+  hasProcessedImage: boolean;
   isAuthentic: boolean;
   itemIdentification: string;
   identificationConfidence: number;

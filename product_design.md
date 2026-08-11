@@ -125,3 +125,4 @@ Funnel: **delivered → opened → clicked through to eBay → voted → (bought
 | 2026-07-19 | Email channel validated (53% open); direction parked pending instrumentation | This document |
 | 2026-08-05 | Mason Lee unsubscribed (email cleared, history preserved) | User request; taste-scoring vote history kept for record |
 | 2026-08-10 | Deep-personalization direction (visual signatures, hard themes, cosplay/costume) parked; focus shifts to email growth | Tinder-swipe prototype tested the costume direction and didn't feel great; no better concrete idea yet |
+| 2026-08-10 | Price block moved above the eBay CTA in email; hero images background-removed to a soft gray studio backdrop (`#d9d5cc`) via `gemini-3.1-flash-image` | Messy/inconsistent listing-photo backgrounds looked unprofessional; price-before-buy-decision is a small conversion improvement. Gray chosen over cream/white after a real side-by-side test on a dark garment |

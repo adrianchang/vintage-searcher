@@ -190,6 +190,9 @@ function makeDeps(overrides?: Partial<ScanDeps>): ScanDeps {
       storyScore: 0.8,
       storyScoreReasoning: "Strong narrative.",
     }),
+    // No real Gemini call in tests by default — must be explicitly overridden
+    // to test the success path.
+    runBackgroundRemoval: async () => null,
     ...overrides,
   };
 }
@@ -286,6 +289,28 @@ describe("runScan", () => {
     expect(JSON.parse(firstEvalData.references)).toBeInstanceOf(Array);
     expect(typeof firstEvalData.soldListings).toBe("string");
     expect(JSON.parse(firstEvalData.soldListings)).toBeInstanceOf(Array);
+  });
+
+  it("stores the background-removed image when generation succeeds", async () => {
+    await runScan(config, makeDeps({
+      runBackgroundRemoval: async () => ({ bytes: Buffer.from("fake-jpeg-bytes"), mimeType: "image/jpeg" }),
+    }));
+
+    const firstEvalData = mockPrisma.evaluation.create.mock.calls[0][0].data;
+    expect(firstEvalData.hasProcessedImage).toBe(true);
+    expect(firstEvalData.heroImageMimeType).toBe("image/jpeg");
+    expect(Buffer.from(firstEvalData.heroImageBytes).toString()).toBe("fake-jpeg-bytes");
+  });
+
+  it("does not fail evaluation creation when background removal fails", async () => {
+    await runScan(config, makeDeps({
+      runBackgroundRemoval: async () => null, // matches makeDeps' default, explicit here for clarity
+    }));
+
+    expect(mockPrisma.evaluation.create).toHaveBeenCalledTimes(2);
+    const firstEvalData = mockPrisma.evaluation.create.mock.calls[0][0].data;
+    expect(firstEvalData.hasProcessedImage).toBeUndefined();
+    expect(firstEvalData.heroImageBytes).toBeUndefined();
   });
 });
 

@@ -203,7 +203,11 @@ function buildEmailHtml(items: DigestItem[], recipient: string, lang = "en"): st
 
 function buildItemHtml(item: DigestItem, index: number, total: number, L: Record<string, string>, recipient: string): string {
   const { listing, evaluation } = item;
-  const imageUrl = listing.imageUrls[0] || "";
+  // Prefer the background-removed hero image (gray studio backdrop) when
+  // available; falls back to the raw listing photo otherwise.
+  const imageUrl = evaluation.hasProcessedImage
+    ? `${APP_URL}/evaluations/${evaluation.id}/image`
+    : (listing.imageUrls[0] || "");
   const pScore = priceScore(evaluation);
   const cScore = combinedScore(evaluation);
   const isUndervalued = evaluation.margin != null && evaluation.estimatedValue != null && pScore > 0.2;
@@ -285,8 +289,12 @@ function buildItemHtml(item: DigestItem, index: number, total: number, L: Record
       <!-- Image -->
       ${imageUrl ? `<img src="${imageUrl}" alt="${escapeHtml(listing.title)}" width="600" style="width:100%;max-width:600px;height:auto;display:block;border-radius:4px;margin-bottom:20px;aspect-ratio:4/3;object-fit:cover;">` : ""}
 
+      <!-- Price block (moved above the fold — price before the buy decision) -->
+      ${priceHtml}
+      ${sizeHtml}
+
       <!-- eBay CTA (top) — routed through /go for click tracking -->
-      <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0 28px;">
         <tr>
           <td>
             <a href="${buildClickUrl(recipient, item.storyId)}" style="display:block;padding:14px 28px;background:#2c2c2c;color:#fff;text-decoration:none;font-size:13px;letter-spacing:1px;font-family:Helvetica,Arial,sans-serif;border-radius:2px;text-align:center;">
@@ -300,10 +308,6 @@ function buildItemHtml(item: DigestItem, index: number, total: number, L: Record
       <h2 style="margin:0 0 20px;font-size:21px;font-weight:normal;line-height:1.5;color:#1a1a1a;font-style:italic;">
         "${escapeHtml(evaluation.hook)}"
       </h2>
-
-      <!-- Price block -->
-      ${priceHtml}
-      ${sizeHtml}
 
       <!-- Story -->
       <h3 style="margin:24px 0 8px;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#888;font-family:Helvetica,Arial,sans-serif;">${L.theStory}</h3>

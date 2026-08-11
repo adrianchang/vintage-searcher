@@ -64,6 +64,15 @@ model Evaluation {
   priceScore     Float?
   imageUrl       String?
 
+  // Background-removed hero image (gray studio backdrop). Generated once per
+  // listing at evaluation-creation time; never regenerated. Served via
+  // GET /evaluations/:id/image — bytes stay out of normal Evaluation queries
+  // (see scan.ts's use of Prisma `omit`) so routine cache-check lookups don't
+  // pull a multi-hundred-KB payload.
+  heroImageBytes    Bytes?
+  heroImageMimeType String?
+  hasProcessedImage Boolean @default(false)
+
   // Size extraction (null on rows evaluated before size matching existed)
   garmentType    String? // top | outerwear | bottom | dress | footwear | accessory | other
   labeledSize    String?

@@ -303,6 +303,36 @@ app.get("/go", async (req, res) => {
   }
 });
 
+// --- Background-removed hero image (served from our own domain so email
+// clients and Threads can fetch it like any other image URL) ---
+
+app.get("/evaluations/:id/image", async (req, res) => {
+  try {
+    const evaluation = await prisma.evaluation.findUnique({
+      where: { id: req.params.id },
+      select: { heroImageBytes: true, heroImageMimeType: true, imageUrl: true },
+    });
+    if (!evaluation) {
+      res.status(404).send("Not found");
+      return;
+    }
+    if (evaluation.heroImageBytes) {
+      res.setHeader("Content-Type", evaluation.heroImageMimeType || "image/jpeg");
+      res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+      res.send(evaluation.heroImageBytes);
+      return;
+    }
+    if (evaluation.imageUrl) {
+      res.redirect(302, evaluation.imageUrl);
+      return;
+    }
+    res.status(404).send("No image available");
+  } catch (err) {
+    console.error("[IMAGE] Error:", err);
+    res.status(500).send("Something went wrong");
+  }
+});
+
 // --- Scan (API key required) ---
 
 app.post("/scan", (req, res) => {

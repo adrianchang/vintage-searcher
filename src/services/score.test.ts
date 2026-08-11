@@ -3,6 +3,8 @@ import type { Evaluation } from "../types";
 import { priceScore, combinedScore, isGoodFind } from "./score";
 
 const STORY_DEFAULTS = {
+  id: "test-eval",
+  hasProcessedImage: false,
   hook: "A garment from another era.",
   mainStory: "A brand with history. A piece with details. Real heads know this one.",
   styleGuide: "Wear it with raw denim and a clean tee.",

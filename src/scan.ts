@@ -6,10 +6,12 @@ import {
   runIdentification as defaultRunIdentification,
   runValuation as defaultRunValuation,
   runStory as defaultRunStory,
+  runBackgroundRemoval as defaultRunBackgroundRemoval,
   computeTasteScores,
   type IdentificationResult,
   type StoryResult,
   type ValuationOutput,
+  type BackgroundRemovalResult,
 } from "./services/evaluate";
 import {
   resolveGarmentSize,
@@ -47,6 +49,7 @@ export interface ScanDeps {
   runIdentification?: typeof defaultRunIdentification;
   runValuation?: typeof defaultRunValuation;
   runStory?: typeof defaultRunStory;
+  runBackgroundRemoval?: typeof defaultRunBackgroundRemoval;
 }
 
 // Distribute total listings across keywords using percentage weights.
@@ -84,6 +87,8 @@ function buildEvaluationFromParts(
   story: StoryResult,
 ): Evaluation {
   return {
+    id: dbEvaluation.id,
+    hasProcessedImage: dbEvaluation.hasProcessedImage ?? false,
     isAuthentic: dbEvaluation.isAuthentic,
     itemIdentification: dbEvaluation.itemIdentification,
     identificationConfidence: dbEvaluation.identificationConfidence,
@@ -120,6 +125,7 @@ export async function runScan(
   const identify = deps.runIdentification ?? defaultRunIdentification;
   const valuate = deps.runValuation ?? defaultRunValuation;
   const generateStory = deps.runStory ?? defaultRunStory;
+  const removeBackground = deps.runBackgroundRemoval ?? defaultRunBackgroundRemoval;
 
   console.log(`Starting vintage scan on ${config.platform}...`);
 
@@ -222,7 +228,13 @@ export async function runScan(
       let cached = evalCache.get(listing.url);
 
       if (!cached) {
-        let dbEvaluation = await prisma.evaluation.findUnique({ where: { url: listing.url } });
+        // omit: heroImageBytes is a multi-hundred-KB blob — this lookup runs
+        // for every (user, listing) pair in a scan, so keeping it out of the
+        // normal payload matters (it's fetched separately by the image route).
+        let dbEvaluation = await prisma.evaluation.findUnique({
+          where: { url: listing.url },
+          omit: { heroImageBytes: true },
+        });
 
         if (!dbEvaluation) {
           onProgress?.({
@@ -235,6 +247,10 @@ export async function runScan(
           try {
             const identification = await identify(listing);
             const valuation = await valuate(listing, identification);
+            // Best-effort — never blocks evaluation creation on failure.
+            const heroImage = listing.imageUrls[0]
+              ? await removeBackground(listing.imageUrls[0])
+              : null;
 
             evalCount++;
             const hasSoldData = (valuation.soldListings?.length ?? 0) > 0;
@@ -272,7 +288,11 @@ export async function runScan(
                 sizeEvidence: size.resolution,
                 sizeRaw: JSON.stringify(identification.sizing ?? {}),
                 isOpportunity: true,
+                ...(heroImage
+                  ? { heroImageBytes: new Uint8Array(heroImage.bytes), heroImageMimeType: heroImage.mimeType, hasProcessedImage: true }
+                  : {}),
               },
+              omit: { heroImageBytes: true },
             });
           } catch (error) {
             evalErrors++;

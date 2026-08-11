@@ -100,6 +100,7 @@ Users pick up to 3 archetypes at signup. Each archetype has:
 | `POST /subscribe` | — | Upserts user by email; atomically replaces `UserKeyword` + `UserArchetype` (max 3 archetypes); accepts optional `topSize`/`waistSize`/`pitToPitInches` (absent = unchanged, null = cleared); never touches votes/deliveries |
 | `GET /vote` | HMAC token | Records thumbs up/down from email links; upserts (last click wins) |
 | `GET /go` | HMAC token | eBay-button click redirect: records an `EngagementEvent` (type `click`), then 302s to the listing URL |
+| `GET /evaluations/:id/image` | — | Serves the background-removed hero image (bytes from DB); 302s to the original listing image if none was generated |
 | `POST /scan` | `x-api-key` | Kicks off `runScan` async; `?test=true` limits to 10 listings + test recipients |
 | `POST /threads` | `x-api-key` | Posts last 3 deliveries to Threads |
 | `GET /threads/auth` → `GET /threads/callback` | — | Threads OAuth; callback page displays the long-lived token to copy into Render env vars |
@@ -126,7 +127,9 @@ The Prisma client is generated into `src/generated/prisma` (checked into git, cu
 
 ### Email Template (`src/services/email.ts`)
 
-HTML digest email, localized en/zh. Layout per item: era tag → image → eBay button (full-width) → hook quote → price block → size line → story → style guide → feedback card (thumbs up/down). Vote URLs are HMAC-signed (`VOTE_SECRET`); the eBay button routes through `GET /go` (same HMAC scheme, "click" pseudo-direction) so click-throughs are recorded as `EngagementEvent` rows before redirecting. Without `RESEND_API_KEY` set, emails are logged instead of sent.
+HTML digest email, localized en/zh. Layout per item: era tag → image → price block → size line → eBay button (full-width) → hook quote → story → style guide → feedback card (thumbs up/down) — price moved above the CTA (2026-08-10) so the number is visible before the buy decision. Vote URLs are HMAC-signed (`VOTE_SECRET`); the eBay button routes through `GET /go` (same HMAC scheme, "click" pseudo-direction) so click-throughs are recorded as `EngagementEvent` rows before redirecting. Without `RESEND_API_KEY` set, emails are logged instead of sent.
+
+**Hero image background removal:** at evaluation-creation time (`scan.ts`), `runBackgroundRemoval` (in `evaluate.ts`) sends the listing's first image to `gemini-3.1-flash-image` via `generateContent` (same API key, same throttle queue as identification/valuation/story — no Vertex AI setup) requesting a soft neutral gray backdrop (`#d9d5cc`, chosen over pure white and the brand's own cream after a side-by-side test). Best-effort only — never blocks evaluation creation on failure. Result is stored as raw bytes on `Evaluation.heroImageBytes`/`heroImageMimeType`/`hasProcessedImage`, generated once per listing forever (same caching tier as identification, not per story/config — the same photo is reused across every archetype/language variant). Bytes are deliberately excluded (`omit`) from the routine per-user cache-check query in `scan.ts` since they're a multi-hundred-KB payload hit on every (user, listing) pair; only `GET /evaluations/:id/image` fetches them, falling back to the original `imageUrl` if generation never succeeded (legacy rows, or failures).
 
 ## Environment Variables
 

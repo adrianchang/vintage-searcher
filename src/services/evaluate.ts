@@ -575,6 +575,69 @@ export async function runValuation(
   return { ...valuation, references };
 }
 
+const BACKGROUND_REMOVAL_MODEL = "gemini-3.1-flash-image";
+
+// Same target color validated in the background-swap test (2026-08-10):
+// soft neutral warm gray, chosen over pure white and the brand's cream.
+const BACKGROUND_REMOVAL_PROMPT = "Replace the background of this product photo with a smooth, seamless studio background in a soft neutral warm gray, hex #d9d5cc. Keep the garment itself completely unchanged — same pose, folds, color, lighting, any visible tags or labels. Only the background changes.";
+
+export interface BackgroundRemovalResult {
+  bytes: Buffer;
+  mimeType: string;
+}
+
+/**
+ * Best-effort background swap on a listing's hero image. Runs once per
+ * listing at evaluation-creation time (cached forever, like identification).
+ * Never throws — a failure here should never block evaluation creation;
+ * callers fall back to the original listing image.
+ */
+export async function runBackgroundRemoval(imageUrl: string): Promise<BackgroundRemovalResult | null> {
+  const timestamp = () => new Date().toISOString();
+  try {
+    const imgRes = await fetch(imageUrl);
+    if (!imgRes.ok) {
+      console.log(`[${timestamp()}]   ⚠ Background removal: source image fetch failed (${imgRes.status})`);
+      return null;
+    }
+    const rawMime = imgRes.headers.get("content-type") || "image/jpeg";
+    const mimeType = rawMime.split(";")[0].trim();
+    const buf = Buffer.from(await imgRes.arrayBuffer());
+
+    await throttle();
+    console.log(`[${timestamp()}]   Background removal: calling Gemini...`);
+    const response = await genAI.models.generateContent({
+      model: BACKGROUND_REMOVAL_MODEL,
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { text: BACKGROUND_REMOVAL_PROMPT },
+            { inlineData: { data: buf.toString("base64"), mimeType } },
+          ],
+        },
+      ],
+      config: { responseModalities: ["IMAGE"] },
+    });
+
+    const parts = response.candidates?.[0]?.content?.parts ?? [];
+    const imgPart = parts.find((p) => p.inlineData?.data);
+    if (!imgPart?.inlineData?.data) {
+      console.log(`[${timestamp()}]   ⚠ Background removal: no image in response`);
+      return null;
+    }
+
+    console.log(`[${timestamp()}]   ✓ Background removal: succeeded`);
+    return {
+      bytes: Buffer.from(imgPart.inlineData.data, "base64"),
+      mimeType: imgPart.inlineData.mimeType || "image/jpeg",
+    };
+  } catch (error) {
+    console.log(`[${timestamp()}]   ⚠ Background removal failed: ${error instanceof Error ? error.message : error}`);
+    return null;
+  }
+}
+
 export async function runIdentification(listing: Listing): Promise<IdentificationResult> {
   const timestamp = () => new Date().toISOString();
   // 12 images (up from 8): tape-measure shots usually come late in the set
