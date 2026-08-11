@@ -577,9 +577,10 @@ export async function runValuation(
 
 const BACKGROUND_REMOVAL_MODEL = "gemini-3.1-flash-image";
 
-// Same target color validated in the background-swap test (2026-08-10):
-// soft neutral warm gray, chosen over pure white and the brand's cream.
-const BACKGROUND_REMOVAL_PROMPT = "Replace the background of this product photo with a smooth, seamless studio background in a soft neutral warm gray, hex #d9d5cc. Keep the garment itself completely unchanged — same pose, folds, color, lighting, any visible tags or labels. Only the background changes.";
+// Background-swap test (2026-08-10) compared white/cream/gray on a live
+// production run; gray was the initial pick but overridden to pure white
+// after reviewing real results.
+const BACKGROUND_REMOVAL_PROMPT = "Replace the background of this product photo with a clean, seamless, pure white studio background. Keep the garment itself completely unchanged — same pose, folds, color, lighting, any visible tags or labels. Only the background changes.";
 
 export interface BackgroundRemovalResult {
   bytes: Buffer;
