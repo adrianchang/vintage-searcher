@@ -235,36 +235,30 @@ function buildItemHtml(item: DigestItem, index: number, total: number, L: Record
       </tr>`
     : "";
 
-  const priceHtml = isUndervalued
-    ? `<table cellpadding="0" cellspacing="0" style="margin-top:24px;background:#1a1a1a;border-radius:4px;overflow:hidden;">
+  // Quiet single-line treatment on the page's own cream background — no dark
+  // box. Isolation-effect research: the eBay button below is the one bold
+  // dark element per item; a matching dark price card would compete with it
+  // instead of reinforcing it. Colors are darker/richer than the on-dark
+  // versions used elsewhere (era tag, style label) since these sit directly
+  // on #f5f0eb and need their own contrast.
+  const priceText = isUndervalued
+    ? `<span style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#999;font-family:Helvetica,Arial,sans-serif;">${L.listed}</span>
+       <span style="font-size:17px;color:#1a1a1a;font-family:Helvetica,Arial,sans-serif;font-weight:600;">$${listing.price.toFixed(0)}</span>
+       <span style="color:#bbb;font-size:14px;"> → </span>
+       <span style="font-size:17px;color:#8a6a30;font-family:Helvetica,Arial,sans-serif;font-weight:600;">$${evaluation.estimatedValue!.toFixed(0)}</span>
+       <span style="font-size:12px;color:#2f7a52;font-family:Helvetica,Arial,sans-serif;font-weight:600;margin-left:8px;">+$${evaluation.margin!.toFixed(0)} ${L.upside}</span>`
+    : `<span style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#999;font-family:Helvetica,Arial,sans-serif;">${L.listedPrice}</span>
+       <span style="font-size:17px;color:#1a1a1a;font-family:Helvetica,Arial,sans-serif;font-weight:600;">$${listing.price.toFixed(0)}</span>`;
+
+  // Price + vote share one row — folds the old standalone feedback card in
+  // here. Vote timing moves earlier (right after image+price, before the
+  // story) — a closer-to-gut-reaction signal; worth watching in vote data.
+  const priceHtml = `<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:20px;">
         <tr>
-          <td style="padding:16px 24px;">
-            <p style="margin:0;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#888;font-family:Helvetica,Arial,sans-serif;">${L.theNumbers}</p>
-            <table cellpadding="0" cellspacing="0" style="margin-top:8px;width:100%;">
-              <tr>
-                <td>
-                  <span style="font-size:13px;color:#aaa;font-family:Helvetica,Arial,sans-serif;">${L.listed}</span><br>
-                  <span style="font-size:22px;color:#fff;font-family:Helvetica,Arial,sans-serif;font-weight:300;">$${listing.price.toFixed(0)}</span>
-                </td>
-                <td style="padding:0 20px;color:#555;font-size:20px;font-family:Helvetica,Arial,sans-serif;" align="center">→</td>
-                <td>
-                  <span style="font-size:13px;color:#aaa;font-family:Helvetica,Arial,sans-serif;">${L.estValue}</span><br>
-                  <span style="font-size:22px;color:#c8a96e;font-family:Helvetica,Arial,sans-serif;font-weight:300;">$${evaluation.estimatedValue!.toFixed(0)}</span>
-                </td>
-                <td align="right">
-                  <span style="font-size:11px;color:#888;font-family:Helvetica,Arial,sans-serif;">${L.upside}</span><br>
-                  <span style="font-size:22px;color:#7ec8a0;font-family:Helvetica,Arial,sans-serif;font-weight:300;">+$${evaluation.margin!.toFixed(0)}</span>
-                </td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-      </table>`
-    : `<table cellpadding="0" cellspacing="0" style="margin-top:24px;background:#1a1a1a;border-radius:4px;overflow:hidden;">
-        <tr>
-          <td style="padding:16px 24px;">
-            <p style="margin:0;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#888;font-family:Helvetica,Arial,sans-serif;">${L.listedPrice}</p>
-            <span style="font-size:22px;color:#fff;font-family:Helvetica,Arial,sans-serif;font-weight:300;">$${listing.price.toFixed(0)}</span>
+          <td style="vertical-align:middle;">${priceText}</td>
+          <td align="right" style="vertical-align:middle;white-space:nowrap;">
+            <a href="${buildVoteUrl(recipient, item.storyId, "up")}" style="display:inline-block;padding:10px 12px;color:#333;text-decoration:none;font-size:19px;">👍</a>
+            <a href="${buildVoteUrl(recipient, item.storyId, "down")}" style="display:inline-block;padding:10px 12px;color:#333;text-decoration:none;font-size:19px;">👎</a>
           </td>
         </tr>
       </table>`;
@@ -293,8 +287,8 @@ function buildItemHtml(item: DigestItem, index: number, total: number, L: Record
       ${priceHtml}
       ${sizeHtml}
 
-      <!-- eBay CTA (top) — routed through /go for click tracking -->
-      <table width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0 28px;">
+      <!-- eBay CTA — the one bold dark focal element per item -->
+      <table width="100%" cellpadding="0" cellspacing="0" style="margin:18px 0 24px;">
         <tr>
           <td>
             <a href="${buildClickUrl(recipient, item.storyId)}" style="display:block;padding:14px 28px;background:#2c2c2c;color:#fff;text-decoration:none;font-size:13px;letter-spacing:1px;font-family:Helvetica,Arial,sans-serif;border-radius:2px;text-align:center;">
@@ -305,20 +299,20 @@ function buildItemHtml(item: DigestItem, index: number, total: number, L: Record
       </table>
 
       <!-- Hook -->
-      <h2 style="margin:0 0 20px;font-size:21px;font-weight:normal;line-height:1.5;color:#1a1a1a;font-style:italic;">
+      <h2 style="margin:0 0 16px;font-size:21px;font-weight:normal;line-height:1.4;color:#1a1a1a;font-style:italic;">
         "${escapeHtml(evaluation.hook)}"
       </h2>
 
-      <!-- Story -->
-      <h3 style="margin:24px 0 8px;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#888;font-family:Helvetica,Arial,sans-serif;">${L.theStory}</h3>
-      <p style="margin:0 0 24px;font-size:15px;line-height:1.8;color:#333;">
+      <!-- Story — full depth, unshortened; this is the actual product -->
+      <h3 style="margin:20px 0 6px;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#888;font-family:Helvetica,Arial,sans-serif;">${L.theStory}</h3>
+      <p style="margin:0 0 20px;font-size:15px;line-height:1.7;color:#333;">
         ${escapeHtml(evaluation.mainStory)}
       </p>
 
-      <!-- Style Guide -->
-      <h3 style="margin:0 0 8px;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#7ec8a0;font-family:Helvetica,Arial,sans-serif;">${L.theStyle}</h3>
-      <p style="margin:0 0 24px;font-size:15px;line-height:1.8;color:#333;">
-        ${escapeHtml(evaluation.styleGuide)}
+      <!-- Style Guide — one tight line, not a full paragraph -->
+      <h3 style="margin:0 0 6px;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#2f7a52;font-family:Helvetica,Arial,sans-serif;">${L.theStyle}</h3>
+      <p style="margin:0 0 20px;font-size:14px;line-height:1.6;color:#555;">
+        ${escapeHtml(firstSentence(evaluation.styleGuide))}
       </p>
 
       <!-- Red flags -->
@@ -326,21 +320,20 @@ function buildItemHtml(item: DigestItem, index: number, total: number, L: Record
         ${redFlagsHtml}
       </table>
 
-      <!-- Feedback -->
-      <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:32px;">
-        <tr>
-          <td align="center" style="padding:24px;background:#eee9e3;border-radius:4px;">
-            <p style="margin:0 0 16px;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#999;font-family:Helvetica,Arial,sans-serif;">Was this worth your time?</p>
-            <a href="${buildVoteUrl(recipient, item.storyId, "up")}" style="display:inline-block;padding:14px 32px;background:#fff;border:1px solid #d0c9c0;color:#333;text-decoration:none;font-size:24px;border-radius:2px;margin-right:12px;">👍</a>
-            <a href="${buildVoteUrl(recipient, item.storyId, "down")}" style="display:inline-block;padding:14px 32px;background:#fff;border:1px solid #d0c9c0;color:#333;text-decoration:none;font-size:24px;border-radius:2px;">👎</a>
-          </td>
-        </tr>
-      </table>
-
-      ${!isLastItem ? '<hr style="border:none;border-top:1px solid #ddd;margin-top:56px;">' : ""}
+      ${!isLastItem ? '<hr style="border:none;border-top:1px solid #ddd;margin-top:40px;">' : ""}
 
     </td>
   </tr>`;
+}
+
+// styleGuide is generated for depth (see STORY_ONLY_PROMPT) but rendered as
+// one tight line — this trims older cached stories written before that
+// prompt asked for brevity. New stories should already be short enough that
+// this is a no-op.
+function firstSentence(text: string, maxLen = 160): string {
+  const cut = text.indexOf(". ");
+  const candidate = cut > -1 && cut < maxLen ? text.slice(0, cut + 1) : text;
+  return candidate.length > maxLen ? candidate.slice(0, maxLen - 1).trimEnd() + "…" : candidate;
 }
 
 function escapeHtml(str: string): string {

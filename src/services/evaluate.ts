@@ -739,7 +739,7 @@ Bad: "The loop collar disappeared from Pendleton's lineup in 1963. This one has 
 
 mainStory: One flowing paragraph, as long as the story needs — aim for the depth of the references above (typically 8–12 sentences). Brand context, construction details, arc, cultural moment, collector validation. All in one piece. Be honest if the piece is unremarkable — a shorter honest story beats a padded one.
 
-styleGuide: How to actually wear this today. Fit, color palette, the cultural aesthetic it belongs to.
+styleGuide: ONE tight sentence — how to actually wear this today (fit, palette, or the aesthetic it belongs to). Punchy, not a paragraph. If you can't say it in one sentence, cut detail until you can.
 
 storyScore (0–1): How strong is the story, cultural weight, and collector desirability?
 - 0.85–1.0: Genuinely iconic. Strong story. Real collector demand.
