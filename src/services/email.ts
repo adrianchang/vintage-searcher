@@ -225,30 +225,21 @@ function buildItemHtml(item: DigestItem, index: number, total: number, L: Record
     ? `<p style="margin:12px 0 0;font-size:12px;color:#888;font-family:Helvetica,Arial,sans-serif;">📏 ${escapeHtml(sizeLineText)}</p>`
     : "";
 
-  const redFlagsHtml = evaluation.redFlags.length > 0
-    ? `<tr>
-        <td style="padding-top:16px;">
-          <p style="margin:0;font-size:12px;color:#999;font-family:Helvetica,Arial,sans-serif;font-style:italic;">
-            ⚠ ${evaluation.redFlags.join(" · ")}
-          </p>
-        </td>
-      </tr>`
-    : "";
-
   // Quiet single-line treatment on the page's own cream background — no dark
   // box. Isolation-effect research: the eBay button below is the one bold
   // dark element per item; a matching dark price card would compete with it
   // instead of reinforcing it. Colors are darker/richer than the on-dark
   // versions used elsewhere (era tag, style label) since these sit directly
-  // on #f5f0eb and need their own contrast.
+  // on #f5f0eb and need their own contrast. Numbers sized up (2026-08-14) —
+  // still no box/background, so the eBay button stays the only bold element.
   const priceText = isUndervalued
     ? `<span style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#999;font-family:Helvetica,Arial,sans-serif;">${L.listed}</span>
-       <span style="font-size:17px;color:#1a1a1a;font-family:Helvetica,Arial,sans-serif;font-weight:600;">$${listing.price.toFixed(0)}</span>
-       <span style="color:#bbb;font-size:14px;"> → </span>
-       <span style="font-size:17px;color:#8a6a30;font-family:Helvetica,Arial,sans-serif;font-weight:600;">$${evaluation.estimatedValue!.toFixed(0)}</span>
-       <span style="font-size:12px;color:#2f7a52;font-family:Helvetica,Arial,sans-serif;font-weight:600;margin-left:8px;">+$${evaluation.margin!.toFixed(0)} ${L.upside}</span>`
+       <span style="font-size:22px;color:#1a1a1a;font-family:Helvetica,Arial,sans-serif;font-weight:600;">$${listing.price.toFixed(0)}</span>
+       <span style="color:#bbb;font-size:17px;"> → </span>
+       <span style="font-size:22px;color:#8a6a30;font-family:Helvetica,Arial,sans-serif;font-weight:600;">$${evaluation.estimatedValue!.toFixed(0)}</span>
+       <span style="font-size:18px;color:#2f7a52;font-family:Helvetica,Arial,sans-serif;font-weight:700;margin-left:10px;">+$${evaluation.margin!.toFixed(0)} ${L.upside}</span>`
     : `<span style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#999;font-family:Helvetica,Arial,sans-serif;">${L.listedPrice}</span>
-       <span style="font-size:17px;color:#1a1a1a;font-family:Helvetica,Arial,sans-serif;font-weight:600;">$${listing.price.toFixed(0)}</span>`;
+       <span style="font-size:22px;color:#1a1a1a;font-family:Helvetica,Arial,sans-serif;font-weight:600;">$${listing.price.toFixed(0)}</span>`;
 
   // Price + vote share one row — folds the old standalone feedback card in
   // here. Vote timing moves earlier (right after image+price, before the
@@ -314,11 +305,6 @@ function buildItemHtml(item: DigestItem, index: number, total: number, L: Record
       <p style="margin:0 0 20px;font-size:14px;line-height:1.6;color:#555;">
         ${escapeHtml(firstSentence(evaluation.styleGuide))}
       </p>
-
-      <!-- Red flags -->
-      <table width="100%" cellpadding="0" cellspacing="0">
-        ${redFlagsHtml}
-      </table>
 
       ${!isLastItem ? '<hr style="border:none;border-top:1px solid #ddd;margin-top:40px;">' : ""}
 
