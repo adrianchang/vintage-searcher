@@ -124,15 +124,28 @@ export async function sendDigestEmail(
   }
 }
 
-function buildSubject(items: DigestItem[], lang = "en"): string {
+// Takes the text before the first comma of itemIdentification (a search-query-shaped
+// label like "Pendleton Board Shirt, loop collar, wool, 1960s") as a short display name.
+function shortItemName(itemIdentification: string): string {
+  return itemIdentification.split(",")[0].trim();
+}
+
+// Joins names with a trailing conjunction ("A, B and C"); no length capping —
+// subject lines are left to truncate naturally in the inbox preview.
+function joinWithAnd(names: string[], conjunction: string, separator = ", "): string {
+  if (names.length <= 1) return names[0] ?? "";
+  if (names.length === 2) return `${names[0]} ${conjunction} ${names[1]}`;
+  return `${names.slice(0, -1).join(separator)} ${conjunction} ${names[names.length - 1]}`;
+}
+
+export function buildSubject(items: DigestItem[], lang = "en"): string {
+  const names = items.map((item) => shortItemName(item.evaluation.itemIdentification));
   if (lang === "zh") {
     const date = new Date().toLocaleDateString("zh-TW", { month: "long", day: "numeric" });
-    if (items.length === 1) return `🏷️ 今日好物 — ${items[0].evaluation.itemIdentification} · ${date}`;
-    return `🏷️ ${items.length} 件好物等你來看 · ${date}`;
+    return `🏷️ 今日精選：${joinWithAnd(names, "和", "、")} · ${date}`;
   }
   const date = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric" });
-  if (items.length === 1) return `🏷️ TODAY'S FIND — ${items[0].evaluation.itemIdentification.toUpperCase()} · ${date.toUpperCase()}`;
-  return `🏷️ ${items.length} FINDS WORTH YOUR ATTENTION · ${date.toUpperCase()}`;
+  return `🏷️ Today's Selection: ${joinWithAnd(names, "and")} · ${date.toUpperCase()}`;
 }
 
 function buildEmailHtml(items: DigestItem[], recipient: string, lang = "en"): string {
