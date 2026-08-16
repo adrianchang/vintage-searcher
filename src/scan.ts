@@ -25,6 +25,7 @@ import {
   buildArchetypeConfigId,
   buildArchetypePromptAppend,
   buildArchetypeScoringContext,
+  mergeArchetypeKeywords,
   type ArchetypeId,
 } from "./configs/archetypes";
 import type { Listing, Evaluation, ScanConfig } from "./types";
@@ -154,11 +155,23 @@ export async function runScan(
   }
 
   // 2. Resolve keywords and archetype config per user (fall back to defaults if none set)
+  //
+  // Archetype users get their keywords recomputed fresh every scan — via
+  // mergeArchetypeKeywords(archetypeIds, dayIndex) — rather than reading the
+  // one-time snapshot /subscribe wrote into UserKeyword, so the daily
+  // keyword rotation (each archetype's long pool narrowed to a small window
+  // that advances every day) actually takes effect. The persisted
+  // UserKeyword rows are only used as a fallback for users with no
+  // archetypes selected (the "everything"/DEFAULT_KEYWORDS case).
+  const dayIndex = Math.floor(Date.now() / 86400000);
   const usersWithKW = users.map(user => {
     const archetypeIds = user.archetypes.map(a => a.archetypeId as ArchetypeId);
+    const resolvedKeywords = archetypeIds.length > 0
+      ? mergeArchetypeKeywords(archetypeIds, dayIndex)
+      : (user.keywords.length > 0 ? user.keywords : DEFAULT_KEYWORDS);
     return {
       ...user,
-      resolvedKeywords: (user.keywords.length > 0 ? user.keywords : DEFAULT_KEYWORDS) as { query: string; percentage: number }[],
+      resolvedKeywords: resolvedKeywords as { query: string; percentage: number }[],
       archetypeIds,
       configId: buildArchetypeConfigId(archetypeIds),
       promptAppend: buildArchetypePromptAppend(archetypeIds),

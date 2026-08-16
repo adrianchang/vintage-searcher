@@ -45,6 +45,12 @@ export const ARCHETYPES: Record<ArchetypeId, Archetype> = {
       { query: "vintage denim jacket", percentage: 0.20 },
       { query: "vintage flannel shirt", percentage: 0.18 },
       { query: "vintage workwear", percentage: 0.15 },
+      { query: "vintage coveralls", percentage: 0.18 },
+      { query: "vintage bib overalls", percentage: 0.16 },
+      { query: "vintage engineer jacket", percentage: 0.18 },
+      { query: "vintage gas station jacket", percentage: 0.15 },
+      { query: "vintage duck canvas jacket", percentage: 0.16 },
+      { query: "vintage hickory stripe", percentage: 0.14 },
     ],
     promptContext: `This item will be shown to a collector who specializes in American heritage workwear and Americana. Pay particular attention to:
 - Union labels (ILGWU, ACWA, UGWA), country of origin tags, and lot/style numbers that confirm domestic manufacture
@@ -63,6 +69,12 @@ In the styleGuide field, speak to how this fits into a rugged, utilitarian Ameri
       { query: "vintage oxford shirt", percentage: 0.33 },
       { query: "vintage tweed jacket", percentage: 0.29 },
       { query: "vintage crewneck sweater", percentage: 0.38 },
+      { query: "vintage sack suit", percentage: 0.18 },
+      { query: "vintage seersucker jacket", percentage: 0.16 },
+      { query: "vintage madras shirt", percentage: 0.18 },
+      { query: "vintage shetland sweater", percentage: 0.17 },
+      { query: "vintage cricket sweater", percentage: 0.14 },
+      { query: "vintage chino trousers", percentage: 0.15 },
     ],
     promptContext: `This item will be shown to a collector focused on Ivy League and traditional American prep style. Pay particular attention to:
 - Natural-shoulder construction, sack silhouette, and 3/2-roll lapels on jackets
@@ -84,6 +96,12 @@ In the styleGuide field, speak to how this fits into a trad wardrobe — khakis,
       { query: "vintage flight jacket", percentage: 0.22 },
       { query: "vintage military fatigue", percentage: 0.13 },
       { query: "vintage deck jacket", percentage: 0.10 },
+      { query: "vintage M-65 field jacket", percentage: 0.18 },
+      { query: "vintage MA-1 bomber", percentage: 0.18 },
+      { query: "vintage tanker jacket", percentage: 0.15 },
+      { query: "vintage navy peacoat", percentage: 0.16 },
+      { query: "vintage BDU jacket", percentage: 0.14 },
+      { query: "vintage flight suit", percentage: 0.13 },
     ],
     promptContext: `This item will be shown to a collector who specializes in authentic US military surplus and vintage government-issue clothing. Pay particular attention to:
 - Contract tags: manufacturer name, contract number (DSA/DLA prefix), date of manufacture, and size
@@ -105,6 +123,11 @@ In the styleGuide field, speak to how the piece is worn today — the gap betwee
       { query: "vintage work jacket", percentage: 0.20 },
       { query: "vintage HBT jacket", percentage: 0.15 },
       { query: "vintage moleskin jacket", percentage: 0.12 },
+      { query: "vintage bleu de travail", percentage: 0.20 },
+      { query: "vintage vetra jacket", percentage: 0.15 },
+      { query: "vintage german work jacket", percentage: 0.16 },
+      { query: "vintage herringbone chore coat", percentage: 0.15 },
+      { query: "vintage work smock", percentage: 0.13 },
     ],
     promptContext: `This item will be shown to a collector who specializes in European — especially French and British — vintage workwear. Pay particular attention to:
 - French manufacture markers: "Fabriqué en France" tags, typical French sizing (38, 40, 42 in jacket), loom-woven cotton twill or moleskin fabric
@@ -126,6 +149,11 @@ In the styleGuide field, speak to the minimalist, utilitarian aesthetic — how 
       { query: "vintage rodeo shirt", percentage: 0.20 },
       { query: "vintage cowboy shirt", percentage: 0.15 },
       { query: "vintage western jacket", percentage: 0.10 },
+      { query: "vintage gabardine western shirt", percentage: 0.18 },
+      { query: "vintage embroidered western shirt", percentage: 0.17 },
+      { query: "vintage ranchwear jacket", percentage: 0.15 },
+      { query: "vintage fringe leather jacket", percentage: 0.14 },
+      { query: "vintage bolo tie", percentage: 0.10 },
     ],
     promptContext: `This item will be shown to a collector focused on authentic American western wear. Pay particular attention to:
 - Pearl snap construction: the specific snap brand (Scovill, Gripper, etc.) and placement authentic to vintage western shirts
@@ -147,6 +175,11 @@ In the styleGuide field, speak honestly to who wears vintage western wear today 
       { query: "vintage cafe racer jacket", percentage: 0.20 },
       { query: "vintage moto jacket", percentage: 0.12 },
       { query: "vintage riding jacket", percentage: 0.08 },
+      { query: "vintage perfecto jacket", percentage: 0.20 },
+      { query: "vintage horsehide jacket", percentage: 0.16 },
+      { query: "vintage belted motorcycle jacket", percentage: 0.15 },
+      { query: "vintage belstaff jacket", percentage: 0.14 },
+      { query: "vintage steerhide jacket", percentage: 0.13 },
     ],
     promptContext: `This item will be shown to a collector who specializes in vintage motorcycle jackets and biker wear. Pay particular attention to:
 - Leather type and grade: horsehide vs cowhide vs steerhide — horsehide is the most prized for its toughness and characteristic grain
@@ -169,6 +202,10 @@ In the styleGuide field, speak to how a vintage motorcycle jacket actually gets 
       { query: "vintage tropical shirt", percentage: 0.20 },
       { query: "vintage ska suit", percentage: 0.18 },
       { query: "vintage tonic suit", percentage: 0.15 },
+      { query: "vintage two tone mohair suit", percentage: 0.18 },
+      { query: "vintage trilby hat", percentage: 0.15 },
+      { query: "vintage rude boy suit", percentage: 0.16 },
+      { query: "vintage checkerboard shirt", percentage: 0.13 },
     ],
     promptContext: `This item will be shown to a collector focused on vintage reggae, ska, and rude boy style — the fashion of Jamaica's Kingston scene, the British ska revival, and related subcultures. Pay particular attention to:
 - Porkpie hat construction and provenance — the silhouette, brim width, and material
@@ -190,6 +227,10 @@ In the styleGuide field, speak to the sharp, cool, understated nature of this ae
       { query: "vintage 60s slim suit", percentage: 0.20 },
       { query: "vintage mod polo shirt", percentage: 0.18 },
       { query: "vintage sta-prest trousers", percentage: 0.12 },
+      { query: "vintage fishtail parka", percentage: 0.20 },
+      { query: "vintage ben sherman shirt", percentage: 0.17 },
+      { query: "vintage fred perry polo", percentage: 0.17 },
+      { query: "vintage mod button down shirt", percentage: 0.14 },
     ],
     promptContext: `This item will be shown to a collector focused on British mod style — the original 1960s London scene and its various revivals. Pay particular attention to:
 - Harrington jacket provenance: Baracuta G9 vs alternatives, British vs later manufacture, correct tartan lining, era-specific label
@@ -211,6 +252,10 @@ In the styleGuide field, speak to the specific mod aesthetic — slim and precis
       { query: "vintage gabardine shirt", percentage: 0.20 },
       { query: "vintage chain stitch shirt", percentage: 0.15 },
       { query: "vintage rayon shirt", percentage: 0.13 },
+      { query: "vintage letterman jacket", percentage: 0.17 },
+      { query: "vintage hawaiian camp shirt", percentage: 0.16 },
+      { query: "vintage loop collar shirt", percentage: 0.15 },
+      { query: "vintage 1950s denim jacket", percentage: 0.16 },
     ],
     promptContext: `This item will be shown to a collector focused on 1950s rockabilly and greaser style. Pay particular attention to:
 - Chain stitch embroidery on bowling shirts: motif quality, thread color contrast, and the specific brands (Rockmount, Champ, California Ranchwear, H Bar C)
@@ -232,6 +277,11 @@ In the styleGuide field, speak to how this fits into the rockabilly/greaser aest
       { query: "vintage sweatshirt", percentage: 0.20 },
       { query: "vintage warm up suit", percentage: 0.18 },
       { query: "vintage athletic jacket", percentage: 0.12 },
+      { query: "vintage reverse weave sweatshirt", percentage: 0.18 },
+      { query: "vintage starter jacket", percentage: 0.18 },
+      { query: "vintage adidas trefoil", percentage: 0.16 },
+      { query: "vintage nike swoosh jacket", percentage: 0.16 },
+      { query: "vintage team jersey", percentage: 0.13 },
     ],
     promptContext: `This item will be shown to a collector who specializes in vintage American and European sportswear — athletic brand heritage pieces from the 1970s through the early 1990s. Pay particular attention to:
 - Champion reverse weave authentication: the specific reverse-weave construction (horizontal ribs on the torso), era-correct "C" logo, bar tag, and union label
@@ -263,6 +313,32 @@ export function buildArchetypeConfigId(archetypeIds: ArchetypeId[]): string {
   return [...archetypeIds].sort().join("+");
 }
 
+// Each archetype's keyword pool is now deliberately long (specific, narrow
+// terms — see 2026-08-15 research pass) so that a small daily-rotating
+// window can still guarantee full coverage over a cycle, while giving each
+// ACTIVE query a much bigger share of maxListings than running the whole
+// pool every day would (that thin-allocation math is what caused the
+// original "same generic stuff every day" complaint — see CLAUDE.md).
+export const KEYWORD_ROTATION_WINDOW = 3;
+
+/**
+ * Deterministic round-robin window over a keyword pool: advances by
+ * `windowSize` positions per day and wraps around, so every keyword in the
+ * pool gets a turn every ceil(pool.length / windowSize) days, and the same
+ * day/archetype pair always selects the same window (so users sharing an
+ * archetype on the same day also share the eBay fetch — see scan.ts's
+ * unique-query dedup). Pools shorter than windowSize just return everything.
+ */
+export function selectActiveKeywords(
+  keywords: KeywordConfig[],
+  windowSize: number,
+  dayIndex: number,
+): KeywordConfig[] {
+  if (keywords.length <= windowSize) return keywords;
+  const offset = (dayIndex * windowSize) % keywords.length;
+  return Array.from({ length: windowSize }, (_, i) => keywords[(offset + i) % keywords.length]);
+}
+
 /**
  * Merges keywords from multiple archetypes into a single deduplicated list.
  *
@@ -270,11 +346,19 @@ export function buildArchetypeConfigId(archetypeIds: ArchetypeId[]): string {
  * (rather than summed) so the merge stays proportional. The final list is
  * renormalized to sum exactly to 1.0.
  *
+ * When `dayIndex` is provided, each archetype's pool is first narrowed to
+ * that day's rotating window (see selectActiveKeywords) before merging —
+ * this is what scan.ts uses so keyword selection varies day to day. Omitted
+ * entirely at signup time (server.ts persists a full-pool snapshot into
+ * UserKeyword; that snapshot is no longer what scan.ts actually searches for
+ * archetype users, see scan.ts's usersWithKW — it's kept only as an inert
+ * reference for users with no archetypes selected).
+ *
  * Falls back to DEFAULT_KEYWORDS if archetypeIds is empty or all invalid.
  */
 import { DEFAULT_KEYWORDS } from "./digests";
 
-export function mergeArchetypeKeywords(archetypeIds: ArchetypeId[]): KeywordConfig[] {
+export function mergeArchetypeKeywords(archetypeIds: ArchetypeId[], dayIndex?: number): KeywordConfig[] {
   if (archetypeIds.length === 0) return DEFAULT_KEYWORDS;
 
   // Collect (query → accumulated weight, contribution count)
@@ -283,7 +367,10 @@ export function mergeArchetypeKeywords(archetypeIds: ArchetypeId[]): KeywordConf
   for (const id of archetypeIds) {
     const archetype = ARCHETYPES[id];
     if (!archetype) continue;
-    for (const kw of archetype.keywords) {
+    const pool = dayIndex != null
+      ? selectActiveKeywords(archetype.keywords, KEYWORD_ROTATION_WINDOW, dayIndex)
+      : archetype.keywords;
+    for (const kw of pool) {
       const existing = accumulator.get(kw.query);
       if (existing) {
         existing.total += kw.percentage;

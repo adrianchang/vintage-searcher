@@ -51,7 +51,7 @@ The core pipeline, triggered via `POST /scan` (server, maxListings 20; 10 in tes
 6. **Score** — `score.ts:combinedScore` weights price + story scores. Personalized via vote history and archetype profile. If the user has a size profile, a size gate runs first: confirmed size mismatches are dropped, unknown sizes get a ×0.85 score penalty (see Size Matching below).
 7. **Email** — top 3 per user sent via Resend (`email.ts`); deliveries recorded in `StoryDelivery` so items are never resent.
 
-Keyword weights are distributed across `maxListings` using the largest-remainder method (`scan.ts:resolveKeywordCounts`). **Gotcha:** if `maxListings` is small relative to the number of active queries, low-weight queries silently get count=0 and are never searched. Safe at current settings (20 listings / max 15 queries) — add a floor of 1 if you change either.
+Keyword weights are distributed across `maxListings` using the largest-remainder method (`scan.ts:resolveKeywordCounts`). **Gotcha:** if `maxListings` is small relative to the number of active queries, low-weight queries silently get count=0 and are never searched. Safe at current settings (20 listings / ~9 active queries for a typical multi-archetype user post-rotation) — add a floor of 1 if you change either.
 
 ### Gemini Calls (`src/services/evaluate.ts`)
 
@@ -89,6 +89,8 @@ Users pick up to 3 archetypes at signup. Each archetype has:
 `buildArchetypeConfigId(ids)` produces a stable slug (e.g. `"biker+ivy"`) used as `Story.configId` — so story variants are cached per archetype combination, not per user.
 
 `"en-default"` configId means no archetypes selected (falls back to DEFAULT_KEYWORDS). It's a misnomer — it means "no archetypes", not "English"; renaming requires a prod DB migration.
+
+**Daily keyword rotation (2026-08-15):** each archetype's `keywords` pool is deliberately long (8–11 specific, narrow terms — e.g. `vintage M-65 field jacket`, `vintage bleu de travail`, `vintage perfecto jacket` — not generic ones) rather than a handful of broad terms. Running the whole pool every day would thin allocation badly (a 3-archetype user would hit 30+ simultaneous queries against `maxListings`=20); instead `selectActiveKeywords` picks a small deterministic round-robin window (`KEYWORD_ROTATION_WINDOW`=3 per archetype) that advances by the window size each day and wraps around, guaranteeing every keyword gets a turn over a cycle while keeping the *active* set small enough that each query gets a real allocation (~2.2 listings/query for a typical 3-archetype user, vs. ~1.3 before this change and ~0.65 if the pool had been expanded without rotation). Same day + same archetype combo always resolves identically, so users sharing a config also share the eBay fetch (existing per-scan query dedup still applies). **Important:** `mergeArchetypeKeywords(archetypeIds, dayIndex)` — the `dayIndex` argument is what triggers rotation; `scan.ts` computes it fresh every run and calls this directly for any user with archetypes selected, **ignoring the `UserKeyword` rows `/subscribe` persisted** (that snapshot predates rotation and is now only read as a fallback for archetype-less users). If you ever see stale/repetitive keyword behavior again, check that scan.ts is still calling `mergeArchetypeKeywords` fresh rather than reading `user.keywords`.
 
 `mergeArchetypeKeywords` averages weights for queries shared by multiple archetypes, then renormalizes to 1.0.
 
