@@ -21,6 +21,7 @@ import { parseTopSizeLabel, coercePitToPitInches, coerceWaistInches } from "./se
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const APP_URL = process.env.APP_URL || "http://localhost:3000";
 const EBAY_VERIFICATION_TOKEN = process.env.EBAY_VERIFICATION_TOKEN || "";
 const EBAY_ENDPOINT = process.env.EBAY_ENDPOINT || "";
 const THREADS_APP_ID = process.env.THREADS_APP_ID || "";
@@ -501,6 +502,9 @@ app.post("/threads", async (req, res) => {
         where: { evaluationId_language_configId: { evaluationId: evaluation.id, language, configId } },
       });
       if (!story) continue;
+      const imageUrl = evaluation.hasProcessedImage
+        ? `${APP_URL}/evaluations/${evaluation.id}/image`
+        : evaluation.imageUrl;
       items.push({
         itemIdentification: evaluation.itemIdentification,
         estimatedEra: evaluation.estimatedEra,
@@ -508,7 +512,7 @@ app.post("/threads", async (req, res) => {
         estimatedValue: evaluation.estimatedValue,
         hook: story.hook,
         mainStory: story.mainStory,
-        imageUrl: evaluation.imageUrl,
+        imageUrl,
         ebayUrl: delivery.url,
       });
     }
