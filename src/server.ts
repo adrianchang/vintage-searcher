@@ -16,7 +16,7 @@ import {
   buildArchetypeConfigId,
   type ArchetypeId,
 } from "./configs/archetypes";
-import { postToThreads, resolveThreadsToken, type ThreadsStoryItem } from "./services/threads";
+import { postToThreads, resolveThreadsToken, type ThreadsStoryItem, type ThreadsAccount } from "./services/threads";
 import { parseTopSizeLabel, coercePitToPitInches, coerceWaistInches } from "./services/size";
 
 const app = express();
@@ -26,6 +26,13 @@ const EBAY_ENDPOINT = process.env.EBAY_ENDPOINT || "";
 const THREADS_APP_ID = process.env.THREADS_APP_ID || "";
 const THREADS_APP_SECRET = process.env.THREADS_APP_SECRET || "";
 const THREADS_REDIRECT_URI = process.env.THREADS_REDIRECT_URI || "https://vintage-searcher.onrender.com/threads/callback";
+
+// Which user's deliveries + which story language each Threads account posts.
+// zh = @bear.7306501 (original), en = @wolf.2833331 (English audience, added 2026-08-19).
+const THREADS_ACCOUNTS: Record<ThreadsAccount, { sourceEmail: string; language: string }> = {
+  zh: { sourceEmail: "adrian.aa.chang@gmail.com", language: "zh" },
+  en: { sourceEmail: "adrian.aa.chang.aa@gmail.com", language: "en" },
+};
 
 const prisma = new PrismaClient();
 const scanConfig: ScanConfig = {
@@ -353,9 +360,10 @@ app.post("/scan", (req, res) => {
   console.log(`Scan triggered${isTest ? " [TEST MODE]" : ""}`);
   res.json({ status: "ok", message: "Scan started" });
 
-  // Piggyback on the daily scan to keep the Threads token perpetually
+  // Piggyback on the daily scan to keep both Threads tokens perpetually
   // refreshed — long-lived tokens die at ~60 days and can't be revived.
-  resolveThreadsToken(prisma).catch(() => {});
+  resolveThreadsToken(prisma, "zh").catch(() => {});
+  resolveThreadsToken(prisma, "en").catch(() => {});
 
   runScan(activeScanConfig, {
     prisma,
@@ -448,20 +456,26 @@ app.post("/threads", async (req, res) => {
     return;
   }
 
+  const accountParam = (req.query.account as string) || "zh";
+  if (accountParam !== "zh" && accountParam !== "en") {
+    res.status(400).json({ error: "account must be 'zh' or 'en'" });
+    return;
+  }
+  const account = accountParam as ThreadsAccount;
+  const { sourceEmail, language } = THREADS_ACCOUNTS[account];
+
   // Fail loudly BEFORE acknowledging — a dead token used to make this
   // endpoint return "ok" and then silently drop the post.
-  const threadsToken = await resolveThreadsToken(prisma);
+  const threadsToken = await resolveThreadsToken(prisma, account);
   if (!threadsToken) {
-    res.status(500).json({ error: "Threads access token invalid or missing — re-mint via Meta portal User Token Generator and set THREADS_ACCESS_TOKEN" });
+    const tokenEnvVar = account === "en" ? "THREADS_ACCESS_TOKEN_EN" : "THREADS_ACCESS_TOKEN";
+    res.status(500).json({ error: `Threads access token invalid or missing for account=${account} — re-mint via Meta portal Generate Token and set ${tokenEnvVar}` });
     return;
   }
 
-  const EN_EMAIL = "adrian.aa.chang@gmail.com";
-  const EN_LANG = "zh";
-
   try {
     const user = await prisma.user.findUnique({
-      where: { email: EN_EMAIL },
+      where: { email: sourceEmail },
       include: { archetypes: true },
     });
     if (!user) {
@@ -484,7 +498,7 @@ app.post("/threads", async (req, res) => {
       const evaluation = await prisma.evaluation.findUnique({ where: { url: delivery.url } });
       if (!evaluation) continue;
       const story = await prisma.story.findUnique({
-        where: { evaluationId_language_configId: { evaluationId: evaluation.id, language: EN_LANG, configId } },
+        where: { evaluationId_language_configId: { evaluationId: evaluation.id, language, configId } },
       });
       if (!story) continue;
       items.push({
@@ -499,9 +513,9 @@ app.post("/threads", async (req, res) => {
       });
     }
 
-    res.json({ status: "ok", message: `Posting thread with ${items.length} stories` });
+    res.json({ status: "ok", message: `Posting thread with ${items.length} stories [${account}]` });
 
-    await postToThreads(title, intro, items, threadsToken);
+    await postToThreads(title, intro, items, threadsToken, account);
   } catch (err) {
     console.error("[THREADS] Endpoint error:", err);
   }

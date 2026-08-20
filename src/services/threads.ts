@@ -1,19 +1,32 @@
 import type { PrismaClient } from "../generated/prisma/client";
 
 const THREADS_API = "https://graph.threads.net/v1.0";
-const THREADS_USER_ID = process.env.THREADS_USER_ID || "";
-const ENV_ACCESS_TOKEN = process.env.THREADS_ACCESS_TOKEN || "";
+
+// ─── Multi-account config ────────────────────────────────────────────────────
+// Each Threads account (one per audience language) has its own user ID, env
+// var-seeded access token, and AppCredential storage key so the two accounts'
+// tokens are resolved/refreshed completely independently.
+export type ThreadsAccount = "zh" | "en";
+
+const ACCOUNT_CONFIG: Record<ThreadsAccount, { userIdEnv: string; tokenEnv: string; tokenKey: string; topicTag: string }> = {
+  zh: { userIdEnv: "THREADS_USER_ID", tokenEnv: "THREADS_ACCESS_TOKEN", tokenKey: "threads_access_token", topicTag: "古著" },
+  en: { userIdEnv: "THREADS_USER_ID_EN", tokenEnv: "THREADS_ACCESS_TOKEN_EN", tokenKey: "threads_access_token_en", topicTag: "vintage" },
+};
+
+function getUserId(account: ThreadsAccount): string {
+  return process.env[ACCOUNT_CONFIG[account].userIdEnv] || "";
+}
 
 // ─── Token lifecycle ─────────────────────────────────────────────────────────
 // Long-lived Threads tokens expire after ~60 days and can only be refreshed
 // while still valid. The active token lives in AppCredential (seeded from the
-// THREADS_ACCESS_TOKEN env var) and is re-refreshed whenever it's >24h old —
-// the daily scan calls resolveThreadsToken, so the token never reaches expiry.
-// If it ever does die (e.g. the service was down for 60+ days), re-mint via
-// the Meta portal User Token Generator and update the env var; the store
-// re-seeds from it automatically.
+// account's *_ACCESS_TOKEN env var) and is re-refreshed whenever it's >24h
+// old — the daily scan calls resolveThreadsToken for both accounts, so
+// neither token ever reaches expiry. If one ever does die (e.g. the service
+// was down for 60+ days), re-mint via the Meta portal's per-tester "Generate
+// Token" button and update the corresponding env var; the store re-seeds
+// from it automatically.
 
-const TOKEN_KEY = "threads_access_token";
 const TOKEN_REFRESH_AFTER_MS = 24 * 60 * 60 * 1000;
 
 async function tokenIsValid(token: string): Promise<boolean> {
@@ -41,12 +54,16 @@ async function refreshToken(token: string): Promise<string | null> {
 }
 
 /**
- * Returns a working Threads access token, or null if none is available.
- * Prefers the stored token (refreshing it when >24h old); falls back to the
- * env var when the store is empty or its token has died (manual re-mint).
+ * Returns a working Threads access token for the given account, or null if
+ * none is available. Prefers the stored token (refreshing it when >24h old);
+ * falls back to the account's env var when the store is empty or its token
+ * has died (manual re-mint).
  */
-export async function resolveThreadsToken(prisma: PrismaClient): Promise<string | null> {
-  const row = await prisma.appCredential.findUnique({ where: { key: TOKEN_KEY } });
+export async function resolveThreadsToken(prisma: PrismaClient, account: ThreadsAccount = "zh"): Promise<string | null> {
+  const { tokenEnv, tokenKey } = ACCOUNT_CONFIG[account];
+  const envAccessToken = process.env[tokenEnv] || "";
+
+  const row = await prisma.appCredential.findUnique({ where: { key: tokenKey } });
 
   if (row && await tokenIsValid(row.value)) {
     let token = row.value;
@@ -54,24 +71,24 @@ export async function resolveThreadsToken(prisma: PrismaClient): Promise<string 
       const refreshed = await refreshToken(token);
       if (refreshed) {
         token = refreshed;
-        await prisma.appCredential.update({ where: { key: TOKEN_KEY }, data: { value: refreshed } });
-        console.log("[THREADS] Access token refreshed (+60 days)");
+        await prisma.appCredential.update({ where: { key: tokenKey }, data: { value: refreshed } });
+        console.log(`[THREADS] Access token refreshed (+60 days) [${account}]`);
       }
     }
     return token;
   }
 
-  if (ENV_ACCESS_TOKEN && await tokenIsValid(ENV_ACCESS_TOKEN)) {
+  if (envAccessToken && await tokenIsValid(envAccessToken)) {
     await prisma.appCredential.upsert({
-      where: { key: TOKEN_KEY },
-      update: { value: ENV_ACCESS_TOKEN },
-      create: { key: TOKEN_KEY, value: ENV_ACCESS_TOKEN },
+      where: { key: tokenKey },
+      update: { value: envAccessToken },
+      create: { key: tokenKey, value: envAccessToken },
     });
-    console.log("[THREADS] Token store seeded from THREADS_ACCESS_TOKEN env var");
-    return ENV_ACCESS_TOKEN;
+    console.log(`[THREADS] Token store seeded from ${tokenEnv} env var`);
+    return envAccessToken;
   }
 
-  console.error("[THREADS] No working access token (stored and env tokens both invalid or missing)");
+  console.error(`[THREADS] No working access token for account=${account} (stored and env tokens both invalid or missing)`);
   return null;
 }
 
@@ -107,8 +124,8 @@ function buildReplyText(item: ThreadsStoryItem): string {
   return `${header}\n${story}`;
 }
 
-async function createContainer(accessToken: string, params: Record<string, string>): Promise<string> {
-  const url = new URL(`${THREADS_API}/${THREADS_USER_ID}/threads`);
+async function createContainer(accessToken: string, userId: string, params: Record<string, string>): Promise<string> {
+  const url = new URL(`${THREADS_API}/${userId}/threads`);
   url.searchParams.set("access_token", accessToken);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
 
@@ -118,8 +135,8 @@ async function createContainer(accessToken: string, params: Record<string, strin
   return json.id;
 }
 
-async function publishContainer(accessToken: string, creationId: string): Promise<string> {
-  const url = new URL(`${THREADS_API}/${THREADS_USER_ID}/threads_publish`);
+async function publishContainer(accessToken: string, userId: string, creationId: string): Promise<string> {
+  const url = new URL(`${THREADS_API}/${userId}/threads_publish`);
   url.searchParams.set("access_token", accessToken);
   url.searchParams.set("creation_id", creationId);
 
@@ -152,9 +169,13 @@ export async function postToThreads(
   intro: string,
   items: ThreadsStoryItem[],
   accessToken: string,
+  account: ThreadsAccount = "zh",
 ): Promise<void> {
-  if (!THREADS_USER_ID || !accessToken) {
-    console.log("[THREADS] THREADS_USER_ID or access token not set — skipping");
+  const { userIdEnv, topicTag } = ACCOUNT_CONFIG[account];
+  const userId = getUserId(account);
+
+  if (!userId || !accessToken) {
+    console.log(`[THREADS] ${userIdEnv} or access token not set for account=${account} — skipping`);
     return;
   }
   if (items.length === 0) {
@@ -167,7 +188,7 @@ export async function postToThreads(
   // Create one IMAGE child container per item for the carousel
   const childIds: string[] = [];
   for (const item of items) {
-    const childId = await createContainer(accessToken, {
+    const childId = await createContainer(accessToken, userId, {
       media_type: "IMAGE",
       image_url: item.imageUrl!,
       is_carousel_item: "true",
@@ -178,26 +199,26 @@ export async function postToThreads(
   }
 
   // Main post: carousel with all images + caption
-  const mainContainerId = await createContainer(accessToken, {
+  const mainContainerId = await createContainer(accessToken, userId, {
     media_type: "CAROUSEL",
     children: childIds.join(","),
     text: mainText,
-    topic_tag: "古著",
+    topic_tag: topicTag,
   });
   await waitForContainer(accessToken, mainContainerId);
-  const mainPostId = await publishContainer(accessToken, mainContainerId);
-  console.log(`[THREADS] Main carousel post published: ${mainPostId}`);
+  const mainPostId = await publishContainer(accessToken, userId, mainContainerId);
+  console.log(`[THREADS] Main carousel post published: ${mainPostId} [${account}]`);
 
   // One reply for the first story
   await sleep(5000);
-  const replyContainerId = await createContainer(accessToken, {
+  const replyContainerId = await createContainer(accessToken, userId, {
     media_type: "TEXT",
     text: buildReplyText(items[0]),
     reply_to_id: mainPostId,
   });
   await waitForContainer(accessToken, replyContainerId);
-  const replyId = await publishContainer(accessToken, replyContainerId);
+  const replyId = await publishContainer(accessToken, userId, replyContainerId);
   console.log(`[THREADS] Reply published: ${replyId}`);
 
-  console.log(`[THREADS] Thread posted`);
+  console.log(`[THREADS] Thread posted [${account}]`);
 }

@@ -30,12 +30,12 @@ curl -s -X POST "https://vintage-searcher.onrender.com/scan?test=true" \
 
 **Post to Threads manually:**
 ```bash
-curl -s -X POST https://vintage-searcher.onrender.com/threads \
+curl -s -X POST "https://vintage-searcher.onrender.com/threads?account=zh" \
   -H "Content-Type: application/json" \
   -H "x-api-key: VBMc+AXdYT1YAGgKUC/uMnOmT4xL5fn9nFzIJO/GBIo=" \
   -d '{"title":"...","intro":"..."}'
 ```
-This pulls the last 3 story deliveries for `adrian.aa.chang@gmail.com`, looks up the **Chinese** (`zh`) story variants (hardcoded `EN_LANG = "zh"` in server.ts), and posts a carousel to Threads.
+`?account=zh` (default, matches existing automation) pulls the last 3 story deliveries for `adrian.aa.chang@gmail.com` and posts the `zh` story variants to **@bear.7306501**. `?account=en` pulls from `adrian.aa.chang.aa@gmail.com` and posts the `en` variants to **@wolf.2833331** (added 2026-08-19, the English-audience account — see Threads Posting below).
 
 ## Architecture
 
@@ -125,9 +125,11 @@ The Prisma client is generated into `src/generated/prisma` (checked into git, cu
 
 ### Threads Posting (`src/services/threads.ts`)
 
-`postToThreads(title, intro, items, accessToken)` posts a carousel (one image per item, topic_tag 古著) + one text reply with the first item's story (truncated to fit the 500-char limit). Containers are polled until `FINISHED` before publishing.
+**Two accounts, one per audience language** (added 2026-08-19): `zh` = **@bear.7306501** (original, Taiwan/Chinese audience), `en` = **@wolf.2833331** (English audience, growth push toward the first 100 users). Both post through the same Meta developer app (`THREADS_APP_ID`/`THREADS_APP_SECRET`) — no second app was created, `wolf.2833331` was just added as an Instagram tester on the existing app. Everything account-specific is keyed off a `ThreadsAccount = "zh" | "en"` type; `ACCOUNT_CONFIG` in `threads.ts` maps each to its own `THREADS_USER_ID`/`THREADS_USER_ID_EN` env var, `THREADS_ACCESS_TOKEN`/`THREADS_ACCESS_TOKEN_EN` env var, `AppCredential` storage key (`threads_access_token` / `threads_access_token_en`), and topic tag (`古著` / `vintage`). `server.ts`'s `THREADS_ACCOUNTS` map is the business-logic side: which source email's deliveries and which story `language` each account posts (`zh` → `adrian.aa.chang@gmail.com`/`zh`, `en` → `adrian.aa.chang.aa@gmail.com`/`en`).
 
-**Token lifecycle (self-refreshing):** the long-lived token (~60-day expiry, refreshable only while still valid) lives in the `AppCredential` table, seeded from the `THREADS_ACCESS_TOKEN` env var. `resolveThreadsToken(prisma)` validates it (`/me`), refreshes it when >24h old (`refresh_access_token`, +60 days), and persists the result; the `/scan` handler calls it fire-and-forget so the daily cron keeps the token alive forever. `POST /threads` resolves + validates the token BEFORE returning "ok" (a dead token used to fail silently after the 200 response). If the token ever fully dies (service down 60+ days), re-mint via the Meta portal **User Token Generator** (not the `/threads/auth` OAuth flow) for the brand account and update the env var — the store re-seeds automatically. `THREADS_USER_ID` stays an env var.
+`postToThreads(title, intro, items, accessToken, account)` posts a carousel (one image per item) + one text reply with the first item's story (truncated to fit the 500-char limit). Containers are polled until `FINISHED` before publishing. `POST /threads?account=en|zh` (defaults to `zh` so existing automation calling it with no query param is unaffected) resolves the account's config, looks up its source user's last 3 `StoryDelivery` rows, and pulls the matching-language `Story` row per item.
+
+**Token lifecycle (self-refreshing, per account):** each account's long-lived token (~60-day expiry, refreshable only while still valid) lives in its own `AppCredential` row, seeded from its env var. `resolveThreadsToken(prisma, account)` validates it (`/me`), refreshes it when >24h old (`refresh_access_token`, +60 days), and persists the result; the `/scan` handler calls it fire-and-forget **for both accounts** so the daily cron keeps both tokens alive forever. `POST /threads` resolves + validates the relevant account's token BEFORE returning "ok" (a dead token used to fail silently after the 200 response). If a token ever fully dies (service down 60+ days), re-mint via the Meta portal's per-tester **"Generate Token"** button (found under the app's Threads API Setup page, not the `/threads/auth` OAuth flow — that flow's auth codes are single-use and prone to being consumed by link prefetching before the real browser tab lands) and update the corresponding env var — the store re-seeds automatically.
 
 ### Email Template (`src/services/email.ts`)
 
