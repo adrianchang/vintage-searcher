@@ -263,12 +263,22 @@ function buildTryOnPickerHtml(items: DigestItem[], recipient: string, L: Record<
             </td>
           </tr>`).join("");
 
+  // Wrapped in the same "notice me" card treatment as the photo nudge banner
+  // (bordered box, gold accent rail) — the plain section-label styling used
+  // elsewhere (THE STORY, THE STYLE) is deliberately quiet, wrong choice for
+  // something meant to catch the eye before anyone scrolls past it.
   return `
           <tr>
             <td style="padding-bottom:32px;">
-              <p style="margin:0 0 2px;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#888;font-family:Helvetica,Arial,sans-serif;">${L.tryOnTitle}</p>
-              <p style="margin:0 0 12px;font-size:13px;color:#666;font-family:Helvetica,Arial,sans-serif;">${L.tryOnSub}</p>
-              <table width="100%" cellpadding="0" cellspacing="0">${rows}</table>
+              <table width="100%" cellpadding="0" cellspacing="0" style="background:#faf7f2;border:1px solid #e5ded4;border-left:3px solid #c8a96e;border-radius:4px;">
+                <tr>
+                  <td style="padding:18px 20px;">
+                    <p style="margin:0 0 4px;font-size:17px;font-weight:bold;color:#1a1a1a;font-family:Helvetica,Arial,sans-serif;">${L.tryOnTitle}</p>
+                    <p style="margin:0 0 14px;font-size:13px;color:#666;line-height:1.6;font-family:Helvetica,Arial,sans-serif;">${L.tryOnSub}</p>
+                    <table width="100%" cellpadding="0" cellspacing="0">${rows}</table>
+                  </td>
+                </tr>
+              </table>
             </td>
           </tr>`;
 }
