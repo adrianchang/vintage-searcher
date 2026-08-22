@@ -18,6 +18,8 @@ import {
 } from "./configs/archetypes";
 import { postToThreads, resolveThreadsToken, type ThreadsStoryItem, type ThreadsAccount } from "./services/threads";
 import { parseTopSizeLabel, coercePitToPitInches, coerceWaistInches } from "./services/size";
+import { buildClickUrl, buildPhotoUploadUrl } from "./services/email";
+import { generateTryOn, startOfUtcDay } from "./services/tryon";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -43,8 +45,50 @@ const scanConfig: ScanConfig = {
   minConfidence: 0,
 };
 
-app.use(express.json());
+// 10mb accommodates a base64-encoded phone photo (see MAX_PHOTO_BYTES below,
+// which caps the actual decoded size well under this).
+app.use(express.json({ limit: "10mb" }));
 app.use(express.static(path.join(import.meta.dirname, "..", "public")));
+
+const MAX_PHOTO_BYTES = 6 * 1024 * 1024;
+
+// Shared by /subscribe (new signups) and /photo (existing-user reminder flow).
+function decodePhotoUpload(photoBase64: unknown, mimeType: unknown): { bytes: Buffer; mimeType: string } | null {
+  if (typeof photoBase64 !== "string" || typeof mimeType !== "string" || !mimeType.startsWith("image/")) return null;
+  let bytes: Buffer;
+  try {
+    bytes = Buffer.from(photoBase64, "base64");
+  } catch {
+    return null;
+  }
+  if (bytes.length === 0 || bytes.length > MAX_PHOTO_BYTES) return null;
+  return { bytes, mimeType };
+}
+
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function renderBrandPage(bodyHtml: string, title = "Vintage Finds"): string {
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${title}</title>
+</head>
+<body style="margin:0;padding:0;background:#f5f0eb;font-family:Georgia,'Times New Roman',serif;color:#1a1a1a;">
+  <div style="max-width:480px;margin:0 auto;padding:48px 20px;text-align:center;">
+    <p style="margin:0 0 8px;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#888;font-family:Helvetica,Arial,sans-serif;">Vintage Finds</p>
+    ${bodyHtml}
+  </div>
+</body>
+</html>`;
+}
 
 app.get("/", (_req, res) => {
   res.sendFile(path.join(import.meta.dirname, "..", "public", "signup.html"));
@@ -55,13 +99,15 @@ app.get("/", (_req, res) => {
 const MAX_ARCHETYPES = 3;
 
 app.post("/subscribe", async (req, res) => {
-  const { email, language, archetypeIds, topSize, waistSize, pitToPitInches } = req.body as {
+  const { email, language, archetypeIds, topSize, waistSize, pitToPitInches, photoBase64, photoMimeType } = req.body as {
     email?: string;
     language?: string;
     archetypeIds?: unknown;
     topSize?: unknown;
     waistSize?: unknown;
     pitToPitInches?: unknown;
+    photoBase64?: unknown;
+    photoMimeType?: unknown;
   };
 
   // --- Validate email ---
@@ -139,12 +185,23 @@ app.post("/subscribe", async (req, res) => {
 
   const lang = language === "zh" ? "zh" : "en";
 
+  // --- Validate optional photo (absent = unchanged, same convention as size fields) ---
+  let photoUpdate: { photoBytes: Uint8Array<ArrayBuffer>; photoMimeType: string; hasPhoto: true } | Record<string, never> = {};
+  if (photoBase64 !== undefined && photoBase64 !== null) {
+    const decoded = decodePhotoUpload(photoBase64, photoMimeType);
+    if (!decoded) {
+      res.status(400).json({ error: "Invalid photo upload" });
+      return;
+    }
+    photoUpdate = { photoBytes: new Uint8Array(decoded.bytes), photoMimeType: decoded.mimeType, hasPhoto: true };
+  }
+
   try {
     // Upsert the user — never touch votes, deliveries, or story history.
     const user = await prisma.user.upsert({
       where: { email },
-      update: { language: lang, ...sizeUpdate },
-      create: { name: email, email, language: lang, ...sizeUpdate },
+      update: { language: lang, ...sizeUpdate, ...photoUpdate },
+      create: { name: email, email, language: lang, ...sizeUpdate, ...photoUpdate },
     });
 
     // Build keyword list: merge archetype keywords, or fall back to defaults when none selected.
@@ -338,6 +395,228 @@ app.get("/evaluations/:id/image", async (req, res) => {
   } catch (err) {
     console.error("[IMAGE] Error:", err);
     res.status(500).send("Something went wrong");
+  }
+});
+
+// --- Photo upload (existing-user reminder flow — new signups set this via /subscribe) ---
+
+app.post("/photo", async (req, res) => {
+  const { email, token, photoBase64, mimeType } = req.body as {
+    email?: string;
+    token?: string;
+    photoBase64?: unknown;
+    mimeType?: unknown;
+  };
+
+  if (!email || !token) {
+    res.status(400).json({ error: "email and token required" });
+    return;
+  }
+
+  const expected = crypto.createHmac("sha256", VOTE_SECRET).update(`photo:${email}`).digest("hex").slice(0, 32);
+  if (token !== expected) {
+    res.status(403).json({ error: "Invalid token" });
+    return;
+  }
+
+  const decoded = decodePhotoUpload(photoBase64, mimeType);
+  if (!decoded) {
+    res.status(400).json({ error: "Invalid photo upload" });
+    return;
+  }
+
+  try {
+    await prisma.user.upsert({
+      where: { email },
+      update: { photoBytes: new Uint8Array(decoded.bytes), photoMimeType: decoded.mimeType, hasPhoto: true },
+      create: { name: email, email, photoBytes: new Uint8Array(decoded.bytes), photoMimeType: decoded.mimeType, hasPhoto: true },
+    });
+    console.log(`[PHOTO] Saved for ${email}`);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[PHOTO] Upload error:", err);
+    res.status(500).json({ error: "Failed to save photo" });
+  }
+});
+
+app.get("/photo/upload", (req, res) => {
+  const { e: email, t: token } = req.query as Record<string, string>;
+  if (!email || !token) {
+    res.status(400).send("Invalid link");
+    return;
+  }
+
+  const expected = crypto.createHmac("sha256", VOTE_SECRET).update(`photo:${email}`).digest("hex").slice(0, 32);
+  if (token !== expected) {
+    res.status(403).send("Invalid link");
+    return;
+  }
+
+  res.send(renderBrandPage(`
+    <h1 style="margin:0 0 12px;font-size:24px;font-weight:normal;">Upload your photo</h1>
+    <p style="margin:0 0 28px;font-size:14px;color:#666;line-height:1.6;font-family:Helvetica,Arial,sans-serif;">One clear, full-body photo — this is what every future try-on pick gets rendered onto. Uploaded once, used from then on.</p>
+    <input type="file" id="photoInput" accept="image/*" style="display:block;margin:0 auto 20px;font-family:Helvetica,Arial,sans-serif;">
+    <div id="preview" style="margin-bottom:20px;"></div>
+    <button id="uploadBtn" style="padding:12px 28px;background:#2c2c2c;color:#fff;border:none;border-radius:2px;font-size:13px;letter-spacing:1px;font-family:Helvetica,Arial,sans-serif;cursor:pointer;">Save Photo</button>
+    <p id="status" style="margin-top:16px;font-size:13px;color:#888;font-family:Helvetica,Arial,sans-serif;"></p>
+    <script>
+      const email = ${JSON.stringify(email)};
+      const token = ${JSON.stringify(token)};
+      const input = document.getElementById('photoInput');
+      const preview = document.getElementById('preview');
+      const statusEl = document.getElementById('status');
+      let selectedFile = null;
+
+      input.addEventListener('change', () => {
+        selectedFile = input.files[0];
+        if (selectedFile) {
+          const url = URL.createObjectURL(selectedFile);
+          preview.innerHTML = '<img src="' + url + '" style="max-width:100%;max-height:320px;border-radius:4px;">';
+        }
+      });
+
+      document.getElementById('uploadBtn').addEventListener('click', () => {
+        if (!selectedFile) {
+          statusEl.textContent = 'Choose a photo first.';
+          return;
+        }
+        statusEl.textContent = 'Uploading...';
+        const reader = new FileReader();
+        reader.onload = async () => {
+          const base64 = reader.result.split(',')[1];
+          try {
+            const res = await fetch('/photo', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email, token, photoBase64: base64, mimeType: selectedFile.type }),
+            });
+            const json = await res.json();
+            statusEl.textContent = res.ok ? 'Saved — you can close this page.' : (json.error || 'Something went wrong.');
+          } catch (err) {
+            statusEl.textContent = 'Something went wrong. Try again.';
+          }
+        };
+        reader.readAsDataURL(selectedFile);
+      });
+    </script>
+  `, "Upload your photo"));
+});
+
+// --- Virtual try-on (AI render of a listing on the user's own photo) ---
+
+app.get("/tryon", async (req, res) => {
+  const { e: email, s: storyId, t: token } = req.query as Record<string, string>;
+  if (!email || !storyId || !token) {
+    res.status(400).send("Invalid link");
+    return;
+  }
+
+  const expected = crypto.createHmac("sha256", VOTE_SECRET)
+    .update(`${email}:${storyId}:tryon`)
+    .digest("hex")
+    .slice(0, 32);
+  if (token !== expected) {
+    res.status(403).send("Invalid token");
+    return;
+  }
+
+  const buildResultBody = (
+    tryOn: { imageBytes: Uint8Array | null; imageMimeType: string | null },
+    evaluation: { itemIdentification: string; estimatedEra: string | null },
+    storyIdForLink: string,
+  ) => {
+    const dataUri = tryOn.imageBytes
+      ? `data:${tryOn.imageMimeType || "image/jpeg"};base64,${Buffer.from(tryOn.imageBytes).toString("base64")}`
+      : "";
+    return `
+      <h1 style="margin:0 0 4px;font-size:22px;font-weight:normal;">${escapeHtml(evaluation.itemIdentification)}</h1>
+      <p style="margin:0 0 20px;font-size:12px;letter-spacing:1px;text-transform:uppercase;color:#888;font-family:Helvetica,Arial,sans-serif;">${escapeHtml(evaluation.estimatedEra || "Vintage")}</p>
+      ${dataUri ? `<img src="${dataUri}" style="width:100%;border-radius:4px;margin-bottom:20px;">` : ""}
+      <a href="${buildClickUrl(email, storyIdForLink)}" style="display:block;padding:14px 28px;background:#2c2c2c;color:#fff;text-decoration:none;font-size:13px;letter-spacing:1px;font-family:Helvetica,Arial,sans-serif;border-radius:2px;">View on eBay →</a>
+    `;
+  };
+
+  try {
+    const story = await prisma.story.findUnique({
+      where: { id: storyId },
+      include: { evaluation: true },
+    });
+    if (!story) {
+      res.status(404).send(renderBrandPage(`<p style="font-size:14px;color:#666;font-family:Helvetica,Arial,sans-serif;">This item is no longer available.</p>`));
+      return;
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true, hasPhoto: true, photoBytes: true, photoMimeType: true },
+    });
+
+    if (!user || !user.hasPhoto || !user.photoBytes || !user.photoMimeType) {
+      res.send(renderBrandPage(`
+        <h1 style="margin:0 0 12px;font-size:24px;font-weight:normal;">Upload a photo first</h1>
+        <p style="margin:0 0 24px;font-size:14px;color:#666;line-height:1.6;font-family:Helvetica,Arial,sans-serif;">You need a photo on file before trying anything on.</p>
+        <a href="${buildPhotoUploadUrl(email)}" style="display:inline-block;padding:12px 28px;background:#2c2c2c;color:#fff;text-decoration:none;border-radius:2px;font-size:13px;letter-spacing:1px;font-family:Helvetica,Arial,sans-serif;">Upload your photo</a>
+      `));
+      return;
+    }
+
+    // Once per UTC day, and only successful ("done") generations count — a
+    // failed attempt doesn't cost the user their day's try.
+    const doneToday = await prisma.tryOn.findFirst({
+      where: { userId: user.id, status: "done", createdAt: { gte: startOfUtcDay() } },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (doneToday) {
+      if (doneToday.evaluationId === story.evaluationId) {
+        // Same item as today's existing result — show it again, no regeneration.
+        res.send(renderBrandPage(buildResultBody(doneToday, story.evaluation, story.id)));
+        return;
+      }
+      res.send(renderBrandPage(`
+        <h1 style="margin:0 0 12px;font-size:24px;font-weight:normal;">Already used today's try-on</h1>
+        <p style="margin:0;font-size:14px;color:#666;line-height:1.6;font-family:Helvetica,Arial,sans-serif;">One try-on per day — come back tomorrow for the next pick.</p>
+      `));
+      return;
+    }
+
+    const garmentImageUrl = story.evaluation.hasProcessedImage
+      ? `${APP_URL}/evaluations/${story.evaluation.id}/image`
+      : (story.evaluation.imageUrl ?? "");
+
+    if (!garmentImageUrl) {
+      res.send(renderBrandPage(`<p style="font-size:14px;color:#666;font-family:Helvetica,Arial,sans-serif;">Something went wrong loading this item's photo.</p>`));
+      return;
+    }
+
+    const result = await generateTryOn(user.photoBytes, user.photoMimeType, garmentImageUrl);
+
+    if (!result) {
+      await prisma.tryOn.create({
+        data: { userId: user.id, evaluationId: story.evaluationId, status: "failed" },
+      });
+      res.send(renderBrandPage(`
+        <h1 style="margin:0 0 12px;font-size:24px;font-weight:normal;">Couldn't generate that one</h1>
+        <p style="margin:0;font-size:14px;color:#666;line-height:1.6;font-family:Helvetica,Arial,sans-serif;">Something went wrong on our end — refresh to try again (this attempt didn't use up today's try-on).</p>
+      `));
+      return;
+    }
+
+    const tryOn = await prisma.tryOn.create({
+      data: {
+        userId: user.id,
+        evaluationId: story.evaluationId,
+        status: "done",
+        imageBytes: new Uint8Array(result.bytes),
+        imageMimeType: result.mimeType,
+      },
+    });
+
+    console.log(`[TRYON] ${email} tried on ${story.evaluation.itemIdentification}`);
+    res.send(renderBrandPage(buildResultBody(tryOn, story.evaluation, story.id)));
+  } catch (err) {
+    console.error("[TRYON] Error:", err);
+    res.status(500).send(renderBrandPage(`<p style="font-size:14px;color:#666;font-family:Helvetica,Arial,sans-serif;">Something went wrong.</p>`));
   }
 });
 

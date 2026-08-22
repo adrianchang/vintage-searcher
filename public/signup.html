@@ -812,6 +812,10 @@
         </div>
       </div>
 
+      <label class="form-label" for="photoInput">Your photo <span class="optional-note">optional — unlocks AI try-on, see any pick rendered on you</span></label>
+      <input type="file" id="photoInput" accept="image/*">
+      <div id="photoPreview"></div>
+
       <button class="primary-btn" id="submitBtn" type="button" onclick="subscribe()">
         Start my daily edit — it's free
       </button>
@@ -884,6 +888,8 @@
     let selectedLang   = 'en';
     let selectedTopSize = null; // "XS".."XXL" or null
     let p2pUnit        = 'in';  // pit-to-pit input unit
+    let selectedPhotoBase64 = null; // base64 (no data: prefix) or null
+    let selectedPhotoMimeType = null;
 
     // ─── Step 1: card selection ──────────────────────────────────────────────
 
@@ -1074,6 +1080,24 @@
       return payload;
     }
 
+    document.getElementById('photoInput').addEventListener('change', e => {
+      const file = e.target.files[0];
+      const preview = document.getElementById('photoPreview');
+      if (!file) {
+        selectedPhotoBase64 = null;
+        selectedPhotoMimeType = null;
+        preview.innerHTML = '';
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        selectedPhotoBase64 = reader.result.split(',')[1];
+        selectedPhotoMimeType = file.type;
+        preview.innerHTML = '<img src="' + reader.result + '" style="max-width:160px;max-height:200px;border-radius:4px;margin-top:8px;display:block;">';
+      };
+      reader.readAsDataURL(file);
+    });
+
     async function subscribe() {
       const email   = document.getElementById('emailInput').value.trim();
       const errorEl = document.getElementById('errorMsg');
@@ -1093,6 +1117,10 @@
       // Build payload
       const archetypeIds = showEverything ? [] : [...selectedIds];
       const payload = { email, language: selectedLang, archetypeIds, ...buildSizePayload() };
+      if (selectedPhotoBase64) {
+        payload.photoBase64 = selectedPhotoBase64;
+        payload.photoMimeType = selectedPhotoMimeType;
+      }
 
       try {
         const res  = await fetch('/subscribe', {

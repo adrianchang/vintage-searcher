@@ -142,6 +142,9 @@ export async function runScan(
         take: 40,
       },
     },
+    // photoBytes is a multi-hundred-KB blob — same reasoning as Evaluation's
+    // heroImageBytes omit. hasPhoto (a plain boolean) is unaffected.
+    omit: { photoBytes: true },
   });
 
   if (testRecipients) {
@@ -440,7 +443,7 @@ export async function runScan(
     const TOP_N = 3;
     const toSend = [...scoredFinds].sort((a, b) => b.score - a.score).slice(0, TOP_N);
     console.log(`  Sending top ${toSend.length} of ${qualifiedFinds.length} candidates`);
-    await sendDigestEmail(toSend, user.email, user.language);
+    await sendDigestEmail(toSend, user.email, user.language, user.hasPhoto);
 
     // Record deliveries so these listings are never resent to this user
     for (const find of toSend) {

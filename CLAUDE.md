@@ -101,15 +101,31 @@ Users pick up to 3 archetypes at signup. Each archetype has:
 | Endpoint | Auth | Purpose |
 |---|---|---|
 | `GET /` | — | Serves `public/signup.html` |
-| `POST /subscribe` | — | Upserts user by email; atomically replaces `UserKeyword` + `UserArchetype` (max 3 archetypes); accepts optional `topSize`/`waistSize`/`pitToPitInches` (absent = unchanged, null = cleared); never touches votes/deliveries |
+| `POST /subscribe` | — | Upserts user by email; atomically replaces `UserKeyword` + `UserArchetype` (max 3 archetypes); accepts optional `topSize`/`waistSize`/`pitToPitInches` (absent = unchanged, null = cleared) and optional `photoBase64`/`photoMimeType` (absent = unchanged, no clear-via-null support); never touches votes/deliveries |
 | `GET /vote` | HMAC token | Records thumbs up/down from email links; upserts (last click wins) |
 | `GET /go` | HMAC token | eBay-button click redirect: records an `EngagementEvent` (type `click`), then 302s to the listing URL |
 | `GET /evaluations/:id/image` | — | Serves the background-removed hero image (bytes from DB); 302s to the original listing image if none was generated |
+| `POST /photo` | HMAC token (`photo:{email}`) | Existing-user photo upload/replace, reached via the email nudge banner's link |
+| `GET /photo/upload` | HMAC token | Serves a standalone upload page (file input → base64 → `POST /photo`) |
+| `GET /tryon` | HMAC token (`{email}:{storyId}:tryon`) | AI virtual try-on — see Virtual Try-On below |
 | `POST /scan` | `x-api-key` | Kicks off `runScan` async; `?test=true` limits to 10 listings + test recipients |
 | `POST /threads` | `x-api-key` | Posts last 3 deliveries to Threads |
 | `GET /threads/auth` → `GET /threads/callback` | — | Threads OAuth; callback page displays the long-lived token to copy into Render env vars |
 | `GET/POST /ebay/webhook` | — | eBay marketplace account deletion challenge/ack |
 | `GET /ebay/auth/callback` | — | Required by eBay OAuth flow — do not remove |
+
+### Virtual Try-On (`src/services/tryon.ts`, added 2026-08-22)
+
+AI-generated image of a user wearing one listing per day, rendered onto their own uploaded photo. Two purposes: engagement/shareability, and a richer preference signal than a thumbs up/down (which item someone actually wants to see on themselves).
+
+- **Photo storage**: `User.photoBytes`/`photoMimeType`/`hasPhoto`, same bytes-in-Postgres pattern as `Evaluation.heroImageBytes`. One-time upload — new users set it in `/subscribe`; existing users get a persistent nudge banner in the email (`buildPhotoNudgeHtml` in `email.ts`) that disappears once `hasPhoto` flips true, no separate one-time-nag flag needed. `MAX_PHOTO_BYTES` (6MB) and `express.json({ limit: "10mb" })` in `server.ts` bound upload size.
+- **Email entry point**: when `hasPhoto` is true, the digest leads with a "Pick One to Try On" thumbnail picker (`buildTryOnPickerHtml`) *before* the intro line — deliberately front-loaded so the pick doesn't require reading the whole email first. Each thumbnail links to `GET /tryon?e=&s=&t=` (HMAC-signed like vote/click links, `buildTryOnUrl` in `email.ts`).
+- **Generation** (`generateTryOn` in `tryon.ts`): `gemini-3.1-flash-image` — the same model Google's own shopping virtual try-on feature runs on — given the user's photo + the item's image (background-removed hero image when available, same `hasProcessedImage` fallback logic as everywhere else) and a prompt asking for a photorealistic composite preserving identity/pose/background, with explicit instructions to keep layered clothing visible (a real failure mode found in testing: garments normally worn over other clothing, like overalls, would otherwise render the person bare underneath).
+- **Deliberately NOT on evaluate.ts's shared 15s scan throttle** — that throttle exists for an unattended batch job; this is a live request with a real user waiting on a page load. Fail-fast by design: one attempt, no retries/backoff (`generateTryOn` returns `null` on any failure).
+- **Rate limit**: one successful try-on per user per UTC calendar day (`startOfUtcDay` — same day-boundary convention as `archetypes.ts`'s `dayIndex`). Enforced by querying `TryOn` rows with `status: "done"` created since the start of today; a **failed** generation doesn't consume the day's allowance, so a Gemini error never costs the user their try. Re-clicking the same item's link the same day shows the cached result instead of regenerating; clicking a different item after already succeeding today shows a "come back tomorrow" page.
+- **Result page**: rendered inline by `GET /tryon` (not a stored/cached public URL) — the generated image is embedded as a base64 data URI directly in the HTML response, since each result is a one-off view tied to a signed link rather than something needing CDN-style caching.
+
+### DB Schema Key Points
 
 ### DB Schema Key Points
 
@@ -119,6 +135,7 @@ Users pick up to 3 archetypes at signup. Each archetype has:
 - `Vote` — thumbs up/down per `(userId, storyId)`. Used to personalize future rankings.
 - `UserKeyword` — per-user eBay search queries. Replaced entirely on re-signup.
 - `UserArchetype` — which archetypes a user selected.
+- `TryOn` — one row per virtual try-on attempt (`status: "done" | "failed"`, bytes only on success). See Virtual Try-On above for the once-per-day rule this enables.
 - `session` — managed by connect-pg-simple, not Prisma.
 
 The Prisma client is generated into `src/generated/prisma` (checked into git, custom output path). Import from `./generated/prisma/client`. Never edit generated files.

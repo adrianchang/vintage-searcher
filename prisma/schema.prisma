@@ -23,6 +23,13 @@ model User {
   waistSize      Int?    // tag waist, inches
   pitToPitInches Float?  // optional refinement, overrides topSize
 
+  // One-time uploaded photo for AI virtual try-on. Bytes in Postgres, same
+  // pattern as Evaluation.heroImageBytes — kept out of routine queries via
+  // `omit` since it's a multi-hundred-KB payload most lookups don't need.
+  photoBytes    Bytes?
+  photoMimeType String?
+  hasPhoto      Boolean @default(false)
+
   createdAt DateTime @default(now())
 
   keywords   UserKeyword[]
@@ -30,6 +37,7 @@ model User {
   deliveries StoryDelivery[]
   archetypes UserArchetype[]
   engagement EngagementEvent[]
+  tryOns     TryOn[]
 }
 
 model UserKeyword {
@@ -86,6 +94,25 @@ model Evaluation {
   createdAt      DateTime @default(now())
 
   stories        Story[]
+  tryOns         TryOn[]
+}
+
+// One AI-generated "try this item on" render per user per day (see
+// src/services/tryon.ts). The once-per-day rule is enforced in code by
+// counting status="done" rows created today — a failed generation doesn't
+// burn the day's allowance, so a user can retry same-day after our error.
+model TryOn {
+  id            String     @id @default(cuid())
+  userId        String
+  user          User       @relation(fields: [userId], references: [id])
+  evaluationId  String
+  evaluation    Evaluation @relation(fields: [evaluationId], references: [id])
+  status        String     // "done" | "failed"
+  imageBytes    Bytes?
+  imageMimeType String?
+  createdAt     DateTime   @default(now())
+
+  @@index([userId, createdAt])
 }
 
 model Story {
