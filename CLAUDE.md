@@ -124,8 +124,7 @@ AI-generated image of a user wearing one listing per day, rendered onto their ow
 - **Deliberately NOT on evaluate.ts's shared 15s scan throttle** — that throttle exists for an unattended batch job; this is a live request with a real user waiting on a page load. Fail-fast by design: one attempt, no retries/backoff (`generateTryOn` returns `null` on any failure).
 - **Rate limit**: one successful try-on per user per UTC calendar day (`startOfUtcDay` — same day-boundary convention as `archetypes.ts`'s `dayIndex`). Enforced by querying `TryOn` rows with `status: "done"` created since the start of today; a **failed** generation doesn't consume the day's allowance, so a Gemini error never costs the user their try. Re-clicking the same item's link the same day shows the cached result instead of regenerating; clicking a different item after already succeeding today shows a "come back tomorrow" page.
 - **Result page**: rendered inline by `GET /tryon` (not a stored/cached public URL) — the generated image is embedded as a base64 data URI directly in the HTML response, since each result is a one-off view tied to a signed link rather than something needing CDN-style caching.
-
-### DB Schema Key Points
+- **Logging**: `TryOn` rows only capture completed attempts (done or failed generation). Every `GET /tryon` hit — including ones blocked by the daily limit or a missing photo — also fires an `EngagementEvent` (`type: "tryon_click"`, fire-and-forget, same non-blocking pattern as `/go`'s click logging) so "wanted to try this on" is never lost just because the request got blocked before generation. This is the intended future personalization signal — a stronger preference indicator than a vote — even though nothing reads it yet.
 
 ### DB Schema Key Points
 

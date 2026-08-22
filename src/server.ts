@@ -520,6 +520,19 @@ app.get("/tryon", async (req, res) => {
     return;
   }
 
+  // Log every click as an EngagementEvent, not just successful generations —
+  // "wanted to try this on" is a signal worth keeping even when blocked by
+  // the daily limit or a missing photo (TryOn only records completed
+  // attempts). Fire-and-forget, same pattern as /go's click logging.
+  prisma.user.upsert({
+    where: { email },
+    update: {},
+    create: { name: email, email },
+  })
+    .then(user => prisma.engagementEvent.create({ data: { userId: user.id, storyId, type: "tryon_click" } }))
+    .then(() => console.log(`[TRYON] Click recorded: ${email} → story ${storyId}`))
+    .catch(err => console.error("[TRYON] Failed to record click:", err));
+
   const buildResultBody = (
     tryOn: { imageBytes: Uint8Array | null; imageMimeType: string | null },
     evaluation: { itemIdentification: string; estimatedEra: string | null },
