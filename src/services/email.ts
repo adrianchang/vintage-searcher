@@ -77,8 +77,8 @@ const LABELS: Record<string, Record<string, string>> = {
     viewOnEbay: "View on eBay →",
     sizeUnverified: "Size unverified — check measurements before buying",
     footer: "You're receiving this because you signed up for daily vintage finds.<br>Prices and availability change — always verify before purchasing.",
-    tryOnTitle: "Pick One to Try On",
-    tryOnSub: "See it on you before you scroll — pick your favorite.",
+    tryOnTitle: "Today's Pick",
+    tryOnSub: "You get one shot today — choose wisely.",
     tryOnCta: "Try this on",
     photoNudgeTitle: "Unlock AI Try-On",
     photoNudgeBody: "Upload a photo once and see any future pick rendered on you.",
@@ -102,8 +102,8 @@ const LABELS: Record<string, Record<string, string>> = {
     viewOnEbay: "前往 eBay 查看 →",
     sizeUnverified: "尺寸未確認 — 購買前請確認實際尺寸",
     footer: "你收到這封信，因為你訂閱了每日古著精選。<br>價格與庫存隨時變動，購買前請自行確認。",
-    tryOnTitle: "選一件試穿",
-    tryOnSub: "看看穿在你身上的樣子 — 選一件你的最愛。",
+    tryOnTitle: "今日限定挑戰",
+    tryOnSub: "今天只有一次機會 — 選你最想看到的那件。",
     tryOnCta: "試穿這件",
     photoNudgeTitle: "解鎖 AI 試穿",
     photoNudgeBody: "上傳一次照片，之後每天都能看到單品穿在你身上的樣子。",
@@ -246,30 +246,29 @@ function buildEmailHtml(items: DigestItem[], recipient: string, lang = "en", has
 </html>`;
 }
 
-// Thumbnail-per-item picker, shown up front (before the full digest) so the
-// "which one would you try on" signal doesn't require reading the whole email
-// first — the whole point is to make it feel like a quick game, not a chore.
+// Named-and-numbered picker, not thumbnails — shown up front (before the full
+// digest) so the "which one would you try on" signal doesn't require reading
+// the whole email first. Deliberately text-only: images here would encourage
+// picture-then-bounce behavior (click try-on, never scroll to the stories,
+// which are the actual product) — see product_design.md's 2026-08-22 entry.
 function buildTryOnPickerHtml(items: DigestItem[], recipient: string, L: Record<string, string>): string {
-  const cells = items.map((item) => {
-    const { listing, evaluation } = item;
-    const imageUrl = evaluation.hasProcessedImage
-      ? `${APP_URL}/evaluations/${evaluation.id}/image`
-      : (listing.imageUrls[0] || "");
-    return `
-          <td width="${Math.floor(100 / items.length)}%" style="padding:0 6px;vertical-align:top;">
-            <a href="${buildTryOnUrl(recipient, item.storyId)}" style="text-decoration:none;display:block;">
-              ${imageUrl ? `<img src="${imageUrl}" alt="${escapeHtml(listing.title)}" width="180" style="width:100%;height:auto;display:block;border-radius:4px;aspect-ratio:3/4;object-fit:cover;">` : ""}
-              <p style="margin:8px 0 0;padding:8px 0;background:#2c2c2c;color:#c8a96e;text-align:center;font-size:11px;letter-spacing:1px;text-transform:uppercase;font-family:Helvetica,Arial,sans-serif;border-radius:2px;">${L.tryOnCta}</p>
-            </a>
-          </td>`;
-  }).join("");
+  const rows = items.map((item, index) => `
+          <tr>
+            <td style="padding:8px 0;border-bottom:${index === items.length - 1 ? "none" : "1px solid #e5ded4"};">
+              <a href="${buildTryOnUrl(recipient, item.storyId)}" style="text-decoration:none;display:block;font-family:Helvetica,Arial,sans-serif;">
+                <span style="font-size:13px;color:#c8a96e;font-weight:bold;">${index + 1}.</span>
+                <span style="font-size:14px;color:#1a1a1a;">${escapeHtml(shortItemName(item.evaluation.itemIdentification))}</span>
+                <span style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#888;float:right;">${L.tryOnCta} →</span>
+              </a>
+            </td>
+          </tr>`).join("");
 
   return `
           <tr>
             <td style="padding-bottom:32px;">
               <p style="margin:0 0 2px;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#888;font-family:Helvetica,Arial,sans-serif;">${L.tryOnTitle}</p>
-              <p style="margin:0 0 16px;font-size:13px;color:#666;font-family:Helvetica,Arial,sans-serif;">${L.tryOnSub}</p>
-              <table width="100%" cellpadding="0" cellspacing="0"><tr>${cells}</tr></table>
+              <p style="margin:0 0 12px;font-size:13px;color:#666;font-family:Helvetica,Arial,sans-serif;">${L.tryOnSub}</p>
+              <table width="100%" cellpadding="0" cellspacing="0">${rows}</table>
             </td>
           </tr>`;
 }
