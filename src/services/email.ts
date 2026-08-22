@@ -102,7 +102,7 @@ const LABELS: Record<string, Record<string, string>> = {
     viewOnEbay: "前往 eBay 查看 →",
     sizeUnverified: "尺寸未確認 — 購買前請確認實際尺寸",
     footer: "你收到這封信，因為你訂閱了每日古著精選。<br>價格與庫存隨時變動，購買前請自行確認。",
-    tryOnTitle: "今日限定挑戰",
+    tryOnTitle: "今日試穿",
     tryOnSub: "今天只有一次機會 — 選你最想看到的那件。",
     tryOnCta: "試穿這件",
     photoNudgeTitle: "解鎖 AI 試穿",
