@@ -18,7 +18,7 @@ import {
 } from "./configs/archetypes";
 import { postToThreads, resolveThreadsToken, type ThreadsStoryItem, type ThreadsAccount } from "./services/threads";
 import { parseTopSizeLabel, coercePitToPitInches, coerceWaistInches } from "./services/size";
-import { buildClickUrl, buildPhotoUploadUrl } from "./services/email";
+import { buildClickUrl } from "./services/email";
 import { generateTryOn, startOfUtcDay } from "./services/tryon";
 
 const app = express();
@@ -439,69 +439,6 @@ app.post("/photo", async (req, res) => {
   }
 });
 
-app.get("/photo/upload", (req, res) => {
-  const { e: email, t: token } = req.query as Record<string, string>;
-  if (!email || !token) {
-    res.status(400).send("Invalid link");
-    return;
-  }
-
-  const expected = crypto.createHmac("sha256", VOTE_SECRET).update(`photo:${email}`).digest("hex").slice(0, 32);
-  if (token !== expected) {
-    res.status(403).send("Invalid link");
-    return;
-  }
-
-  res.send(renderBrandPage(`
-    <h1 style="margin:0 0 12px;font-size:24px;font-weight:normal;">Upload your photo</h1>
-    <p style="margin:0 0 28px;font-size:14px;color:#666;line-height:1.6;font-family:Helvetica,Arial,sans-serif;">One clear, full-body photo — this is what every future try-on pick gets rendered onto. Uploaded once, used from then on.</p>
-    <input type="file" id="photoInput" accept="image/*" style="display:block;margin:0 auto 20px;font-family:Helvetica,Arial,sans-serif;">
-    <div id="preview" style="margin-bottom:20px;"></div>
-    <button id="uploadBtn" style="padding:12px 28px;background:#2c2c2c;color:#fff;border:none;border-radius:2px;font-size:13px;letter-spacing:1px;font-family:Helvetica,Arial,sans-serif;cursor:pointer;">Save Photo</button>
-    <p id="status" style="margin-top:16px;font-size:13px;color:#888;font-family:Helvetica,Arial,sans-serif;"></p>
-    <script>
-      const email = ${JSON.stringify(email)};
-      const token = ${JSON.stringify(token)};
-      const input = document.getElementById('photoInput');
-      const preview = document.getElementById('preview');
-      const statusEl = document.getElementById('status');
-      let selectedFile = null;
-
-      input.addEventListener('change', () => {
-        selectedFile = input.files[0];
-        if (selectedFile) {
-          const url = URL.createObjectURL(selectedFile);
-          preview.innerHTML = '<img src="' + url + '" style="max-width:100%;max-height:320px;border-radius:4px;">';
-        }
-      });
-
-      document.getElementById('uploadBtn').addEventListener('click', () => {
-        if (!selectedFile) {
-          statusEl.textContent = 'Choose a photo first.';
-          return;
-        }
-        statusEl.textContent = 'Uploading...';
-        const reader = new FileReader();
-        reader.onload = async () => {
-          const base64 = reader.result.split(',')[1];
-          try {
-            const res = await fetch('/photo', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ email, token, photoBase64: base64, mimeType: selectedFile.type }),
-            });
-            const json = await res.json();
-            statusEl.textContent = res.ok ? 'Saved — you can close this page.' : (json.error || 'Something went wrong.');
-          } catch (err) {
-            statusEl.textContent = 'Something went wrong. Try again.';
-          }
-        };
-        reader.readAsDataURL(selectedFile);
-      });
-    </script>
-  `, "Upload your photo"));
-});
-
 // --- Virtual try-on (AI render of a listing on the user's own photo) ---
 
 app.get("/tryon", async (req, res) => {
@@ -565,11 +502,63 @@ app.get("/tryon", async (req, res) => {
     });
 
     if (!user || !user.hasPhoto || !user.photoBytes || !user.photoMimeType) {
+      // Upload happens right here — same page, no separate hop. On success the
+      // page just reloads itself (same email/storyId/token already in the URL);
+      // hasPhoto is now true, so the reload runs straight into generation.
+      const photoToken = crypto.createHmac("sha256", VOTE_SECRET).update(`photo:${email}`).digest("hex").slice(0, 32);
       res.send(renderBrandPage(`
-        <h1 style="margin:0 0 12px;font-size:24px;font-weight:normal;">Upload a photo first</h1>
-        <p style="margin:0 0 24px;font-size:14px;color:#666;line-height:1.6;font-family:Helvetica,Arial,sans-serif;">You need a photo on file before trying anything on.</p>
-        <a href="${buildPhotoUploadUrl(email)}" style="display:inline-block;padding:12px 28px;background:#2c2c2c;color:#fff;text-decoration:none;border-radius:2px;font-size:13px;letter-spacing:1px;font-family:Helvetica,Arial,sans-serif;">Upload your photo</a>
-      `));
+        <h1 style="margin:0 0 12px;font-size:24px;font-weight:normal;">Upload a photo to try this on</h1>
+        <p style="margin:0 0 24px;font-size:14px;color:#666;line-height:1.6;font-family:Helvetica,Arial,sans-serif;">One clear, full-body photo — used for this and every future pick, uploaded once.</p>
+        <input type="file" id="photoInput" accept="image/*" style="display:block;margin:0 auto 20px;font-family:Helvetica,Arial,sans-serif;">
+        <div id="preview" style="margin-bottom:20px;"></div>
+        <button id="uploadBtn" style="padding:12px 28px;background:#2c2c2c;color:#fff;border:none;border-radius:2px;font-size:13px;letter-spacing:1px;font-family:Helvetica,Arial,sans-serif;cursor:pointer;">Save Photo &amp; Try This On</button>
+        <p id="status" style="margin-top:16px;font-size:13px;color:#888;font-family:Helvetica,Arial,sans-serif;"></p>
+        <script>
+          const email = ${JSON.stringify(email)};
+          const photoToken = ${JSON.stringify(photoToken)};
+          const input = document.getElementById('photoInput');
+          const preview = document.getElementById('preview');
+          const statusEl = document.getElementById('status');
+          let selectedFile = null;
+
+          input.addEventListener('change', () => {
+            selectedFile = input.files[0];
+            if (selectedFile) {
+              const url = URL.createObjectURL(selectedFile);
+              preview.innerHTML = '<img src="' + url + '" style="max-width:100%;max-height:320px;border-radius:4px;">';
+            }
+          });
+
+          document.getElementById('uploadBtn').addEventListener('click', () => {
+            if (!selectedFile) {
+              statusEl.textContent = 'Choose a photo first.';
+              return;
+            }
+            statusEl.textContent = 'Uploading...';
+            const reader = new FileReader();
+            reader.onload = async () => {
+              const base64 = reader.result.split(',')[1];
+              try {
+                const res = await fetch('/photo', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ email, token: photoToken, photoBase64: base64, mimeType: selectedFile.type }),
+                });
+                if (res.ok) {
+                  statusEl.textContent = 'Saved — generating your try-on...';
+                  location.reload();
+                } else {
+                  const json = await res.json();
+                  statusEl.textContent = json.error || 'Something went wrong.';
+                }
+              } catch (err) {
+                statusEl.textContent = 'Something went wrong. Try again.';
+              }
+            };
+            reader.readAsDataURL(selectedFile);
+          });
+        </script>
+      `, "Upload your photo"));
       return;
     }
 

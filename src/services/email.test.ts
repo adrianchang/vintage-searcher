@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildClickUrl, buildSubject, buildTryOnUrl, buildPhotoUploadUrl, type DigestItem } from "./email";
+import { buildClickUrl, buildSubject, buildTryOnUrl, type DigestItem } from "./email";
 
 function mockItem(itemIdentification: string): DigestItem {
   return {
@@ -72,22 +72,5 @@ describe("buildTryOnUrl", () => {
 
   it("is deterministic", () => {
     expect(buildTryOnUrl("a@b.com", "s1")).toBe(buildTryOnUrl("a@b.com", "s1"));
-  });
-});
-
-describe("buildPhotoUploadUrl", () => {
-  it("builds a signed /photo/upload link with just the email (no story)", () => {
-    const url = new URL(buildPhotoUploadUrl("test@example.com"));
-    expect(url.pathname).toBe("/photo/upload");
-    expect(url.searchParams.get("e")).toBe("test@example.com");
-    expect(url.searchParams.get("t")).toMatch(/^[0-9a-f]{32}$/);
-    expect(url.searchParams.get("s")).toBeNull();
-  });
-
-  it("is deterministic per email", () => {
-    expect(buildPhotoUploadUrl("a@b.com")).toBe(buildPhotoUploadUrl("a@b.com"));
-    const t1 = new URL(buildPhotoUploadUrl("a@b.com")).searchParams.get("t");
-    const t2 = new URL(buildPhotoUploadUrl("c@d.com")).searchParams.get("t");
-    expect(t1).not.toBe(t2);
   });
 });

@@ -443,7 +443,7 @@ export async function runScan(
     const TOP_N = 3;
     const toSend = [...scoredFinds].sort((a, b) => b.score - a.score).slice(0, TOP_N);
     console.log(`  Sending top ${toSend.length} of ${qualifiedFinds.length} candidates`);
-    await sendDigestEmail(toSend, user.email, user.language, user.hasPhoto);
+    await sendDigestEmail(toSend, user.email, user.language);
 
     // Record deliveries so these listings are never resent to this user
     for (const find of toSend) {

@@ -50,14 +50,6 @@ export function buildTryOnUrl(email: string, storyId: string): string {
   return `${APP_URL}/tryon?${params.toString()}`;
 }
 
-// Not story-specific (a user uploads one photo, not one per item), so this
-// signs on email alone rather than reusing buildVoteToken's email:story:dir shape.
-export function buildPhotoUploadUrl(email: string): string {
-  const token = createHmac("sha256", VOTE_SECRET).update(`photo:${email}`).digest("hex").slice(0, 32);
-  const params = new URLSearchParams({ e: email, t: token });
-  return `${APP_URL}/photo/upload?${params.toString()}`;
-}
-
 const LABELS: Record<string, Record<string, string>> = {
   en: {
     dailyEdit: "The Daily Edit",
@@ -80,9 +72,6 @@ const LABELS: Record<string, Record<string, string>> = {
     tryOnTitle: "Today's Pick",
     tryOnSub: "You get one shot today — choose wisely.",
     tryOnCta: "Try this on",
-    photoNudgeTitle: "Unlock AI Try-On",
-    photoNudgeBody: "Upload a photo once and see any future pick rendered on you.",
-    photoNudgeCta: "Upload your photo",
   },
   zh: {
     dailyEdit: "每日精選",
@@ -105,9 +94,6 @@ const LABELS: Record<string, Record<string, string>> = {
     tryOnTitle: "今日試穿",
     tryOnSub: "今天只有一次機會 — 選你最想看到的那件。",
     tryOnCta: "試穿這件",
-    photoNudgeTitle: "解鎖 AI 試穿",
-    photoNudgeBody: "上傳一次照片，之後每天都能看到單品穿在你身上的樣子。",
-    photoNudgeCta: "上傳照片",
   },
 };
 
@@ -115,7 +101,6 @@ export async function sendDigestEmail(
   items: DigestItem[],
   recipient: string,
   lang = "en",
-  hasPhoto = false,
 ): Promise<void> {
   if (!recipient) {
     console.log("No recipient — skipping email");
@@ -126,7 +111,7 @@ export async function sendDigestEmail(
     return;
   }
 
-  const html = buildEmailHtml(items, recipient, lang, hasPhoto);
+  const html = buildEmailHtml(items, recipient, lang);
   const subject = buildSubject(items, lang);
 
   if (!RESEND_API_KEY) {
@@ -176,7 +161,7 @@ export function buildSubject(items: DigestItem[], lang = "en"): string {
   return `🏷️ Today's Selection: ${joinWithAnd(names, "and")} · ${date.toUpperCase()}`;
 }
 
-function buildEmailHtml(items: DigestItem[], recipient: string, lang = "en", hasPhoto = false): string {
+function buildEmailHtml(items: DigestItem[], recipient: string, lang = "en"): string {
   const L = LABELS[lang] ?? LABELS.en;
   const date = lang === "zh"
     ? new Date().toLocaleDateString("zh-TW", { year: "numeric", month: "long", day: "numeric", weekday: "long" })
@@ -213,9 +198,11 @@ function buildEmailHtml(items: DigestItem[], recipient: string, lang = "en", has
             </td>
           </tr>
 
-          <!-- Try-on picker (has photo) or upload nudge (no photo yet) — front and center,
-               before the intro, so it's seen without scrolling through the full digest. -->
-          ${hasPhoto ? buildTryOnPickerHtml(items, recipient, L) : buildPhotoNudgeHtml(recipient, L)}
+          <!-- Try-on picker — always shown, front and center, before the intro, so
+               it's seen without scrolling through the full digest. Clicking without
+               a photo on file prompts for one right on /tryon itself (see server.ts) —
+               no separate nudge/upload step needed here. -->
+          ${buildTryOnPickerHtml(items, recipient, L)}
 
           <!-- Intro line -->
           <tr>
@@ -276,26 +263,6 @@ function buildTryOnPickerHtml(items: DigestItem[], recipient: string, L: Record<
                     <p style="margin:0 0 4px;font-size:17px;font-weight:bold;color:#1a1a1a;font-family:Helvetica,Arial,sans-serif;">${L.tryOnTitle}</p>
                     <p style="margin:0 0 14px;font-size:13px;color:#666;line-height:1.6;font-family:Helvetica,Arial,sans-serif;">${L.tryOnSub}</p>
                     <table width="100%" cellpadding="0" cellspacing="0">${rows}</table>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>`;
-}
-
-// Shown instead of the picker for users who haven't uploaded a photo yet —
-// re-appears every digest until they do (no separate one-time-nag flag needed;
-// it naturally stops once User.hasPhoto flips true).
-function buildPhotoNudgeHtml(recipient: string, L: Record<string, string>): string {
-  return `
-          <tr>
-            <td style="padding-bottom:32px;">
-              <table width="100%" cellpadding="0" cellspacing="0" style="background:#faf7f2;border:1px solid #e5ded4;border-left:3px solid #c8a96e;border-radius:4px;">
-                <tr>
-                  <td style="padding:18px 20px;">
-                    <p style="margin:0 0 4px;font-size:13px;font-weight:bold;color:#1a1a1a;font-family:Helvetica,Arial,sans-serif;">${L.photoNudgeTitle}</p>
-                    <p style="margin:0 0 14px;font-size:13px;color:#666;line-height:1.6;font-family:Helvetica,Arial,sans-serif;">${L.photoNudgeBody}</p>
-                    <a href="${buildPhotoUploadUrl(recipient)}" style="display:inline-block;padding:10px 20px;background:#2c2c2c;color:#fff;text-decoration:none;font-size:12px;letter-spacing:1px;font-family:Helvetica,Arial,sans-serif;border-radius:2px;">${L.photoNudgeCta}</a>
                   </td>
                 </tr>
               </table>
