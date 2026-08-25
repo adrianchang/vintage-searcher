@@ -93,6 +93,44 @@ function renderBrandPage(bodyHtml: string, title = "Vintage Finds"): string {
 </html>`;
 }
 
+// Copy for the /tryon page family (upload form, generating screen). Small
+// and local rather than reusing email.ts's LABELS since these are server-
+// rendered standalone pages, not part of the email template.
+const TRYON_LABELS: Record<string, Record<string, string>> = {
+  en: {
+    uploadTitle: "Upload a photo to try this on",
+    uploadDesc: "One clear, full-body photo — used for this and every future pick, uploaded once.",
+    uploadBtn: "Save Photo & Try This On",
+    choosePhotoFirst: "Choose a photo first.",
+    processingPhoto: "Processing photo...",
+    uploadingPhoto: "Uploading...",
+    savedGenerating: "Saved — generating your try-on...",
+    genericError: "Something went wrong.",
+    genericErrorRetry: "Something went wrong. Try again.",
+    uploadPageTitle: "Upload your photo",
+    generatingTitle: "Generating your try-on...",
+    generatingDesc: "This usually takes 10–20 seconds.",
+    generatingPageTitle: "Generating...",
+    generateFailed: "Couldn't generate that one. Refresh to try again — this attempt didn't use up today's try-on.",
+  },
+  zh: {
+    uploadTitle: "上傳照片來試穿",
+    uploadDesc: "上傳一張清晰的全身照 — 這次和之後每次試穿都會用到，只需要上傳一次。",
+    uploadBtn: "儲存照片並試穿",
+    choosePhotoFirst: "請先選擇一張照片。",
+    processingPhoto: "處理照片中...",
+    uploadingPhoto: "上傳中...",
+    savedGenerating: "已儲存 — 正在生成你的試穿...",
+    genericError: "發生錯誤。",
+    genericErrorRetry: "發生錯誤，請再試一次。",
+    uploadPageTitle: "上傳你的照片",
+    generatingTitle: "正在生成你的試穿...",
+    generatingDesc: "通常需要 10–20 秒。",
+    generatingPageTitle: "生成中...",
+    generateFailed: "生成失敗，請重新整理再試一次 — 這次沒有用掉你今天的試穿機會。",
+  },
+};
+
 app.get("/", (_req, res) => {
   res.sendFile(path.join(import.meta.dirname, "..", "public", "signup.html"));
 });
@@ -520,7 +558,9 @@ app.get("/tryon", async (req, res) => {
       where: { email },
       select: { id: true, hasPhoto: true, photoBytes: true, photoMimeType: true, language: true },
     });
-    changePhotoLink = buildChangePhotoLink(user?.language ?? "en");
+    const lang = user?.language === "zh" ? "zh" : "en";
+    const L = TRYON_LABELS[lang];
+    changePhotoLink = buildChangePhotoLink(lang);
 
     if (changePhoto === "1" || !user || !user.hasPhoto || !user.photoBytes || !user.photoMimeType) {
       // Upload happens right here — same page, no separate hop. On success the
@@ -530,15 +570,16 @@ app.get("/tryon", async (req, res) => {
       // since re-uploading a photo never resets the daily limit.
       const photoToken = crypto.createHmac("sha256", VOTE_SECRET).update(`photo:${email}`).digest("hex").slice(0, 32);
       res.send(renderBrandPage(`
-        <h1 style="margin:0 0 12px;font-size:24px;font-weight:normal;">Upload a photo to try this on</h1>
-        <p style="margin:0 0 24px;font-size:14px;color:#666;line-height:1.6;font-family:Helvetica,Arial,sans-serif;">One clear, full-body photo — used for this and every future pick, uploaded once.</p>
+        <h1 style="margin:0 0 12px;font-size:24px;font-weight:normal;">${L.uploadTitle}</h1>
+        <p style="margin:0 0 24px;font-size:14px;color:#666;line-height:1.6;font-family:Helvetica,Arial,sans-serif;">${L.uploadDesc}</p>
         <input type="file" id="photoInput" accept="image/*" style="display:block;margin:0 auto 20px;font-family:Helvetica,Arial,sans-serif;">
         <div id="preview" style="margin-bottom:20px;"></div>
-        <button id="uploadBtn" style="padding:12px 28px;background:#2c2c2c;color:#fff;border:none;border-radius:2px;font-size:13px;letter-spacing:1px;font-family:Helvetica,Arial,sans-serif;cursor:pointer;">Save Photo &amp; Try This On</button>
+        <button id="uploadBtn" style="padding:12px 28px;background:#2c2c2c;color:#fff;border:none;border-radius:2px;font-size:13px;letter-spacing:1px;font-family:Helvetica,Arial,sans-serif;cursor:pointer;">${L.uploadBtn}</button>
         <p id="status" style="margin-top:16px;font-size:13px;color:#888;font-family:Helvetica,Arial,sans-serif;"></p>
         <script>
           const email = ${JSON.stringify(email)};
           const photoToken = ${JSON.stringify(photoToken)};
+          const L = ${JSON.stringify(L)};
           const input = document.getElementById('photoInput');
           const preview = document.getElementById('preview');
           const statusEl = document.getElementById('status');
@@ -580,12 +621,12 @@ app.get("/tryon", async (req, res) => {
 
           document.getElementById('uploadBtn').addEventListener('click', async () => {
             if (!selectedFile) {
-              statusEl.textContent = 'Choose a photo first.';
+              statusEl.textContent = L.choosePhotoFirst;
               return;
             }
-            statusEl.textContent = 'Processing photo...';
+            statusEl.textContent = L.processingPhoto;
             const compressed = await compressImage(selectedFile, 1600, 0.85);
-            statusEl.textContent = 'Uploading...';
+            statusEl.textContent = L.uploadingPhoto;
             const reader = new FileReader();
             reader.onload = async () => {
               const base64 = reader.result.split(',')[1];
@@ -596,22 +637,22 @@ app.get("/tryon", async (req, res) => {
                   body: JSON.stringify({ email, token: photoToken, photoBase64: base64, mimeType: compressed.type || 'image/jpeg' }),
                 });
                 if (res.ok) {
-                  statusEl.textContent = 'Saved — generating your try-on...';
+                  statusEl.textContent = L.savedGenerating;
                   const nextUrl = new URL(location.href);
                   nextUrl.searchParams.delete('changePhoto');
                   location.href = nextUrl.toString();
                 } else {
                   const json = await res.json();
-                  statusEl.textContent = json.error || 'Something went wrong.';
+                  statusEl.textContent = json.error || L.genericError;
                 }
               } catch (err) {
-                statusEl.textContent = 'Something went wrong. Try again.';
+                statusEl.textContent = L.genericErrorRetry;
               }
             };
             reader.readAsDataURL(compressed);
           });
         </script>
-      `, "Upload your photo"));
+      `, L.uploadPageTitle));
       return;
     }
 
@@ -636,12 +677,92 @@ app.get("/tryon", async (req, res) => {
       return;
     }
 
+    // Generation itself (a real Gemini call, often 10-20+ seconds) happens on
+    // GET /tryon/generate, called by this page's own script — showing a
+    // loading screen immediately instead of leaving the browser on a blank
+    // tab for the whole request. Once that call succeeds, the script reloads
+    // this exact URL, which now finds a "done" TryOn row above and renders
+    // the cached result instantly rather than generating a second time.
+    res.send(renderBrandPage(`
+      <h1 style="margin:0 0 12px;font-size:24px;font-weight:normal;">${L.generatingTitle}</h1>
+      <p id="status" style="margin:0;font-size:14px;color:#666;line-height:1.6;font-family:Helvetica,Arial,sans-serif;">${L.generatingDesc}</p>
+      <div style="width:32px;height:32px;margin:24px auto 0;border:3px solid #e5ded4;border-top-color:#c8a96e;border-radius:50%;animation:tryonspin 0.8s linear infinite;"></div>
+      <style>@keyframes tryonspin { to { transform: rotate(360deg); } }</style>
+      <script>
+        const statusEl = document.getElementById('status');
+        fetch('/tryon/generate?e=${encodeURIComponent(email)}&s=${encodeURIComponent(storyId)}&t=${encodeURIComponent(token)}')
+          .then(res => res.json())
+          .then(json => {
+            if (json.ok) {
+              location.href = ${JSON.stringify(`/tryon?e=${email}&s=${storyId}&t=${token}`)};
+            } else {
+              statusEl.textContent = json.error || ${JSON.stringify(L.generateFailed)};
+            }
+          })
+          .catch(() => { statusEl.textContent = ${JSON.stringify(L.generateFailed)}; });
+      </script>
+    `, L.generatingPageTitle));
+  } catch (err) {
+    console.error("[TRYON] Error:", err);
+    res.status(500).send(renderBrandPage(`<p style="font-size:14px;color:#666;font-family:Helvetica,Arial,sans-serif;">Something went wrong.</p>`));
+  }
+});
+
+// Performs the actual generation, called via fetch from GET /tryon's loading
+// screen (see above). Re-validates everything independently since this is a
+// separate request — including the daily limit, so two tabs (or a retried
+// fetch) can't produce two generations for the same day.
+app.get("/tryon/generate", async (req, res) => {
+  const { e: email, s: storyId, t: token } = req.query as Record<string, string>;
+  if (!email || !storyId || !token) {
+    res.status(400).json({ ok: false, error: "Invalid link" });
+    return;
+  }
+
+  const expected = crypto.createHmac("sha256", VOTE_SECRET)
+    .update(`${email}:${storyId}:tryon`)
+    .digest("hex")
+    .slice(0, 32);
+  if (token !== expected) {
+    res.status(403).json({ ok: false, error: "Invalid token" });
+    return;
+  }
+
+  try {
+    const story = await prisma.story.findUnique({
+      where: { id: storyId },
+      include: { evaluation: true },
+    });
+    if (!story) {
+      res.status(404).json({ ok: false, error: "This item is no longer available." });
+      return;
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true, hasPhoto: true, photoBytes: true, photoMimeType: true },
+    });
+    if (!user || !user.hasPhoto || !user.photoBytes || !user.photoMimeType) {
+      res.status(400).json({ ok: false, error: "No photo on file." });
+      return;
+    }
+
+    const doneToday = await prisma.tryOn.findFirst({
+      where: { userId: user.id, status: "done", createdAt: { gte: startOfUtcDay() } },
+    });
+    if (doneToday) {
+      // Already generated (e.g. a second tab) — report success without
+      // regenerating; the caller's reload will show whatever today's result is.
+      res.json({ ok: true });
+      return;
+    }
+
     const garmentImageUrl = story.evaluation.hasProcessedImage
       ? `${APP_URL}/evaluations/${story.evaluation.id}/image`
       : (story.evaluation.imageUrl ?? "");
 
     if (!garmentImageUrl) {
-      res.send(renderBrandPage(`<p style="font-size:14px;color:#666;font-family:Helvetica,Arial,sans-serif;">Something went wrong loading this item's photo.</p>`));
+      res.json({ ok: false, error: "Something went wrong loading this item's photo." });
       return;
     }
 
@@ -651,14 +772,11 @@ app.get("/tryon", async (req, res) => {
       await prisma.tryOn.create({
         data: { userId: user.id, evaluationId: story.evaluationId, status: "failed" },
       });
-      res.send(renderBrandPage(`
-        <h1 style="margin:0 0 12px;font-size:24px;font-weight:normal;">Couldn't generate that one</h1>
-        <p style="margin:0;font-size:14px;color:#666;line-height:1.6;font-family:Helvetica,Arial,sans-serif;">Something went wrong on our end — refresh to try again (this attempt didn't use up today's try-on).</p>
-      `));
+      res.json({ ok: false, error: "Couldn't generate that one — this attempt didn't use up today's try-on." });
       return;
     }
 
-    const tryOn = await prisma.tryOn.create({
+    await prisma.tryOn.create({
       data: {
         userId: user.id,
         evaluationId: story.evaluationId,
@@ -669,10 +787,10 @@ app.get("/tryon", async (req, res) => {
     });
 
     console.log(`[TRYON] ${email} tried on ${story.evaluation.itemIdentification}`);
-    res.send(renderBrandPage(buildResultBody(tryOn, story.evaluation, story.id)));
+    res.json({ ok: true });
   } catch (err) {
-    console.error("[TRYON] Error:", err);
-    res.status(500).send(renderBrandPage(`<p style="font-size:14px;color:#666;font-family:Helvetica,Arial,sans-serif;">Something went wrong.</p>`));
+    console.error("[TRYON] Generate error:", err);
+    res.status(500).json({ ok: false, error: "Something went wrong." });
   }
 });
 
