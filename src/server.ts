@@ -53,15 +53,18 @@ app.use(express.static(path.join(import.meta.dirname, "..", "public")));
 const MAX_PHOTO_BYTES = 6 * 1024 * 1024;
 
 // Shared by /subscribe (new signups) and /photo (existing-user reminder flow).
-function decodePhotoUpload(photoBase64: unknown, mimeType: unknown): { bytes: Buffer; mimeType: string } | null {
-  if (typeof photoBase64 !== "string" || typeof mimeType !== "string" || !mimeType.startsWith("image/")) return null;
+function decodePhotoUpload(photoBase64: unknown, mimeType: unknown): { bytes: Buffer; mimeType: string } | { error: string } {
+  if (typeof photoBase64 !== "string" || typeof mimeType !== "string" || !mimeType.startsWith("image/")) {
+    return { error: "That doesn't look like a valid image file." };
+  }
   let bytes: Buffer;
   try {
     bytes = Buffer.from(photoBase64, "base64");
   } catch {
-    return null;
+    return { error: "That doesn't look like a valid image file." };
   }
-  if (bytes.length === 0 || bytes.length > MAX_PHOTO_BYTES) return null;
+  if (bytes.length === 0) return { error: "That doesn't look like a valid image file." };
+  if (bytes.length > MAX_PHOTO_BYTES) return { error: "That file is too large. Try a smaller photo." };
   return { bytes, mimeType };
 }
 
@@ -189,8 +192,8 @@ app.post("/subscribe", async (req, res) => {
   let photoUpdate: { photoBytes: Uint8Array<ArrayBuffer>; photoMimeType: string; hasPhoto: true } | Record<string, never> = {};
   if (photoBase64 !== undefined && photoBase64 !== null) {
     const decoded = decodePhotoUpload(photoBase64, photoMimeType);
-    if (!decoded) {
-      res.status(400).json({ error: "Invalid photo upload" });
+    if ("error" in decoded) {
+      res.status(400).json({ error: decoded.error });
       return;
     }
     photoUpdate = { photoBytes: new Uint8Array(decoded.bytes), photoMimeType: decoded.mimeType, hasPhoto: true };
@@ -420,8 +423,8 @@ app.post("/photo", async (req, res) => {
   }
 
   const decoded = decodePhotoUpload(photoBase64, mimeType);
-  if (!decoded) {
-    res.status(400).json({ error: "Invalid photo upload" });
+  if ("error" in decoded) {
+    res.status(400).json({ error: decoded.error });
     return;
   }
 
@@ -521,6 +524,32 @@ app.get("/tryon", async (req, res) => {
           const statusEl = document.getElementById('status');
           let selectedFile = null;
 
+          // Resizes to maxDim on the longest edge and re-encodes as JPEG —
+          // phone cameras routinely produce 8-15MB+ originals, well past what
+          // the server accepts, and the model doesn't use more detail than
+          // this anyway. Falls back to the original file if compression fails.
+          function compressImage(file, maxDim, quality) {
+            return new Promise((resolve) => {
+              const img = new Image();
+              const url = URL.createObjectURL(file);
+              img.onload = () => {
+                URL.revokeObjectURL(url);
+                let { width, height } = img;
+                if (width > maxDim || height > maxDim) {
+                  if (width > height) { height = Math.round(height * (maxDim / width)); width = maxDim; }
+                  else { width = Math.round(width * (maxDim / height)); height = maxDim; }
+                }
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+                canvas.toBlob(blob => resolve(blob || file), 'image/jpeg', quality);
+              };
+              img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+              img.src = url;
+            });
+          }
+
           input.addEventListener('change', () => {
             selectedFile = input.files[0];
             if (selectedFile) {
@@ -529,11 +558,13 @@ app.get("/tryon", async (req, res) => {
             }
           });
 
-          document.getElementById('uploadBtn').addEventListener('click', () => {
+          document.getElementById('uploadBtn').addEventListener('click', async () => {
             if (!selectedFile) {
               statusEl.textContent = 'Choose a photo first.';
               return;
             }
+            statusEl.textContent = 'Processing photo...';
+            const compressed = await compressImage(selectedFile, 1600, 0.85);
             statusEl.textContent = 'Uploading...';
             const reader = new FileReader();
             reader.onload = async () => {
@@ -542,7 +573,7 @@ app.get("/tryon", async (req, res) => {
                 const res = await fetch('/photo', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ email, token: photoToken, photoBase64: base64, mimeType: selectedFile.type }),
+                  body: JSON.stringify({ email, token: photoToken, photoBase64: base64, mimeType: compressed.type || 'image/jpeg' }),
                 });
                 if (res.ok) {
                   statusEl.textContent = 'Saved — generating your try-on...';
@@ -555,7 +586,7 @@ app.get("/tryon", async (req, res) => {
                 statusEl.textContent = 'Something went wrong. Try again.';
               }
             };
-            reader.readAsDataURL(selectedFile);
+            reader.readAsDataURL(compressed);
           });
         </script>
       `, "Upload your photo"));
@@ -804,6 +835,21 @@ app.post("/threads", async (req, res) => {
   } catch (err) {
     console.error("[THREADS] Endpoint error:", err);
   }
+});
+
+// Catches body-parser errors (e.g. express.json's 10mb limit) so an oversized
+// upload returns a real {error} JSON message instead of Express's default
+// HTML error page — without this, client-side `await res.json()` on the
+// error response throws, and the user just sees a generic "something went
+// wrong" with no idea it was a size problem. Must be registered after all
+// routes (Express only recognizes 4-arg middleware as an error handler).
+app.use((err: { status?: number; type?: string } & Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  if (err.status === 413 || err.type === "entity.too.large") {
+    res.status(413).json({ error: "That file is too large. Try a smaller photo." });
+    return;
+  }
+  console.error("[ERROR]", err);
+  res.status(500).json({ error: "Something went wrong." });
 });
 
 app.listen(PORT, () => {
