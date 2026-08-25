@@ -495,7 +495,16 @@ app.get("/tryon", async (req, res) => {
   // upsert); it does NOT reset or grant an extra generation for today. The
   // once-per-day check below runs purely on TryOn rows and doesn't care
   // which photo was used, so this can't be used to get more than one try-on.
-  const changePhotoLink = `<p style="margin-top:24px;"><a href="/tryon?e=${encodeURIComponent(email)}&s=${encodeURIComponent(storyId)}&t=${encodeURIComponent(token)}&changePhoto=1" style="font-size:12px;color:#999;text-decoration:underline;font-family:Helvetica,Arial,sans-serif;">Not you? Update your photo</a></p>`;
+  // Set once the user's language is known (below) — every page that renders
+  // this has already resolved today's generation, so "starting tomorrow" is
+  // always accurate here, never a case where today's photo hasn't been used yet.
+  let changePhotoLink = "";
+  function buildChangePhotoLink(lang: string): string {
+    const text = lang === "zh"
+      ? "不喜歡這張照片嗎？上傳新的 — 明天開始就會看到新照片。"
+      : "Don't like the image? Upload a new one — you'll see the new one starting tomorrow.";
+    return `<p style="margin-top:24px;"><a href="/tryon?e=${encodeURIComponent(email)}&s=${encodeURIComponent(storyId)}&t=${encodeURIComponent(token)}&changePhoto=1" style="font-size:12px;color:#999;text-decoration:underline;font-family:Helvetica,Arial,sans-serif;">${text}</a></p>`;
+  }
 
   try {
     const story = await prisma.story.findUnique({
@@ -509,8 +518,9 @@ app.get("/tryon", async (req, res) => {
 
     const user = await prisma.user.findUnique({
       where: { email },
-      select: { id: true, hasPhoto: true, photoBytes: true, photoMimeType: true },
+      select: { id: true, hasPhoto: true, photoBytes: true, photoMimeType: true, language: true },
     });
+    changePhotoLink = buildChangePhotoLink(user?.language ?? "en");
 
     if (changePhoto === "1" || !user || !user.hasPhoto || !user.photoBytes || !user.photoMimeType) {
       // Upload happens right here — same page, no separate hop. On success the
