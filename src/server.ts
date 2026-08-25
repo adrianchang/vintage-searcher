@@ -445,7 +445,7 @@ app.post("/photo", async (req, res) => {
 // --- Virtual try-on (AI render of a listing on the user's own photo) ---
 
 app.get("/tryon", async (req, res) => {
-  const { e: email, s: storyId, t: token } = req.query as Record<string, string>;
+  const { e: email, s: storyId, t: token, changePhoto } = req.query as Record<string, string>;
   if (!email || !storyId || !token) {
     res.status(400).send("Invalid link");
     return;
@@ -486,8 +486,16 @@ app.get("/tryon", async (req, res) => {
       <p style="margin:0 0 20px;font-size:12px;letter-spacing:1px;text-transform:uppercase;color:#888;font-family:Helvetica,Arial,sans-serif;">${escapeHtml(evaluation.estimatedEra || "Vintage")}</p>
       ${dataUri ? `<img src="${dataUri}" style="width:100%;border-radius:4px;margin-bottom:20px;">` : ""}
       <a href="${buildClickUrl(email, storyIdForLink)}" style="display:block;padding:14px 28px;background:#2c2c2c;color:#fff;text-decoration:none;font-size:13px;letter-spacing:1px;font-family:Helvetica,Arial,sans-serif;border-radius:2px;">View on eBay →</a>
+      ${changePhotoLink}
     `;
   };
+
+  // Reachable any time via ?changePhoto=1, not just when hasPhoto is false —
+  // re-uploading only replaces the stored photo (see POST /photo, always an
+  // upsert); it does NOT reset or grant an extra generation for today. The
+  // once-per-day check below runs purely on TryOn rows and doesn't care
+  // which photo was used, so this can't be used to get more than one try-on.
+  const changePhotoLink = `<p style="margin-top:24px;"><a href="/tryon?e=${encodeURIComponent(email)}&s=${encodeURIComponent(storyId)}&t=${encodeURIComponent(token)}&changePhoto=1" style="font-size:12px;color:#999;text-decoration:underline;font-family:Helvetica,Arial,sans-serif;">Not you? Update your photo</a></p>`;
 
   try {
     const story = await prisma.story.findUnique({
@@ -504,10 +512,12 @@ app.get("/tryon", async (req, res) => {
       select: { id: true, hasPhoto: true, photoBytes: true, photoMimeType: true },
     });
 
-    if (!user || !user.hasPhoto || !user.photoBytes || !user.photoMimeType) {
+    if (changePhoto === "1" || !user || !user.hasPhoto || !user.photoBytes || !user.photoMimeType) {
       // Upload happens right here — same page, no separate hop. On success the
-      // page just reloads itself (same email/storyId/token already in the URL);
-      // hasPhoto is now true, so the reload runs straight into generation.
+      // page redirects to this same URL minus ?changePhoto (see the script
+      // below); hasPhoto is now true, so that reload runs straight into
+      // generation — or shows today's already-generated result if one exists,
+      // since re-uploading a photo never resets the daily limit.
       const photoToken = crypto.createHmac("sha256", VOTE_SECRET).update(`photo:${email}`).digest("hex").slice(0, 32);
       res.send(renderBrandPage(`
         <h1 style="margin:0 0 12px;font-size:24px;font-weight:normal;">Upload a photo to try this on</h1>
@@ -577,7 +587,9 @@ app.get("/tryon", async (req, res) => {
                 });
                 if (res.ok) {
                   statusEl.textContent = 'Saved — generating your try-on...';
-                  location.reload();
+                  const nextUrl = new URL(location.href);
+                  nextUrl.searchParams.delete('changePhoto');
+                  location.href = nextUrl.toString();
                 } else {
                   const json = await res.json();
                   statusEl.textContent = json.error || 'Something went wrong.';
@@ -609,6 +621,7 @@ app.get("/tryon", async (req, res) => {
       res.send(renderBrandPage(`
         <h1 style="margin:0 0 12px;font-size:24px;font-weight:normal;">Already used today's try-on</h1>
         <p style="margin:0;font-size:14px;color:#666;line-height:1.6;font-family:Helvetica,Arial,sans-serif;">One try-on per day — come back tomorrow for the next pick.</p>
+        ${changePhotoLink}
       `));
       return;
     }
