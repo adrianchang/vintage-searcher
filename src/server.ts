@@ -19,7 +19,7 @@ import {
 import { postToThreads, resolveThreadsToken, type ThreadsStoryItem, type ThreadsAccount } from "./services/threads";
 import { parseTopSizeLabel, coercePitToPitInches, coerceWaistInches } from "./services/size";
 import { buildClickUrl } from "./services/email";
-import { generateTryOn, startOfUtcDay } from "./services/tryon";
+import { generateTryOn } from "./services/tryon";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -111,7 +111,10 @@ const TRYON_LABELS: Record<string, Record<string, string>> = {
     generatingTitle: "Generating your try-on...",
     generatingDesc: "This usually takes 10–20 seconds.",
     generatingPageTitle: "Generating...",
-    generateFailed: "Couldn't generate that one. Refresh to try again — this attempt didn't use up today's try-on.",
+    generateFailed: "Couldn't generate that one. Refresh to try again — this attempt didn't use up your try-on for this pick.",
+    alreadyUsedTitle: "Already used this pick's try-on",
+    alreadyUsedBody: "One try-on per email — if you have other unused picks from earlier days, you can still try those.",
+    changePhotoLinkText: "Don't like the image? Upload a new one — you'll see it the next time you try something on.",
   },
   zh: {
     uploadTitle: "上傳照片來試穿",
@@ -127,7 +130,10 @@ const TRYON_LABELS: Record<string, Record<string, string>> = {
     generatingTitle: "正在生成你的試穿...",
     generatingDesc: "通常需要 10–20 秒。",
     generatingPageTitle: "生成中...",
-    generateFailed: "生成失敗，請重新整理再試一次 — 這次沒有用掉你今天的試穿機會。",
+    generateFailed: "生成失敗，請重新整理再試一次 — 這次沒有用掉這個信件的試穿機會。",
+    alreadyUsedTitle: "已經用掉這封信的試穿機會",
+    alreadyUsedBody: "每封信只能試穿一件 — 如果你還有其他天未使用的試穿機會，仍然可以使用。",
+    changePhotoLinkText: "不喜歡這張照片嗎？上傳新的 — 下次試穿時就會套用新照片。",
   },
 };
 
@@ -530,17 +536,13 @@ app.get("/tryon", async (req, res) => {
 
   // Reachable any time via ?changePhoto=1, not just when hasPhoto is false —
   // re-uploading only replaces the stored photo (see POST /photo, always an
-  // upsert); it does NOT reset or grant an extra generation for today. The
-  // once-per-day check below runs purely on TryOn rows and doesn't care
-  // which photo was used, so this can't be used to get more than one try-on.
-  // Set once the user's language is known (below) — every page that renders
-  // this has already resolved today's generation, so "starting tomorrow" is
-  // always accurate here, never a case where today's photo hasn't been used yet.
+  // upsert); it does NOT reset or grant an extra generation for this pick.
+  // The per-batch quota check below runs purely on TryOn rows and doesn't
+  // care which photo was used, so this can't be used to get more than one
+  // try-on per digest.
   let changePhotoLink = "";
   function buildChangePhotoLink(lang: string): string {
-    const text = lang === "zh"
-      ? "不喜歡這張照片嗎？上傳新的 — 明天開始就會看到新照片。"
-      : "Don't like the image? Upload a new one — you'll see the new one starting tomorrow.";
+    const text = TRYON_LABELS[lang].changePhotoLinkText;
     return `<p style="margin-top:24px;"><a href="/tryon?e=${encodeURIComponent(email)}&s=${encodeURIComponent(storyId)}&t=${encodeURIComponent(token)}&changePhoto=1" style="font-size:12px;color:#999;text-decoration:underline;font-family:Helvetica,Arial,sans-serif;">${text}</a></p>`;
   }
 
@@ -656,22 +658,34 @@ app.get("/tryon", async (req, res) => {
       return;
     }
 
-    // Once per UTC day, and only successful ("done") generations count — a
-    // failed attempt doesn't cost the user their day's try.
-    const doneToday = await prisma.tryOn.findFirst({
-      where: { userId: user.id, status: "done", createdAt: { gte: startOfUtcDay() } },
+    // Quota is per digest batch, not per calendar day (see StoryDelivery.batchId) —
+    // find which batch this item belongs to for this user.
+    const delivery = await prisma.storyDelivery.findUnique({
+      where: { userId_url: { userId: user.id, url: story.evaluation.url } },
+    });
+    if (!delivery) {
+      // Shouldn't happen for a legitimately signed link — the link only ever
+      // comes from a digest email, which always creates a StoryDelivery row.
+      res.status(500).send(renderBrandPage(`<p style="font-size:14px;color:#666;font-family:Helvetica,Arial,sans-serif;">Something went wrong.</p>`));
+      return;
+    }
+
+    // Only successful ("done") generations count — a failed attempt doesn't
+    // cost the user their batch's try.
+    const doneForBatch = await prisma.tryOn.findFirst({
+      where: { userId: user.id, batchId: delivery.batchId, status: "done" },
       orderBy: { createdAt: "desc" },
     });
 
-    if (doneToday) {
-      if (doneToday.evaluationId === story.evaluationId) {
-        // Same item as today's existing result — show it again, no regeneration.
-        res.send(renderBrandPage(buildResultBody(doneToday, story.evaluation, story.id)));
+    if (doneForBatch) {
+      if (doneForBatch.evaluationId === story.evaluationId) {
+        // Same item as this batch's existing result — show it again, no regeneration.
+        res.send(renderBrandPage(buildResultBody(doneForBatch, story.evaluation, story.id)));
         return;
       }
       res.send(renderBrandPage(`
-        <h1 style="margin:0 0 12px;font-size:24px;font-weight:normal;">Already used today's try-on</h1>
-        <p style="margin:0;font-size:14px;color:#666;line-height:1.6;font-family:Helvetica,Arial,sans-serif;">One try-on per day — come back tomorrow for the next pick.</p>
+        <h1 style="margin:0 0 12px;font-size:24px;font-weight:normal;">${L.alreadyUsedTitle}</h1>
+        <p style="margin:0;font-size:14px;color:#666;line-height:1.6;font-family:Helvetica,Arial,sans-serif;">${L.alreadyUsedBody}</p>
         ${changePhotoLink}
       `));
       return;
@@ -710,8 +724,8 @@ app.get("/tryon", async (req, res) => {
 
 // Performs the actual generation, called via fetch from GET /tryon's loading
 // screen (see above). Re-validates everything independently since this is a
-// separate request — including the daily limit, so two tabs (or a retried
-// fetch) can't produce two generations for the same day.
+// separate request — including the per-batch quota, so two tabs (or a
+// retried fetch) can't produce two generations for the same digest.
 app.get("/tryon/generate", async (req, res) => {
   const { e: email, s: storyId, t: token } = req.query as Record<string, string>;
   if (!email || !storyId || !token) {
@@ -747,12 +761,20 @@ app.get("/tryon/generate", async (req, res) => {
       return;
     }
 
-    const doneToday = await prisma.tryOn.findFirst({
-      where: { userId: user.id, status: "done", createdAt: { gte: startOfUtcDay() } },
+    const delivery = await prisma.storyDelivery.findUnique({
+      where: { userId_url: { userId: user.id, url: story.evaluation.url } },
     });
-    if (doneToday) {
+    if (!delivery) {
+      res.status(500).json({ ok: false, error: "Something went wrong." });
+      return;
+    }
+
+    const doneForBatch = await prisma.tryOn.findFirst({
+      where: { userId: user.id, batchId: delivery.batchId, status: "done" },
+    });
+    if (doneForBatch) {
       // Already generated (e.g. a second tab) — report success without
-      // regenerating; the caller's reload will show whatever today's result is.
+      // regenerating; the caller's reload will show whatever this batch's result is.
       res.json({ ok: true });
       return;
     }
@@ -770,9 +792,9 @@ app.get("/tryon/generate", async (req, res) => {
 
     if (!result) {
       await prisma.tryOn.create({
-        data: { userId: user.id, evaluationId: story.evaluationId, status: "failed" },
+        data: { userId: user.id, evaluationId: story.evaluationId, status: "failed", batchId: delivery.batchId },
       });
-      res.json({ ok: false, error: "Couldn't generate that one — this attempt didn't use up today's try-on." });
+      res.json({ ok: false, error: "Couldn't generate that one — this attempt didn't use up your try-on for this pick." });
       return;
     }
 
@@ -783,6 +805,7 @@ app.get("/tryon/generate", async (req, res) => {
         status: "done",
         imageBytes: new Uint8Array(result.bytes),
         imageMimeType: result.mimeType,
+        batchId: delivery.batchId,
       },
     });
 

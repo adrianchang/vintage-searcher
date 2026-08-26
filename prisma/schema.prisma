@@ -97,10 +97,14 @@ model Evaluation {
   tryOns         TryOn[]
 }
 
-// One AI-generated "try this item on" render per user per day (see
-// src/services/tryon.ts). The once-per-day rule is enforced in code by
-// counting status="done" rows created today — a failed generation doesn't
-// burn the day's allowance, so a user can retry same-day after our error.
+// One AI-generated "try this item on" render per user per digest batch (see
+// src/services/tryon.ts, StoryDelivery.batchId). Changed 2026-08-25 from a
+// calendar-day limit to a per-batch one: unused quota from a digest the user
+// never used carries forward indefinitely rather than expiring at midnight,
+// so someone who skipped a few days' emails can use all of them in one
+// sitting — deliberate, not a bug. Enforced in code by checking for a
+// status="done" row with this batchId; a failed generation doesn't burn the
+// batch's allowance, so a user can retry after our error without losing it.
 model TryOn {
   id            String     @id @default(cuid())
   userId        String
@@ -111,8 +115,13 @@ model TryOn {
   imageBytes    Bytes?
   imageMimeType String?
   createdAt     DateTime   @default(now())
+  // Which digest batch this generation "spent" (see StoryDelivery.batchId).
+  // Historical rows predating this column (2026-08-25) are backfilled to
+  // userId+day(createdAt), matching the old day-based rule for old data.
+  batchId       String
 
   @@index([userId, createdAt])
+  @@index([userId, batchId])
 }
 
 model Story {
@@ -150,11 +159,17 @@ model Vote {
 }
 
 model StoryDelivery {
-  id     String   @id @default(cuid())
-  userId String
-  user   User     @relation(fields: [userId], references: [id])
-  url    String
-  sentAt DateTime @default(now())
+  id      String   @id @default(cuid())
+  userId  String
+  user    User     @relation(fields: [userId], references: [id])
+  url     String
+  sentAt  DateTime @default(now())
+  // One id shared by every item in the same digest send (see scan.ts) — lets
+  // TryOn's quota be "one per digest" rather than "one per calendar day"
+  // (see TryOn.batchId). Historical rows predating that feature (2026-08-25)
+  // are backfilled to userId+day(sentAt), reconstructing the one-batch-per-
+  // day reality that held before this column existed.
+  batchId String
 
   @@unique([userId, url])
 }

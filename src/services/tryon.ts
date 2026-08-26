@@ -5,8 +5,9 @@ const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "not-set" 
 // Same model Google's own shopping virtual try-on feature runs on. Deliberately
 // NOT sharing evaluate.ts's global 15s scan throttle — that throttle exists for
 // an unattended background batch job; this is a live request with a real user
-// waiting on a page load, and volume is already self-limited to once/day/user
-// (see startOfUtcDay + the daily-limit check in server.ts's GET /tryon).
+// waiting on a page load, and volume is already self-limited to once per digest
+// batch per user (see StoryDelivery.batchId + the quota check in server.ts's
+// GET /tryon).
 const TRYON_MODEL = "gemini-3.1-flash-image";
 
 const TRYON_PROMPT = `You are given two images: the first is a photo of a person, the second is a photo of a single garment (a vintage clothing item). Generate a new, photorealistic image of the exact same person from image 1 — same face, same identity, same body proportions, same pose, same background — now wearing the garment from image 2 instead of what they're currently wearing. Render the garment with realistic fit, drape, folds, and shadows appropriate to the person's pose and body — do not just overlay a flat texture. This garment may normally be worn layered over other clothing (e.g. overalls over a shirt, a vest over a jacket) — if so, keep the person's existing visible clothing underneath/around it rather than leaving them bare. Otherwise keep any other clothing the new garment doesn't replace (e.g. keep pants if the new garment is a top). Match the lighting of the original person photo.`;
@@ -65,16 +66,4 @@ export async function generateTryOn(
     console.log(`[TRYON] Generation failed: ${error instanceof Error ? error.message : error}`);
     return null;
   }
-}
-
-/**
- * Start of the current UTC calendar day — same day-boundary convention as
- * archetypes.ts's dayIndex, so "once per day" means the same thing everywhere
- * in this codebase. Callers use this as the `createdAt` floor when checking
- * for an existing *successful* ("done") TryOn today; failed attempts are
- * excluded from that query so a generation error never costs the user their
- * day's try.
- */
-export function startOfUtcDay(now: Date = new Date()): Date {
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 }

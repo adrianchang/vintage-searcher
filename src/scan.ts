@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { PrismaClient } from "./generated/prisma/client";
 import { type Platform } from "./services/ecommerce";
 import { sendDigestEmail, type DigestItem } from "./services/email";
@@ -445,10 +446,14 @@ export async function runScan(
     console.log(`  Sending top ${toSend.length} of ${qualifiedFinds.length} candidates`);
     await sendDigestEmail(toSend, user.email, user.language);
 
-    // Record deliveries so these listings are never resent to this user
+    // Record deliveries so these listings are never resent to this user.
+    // One batchId shared by every item in this digest — lets the try-on
+    // feature's quota be "one per digest" rather than "one per calendar day"
+    // (see TryOn.batchId, server.ts's GET /tryon).
+    const batchId = crypto.randomUUID();
     for (const find of toSend) {
       await prisma.storyDelivery.create({
-        data: { userId: user.id, url: find.listing.url },
+        data: { userId: user.id, url: find.listing.url, batchId },
       });
     }
 
