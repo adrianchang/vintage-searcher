@@ -69,6 +69,7 @@ const LABELS: Record<string, Record<string, string>> = {
     viewOnEbay: "View on eBay →",
     sizeUnverified: "Size unverified — check measurements before buying",
     footer: "You're receiving this because you signed up for daily vintage finds.<br>Prices and availability change — always verify before purchasing.",
+    visitWebsite: "Visit our website →",
     tryOnTitle: "Try It On",
     tryOnSub: "Pick one — one try per email.",
     tryOnFirst: "First Item",
@@ -93,6 +94,7 @@ const LABELS: Record<string, Record<string, string>> = {
     viewOnEbay: "前往 eBay 查看 →",
     sizeUnverified: "尺寸未確認 — 購買前請確認實際尺寸",
     footer: "你收到這封信，因為你訂閱了每日古著精選。<br>價格與庫存隨時變動，購買前請自行確認。",
+    visitWebsite: "前往我們的網站 →",
     tryOnTitle: "試穿",
     tryOnSub: "選一件 — 每封信限一次。",
     tryOnFirst: "第一件",
@@ -223,8 +225,11 @@ function buildEmailHtml(items: DigestItem[], recipient: string, lang = "en"): st
           <!-- Footer -->
           <tr>
             <td style="padding-top:48px;border-top:1px solid #ddd;">
-              <p style="margin:0;font-size:11px;color:#aaa;line-height:1.8;font-family:Helvetica,Arial,sans-serif;text-align:center;">
+              <p style="margin:0 0 12px;font-size:11px;color:#aaa;line-height:1.8;font-family:Helvetica,Arial,sans-serif;text-align:center;">
                 ${L.footer}
+              </p>
+              <p style="margin:0;font-size:11px;text-align:center;">
+                <a href="${APP_URL}/" style="color:#8a6a30;text-decoration:none;font-family:Helvetica,Arial,sans-serif;">${L.visitWebsite}</a>
               </p>
             </td>
           </tr>
