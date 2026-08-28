@@ -71,6 +71,9 @@ const LABELS: Record<string, Record<string, string>> = {
     footer: "You're receiving this because you signed up for daily vintage finds.<br>Prices and availability change — always verify before purchasing.",
     tryOnTitle: "Try It On",
     tryOnSub: "Pick one — one try per email.",
+    tryOnFirst: "First Item",
+    tryOnSecond: "Second Item",
+    tryOnThird: "Third Item",
   },
   zh: {
     dailyEdit: "每日精選",
@@ -92,6 +95,9 @@ const LABELS: Record<string, Record<string, string>> = {
     footer: "你收到這封信，因為你訂閱了每日古著精選。<br>價格與庫存隨時變動，購買前請自行確認。",
     tryOnTitle: "試穿",
     tryOnSub: "選一件 — 每封信限一次。",
+    tryOnFirst: "第一件",
+    tryOnSecond: "第二件",
+    tryOnThird: "第三件",
   },
 };
 
@@ -242,23 +248,31 @@ function buildEmailHtml(items: DigestItem[], recipient: string, lang = "en"): st
 // elsewhere as a button fill) deliberately differentiates these from the
 // dark eBay CTA buttons below each item — a different, "just for fun" action.
 function buildTryOnPickerHtml(items: DigestItem[], recipient: string, L: Record<string, string>): string {
+  // Rounder corners + a soft gold-tinted shadow than the sharp/flat eBay CTA
+  // (2px radius, no shadow) — a little more "tap me" tactility for a button
+  // that's meant to feel like a fun extra, not a transactional link.
+  const ordinals = [L.tryOnFirst, L.tryOnSecond, L.tryOnThird];
   const buttons = items.map((item, index) => `
           <tr>
-            <td style="padding-bottom:${index === items.length - 1 ? "0" : "8px"};">
-              <a href="${buildTryOnUrl(recipient, item.storyId)}" style="display:block;padding:14px 20px;background:#c8a96e;color:#1a1a1a;text-decoration:none;font-size:14px;font-weight:bold;font-family:Helvetica,Arial,sans-serif;border-radius:2px;text-align:center;">
-                ${escapeHtml(shortItemName(item.evaluation.itemIdentification))} →
+            <td style="padding-bottom:${index === items.length - 1 ? "0" : "10px"};">
+              <a href="${buildTryOnUrl(recipient, item.storyId)}" style="display:block;padding:16px 22px;background:#c8a96e;color:#1a1a1a;text-decoration:none;font-size:14px;font-weight:bold;letter-spacing:0.2px;font-family:Helvetica,Arial,sans-serif;border-radius:6px;text-align:center;box-shadow:0 2px 5px rgba(200,169,110,0.45);">
+                ${escapeHtml(shortItemName(item.evaluation.itemIdentification))} — ${ordinals[index] ?? ""} <span style="margin-left:4px;">→</span>
               </a>
             </td>
           </tr>`).join("");
 
+  // Warm dark taupe (lighter than the era tags' near-black #2c2c2c) instead of
+  // the near-invisible off-white card — a real color block at the top of the
+  // email reads as "featured," not just another quiet section. padding-top
+  // keeps it from touching the header's border-bottom rule directly above.
   return `
           <tr>
-            <td style="padding-bottom:32px;">
-              <table width="100%" cellpadding="0" cellspacing="0" style="background:#faf7f2;border:1px solid #e5ded4;border-radius:4px;">
+            <td style="padding-top:24px;padding-bottom:32px;">
+              <table width="100%" cellpadding="0" cellspacing="0" style="background:#524c42;border-radius:8px;">
                 <tr>
-                  <td style="padding:18px 20px;">
-                    <p style="margin:0 0 2px;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#888;font-family:Helvetica,Arial,sans-serif;">${L.tryOnTitle}</p>
-                    <p style="margin:0 0 14px;font-size:13px;color:#666;font-family:Helvetica,Arial,sans-serif;">${L.tryOnSub}</p>
+                  <td style="padding:20px 22px;">
+                    <p style="margin:0 0 4px;font-size:14px;font-weight:bold;color:#f5f0eb;font-family:Helvetica,Arial,sans-serif;">${L.tryOnTitle}</p>
+                    <p style="margin:0 0 16px;font-size:13px;color:#b8b1a6;font-family:Helvetica,Arial,sans-serif;">${L.tryOnSub}</p>
                     <table width="100%" cellpadding="0" cellspacing="0">${buttons}</table>
                   </td>
                 </tr>
