@@ -50,6 +50,13 @@ export function buildTryOnUrl(email: string, storyId: string): string {
   return `${APP_URL}/tryon?${params.toString()}`;
 }
 
+// Not signed/personal like the links above — this points at a public page
+// (GET /story/:id in server.ts) meant to be forwarded to strangers, so it
+// deliberately carries no email or token.
+export function buildStoryShareUrl(storyId: string): string {
+  return `${APP_URL}/story/${storyId}`;
+}
+
 const LABELS: Record<string, Record<string, string>> = {
   en: {
     dailyEdit: "The Daily Edit",
@@ -75,6 +82,7 @@ const LABELS: Record<string, Record<string, string>> = {
     tryOnFirst: "First Item",
     tryOnSecond: "Second Item",
     tryOnThird: "Third Item",
+    shareThisFind: "Share this find →",
   },
   zh: {
     dailyEdit: "每日精選",
@@ -100,6 +108,7 @@ const LABELS: Record<string, Record<string, string>> = {
     tryOnFirst: "第一件",
     tryOnSecond: "第二件",
     tryOnThird: "第三件",
+    shareThisFind: "分享這件單品 →",
   },
 };
 
@@ -389,6 +398,14 @@ function buildItemHtml(item: DigestItem, index: number, total: number, L: Record
       <h3 style="margin:0 0 6px;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#2f7a52;font-family:Helvetica,Arial,sans-serif;">${L.theStyle}</h3>
       <p style="margin:0 0 20px;font-size:14px;line-height:1.6;color:#555;">
         ${escapeHtml(firstSentence(evaluation.styleGuide))}
+      </p>
+
+      <!-- Share — a small unobtrusive text link, not another button, so it
+           doesn't compete with the eBay CTA (deliberately kept lightweight
+           given how packed each item card already is). Points at a public,
+           unsigned page (see buildStoryShareUrl) meant to be forwarded. -->
+      <p style="margin:0 0 20px;">
+        <a href="${buildStoryShareUrl(item.storyId)}" style="font-size:12px;color:#999;text-decoration:underline;font-family:Helvetica,Arial,sans-serif;">${L.shareThisFind}</a>
       </p>
 
       ${!isLastItem ? '<hr style="border:none;border-top:1px solid #ddd;margin-top:40px;">' : ""}

@@ -445,6 +445,129 @@ app.get("/evaluations/:id/image", async (req, res) => {
   }
 });
 
+// --- Public, shareable story page (no auth — meant to be forwarded to
+// strangers; see buildStoryShareUrl in email.ts) ---
+
+const STORY_SHARE_LABELS: Record<string, Record<string, string>> = {
+  en: {
+    viewOnEbay: "View on eBay →",
+    getYourOwn: "Get your own daily vintage finds — free.",
+    signUp: "Sign up →",
+    share: "Share",
+    linkCopied: "Link copied!",
+    notFound: "This find is no longer available.",
+  },
+  zh: {
+    viewOnEbay: "前往 eBay 查看 →",
+    getYourOwn: "免費訂閱，每天收到你的專屬古著精選。",
+    signUp: "立即訂閱 →",
+    share: "分享",
+    linkCopied: "已複製連結！",
+    notFound: "這件單品已不存在。",
+  },
+};
+
+app.get("/story/:id", async (req, res) => {
+  try {
+    const story = await prisma.story.findUnique({
+      where: { id: req.params.id },
+      include: { evaluation: true },
+    });
+
+    if (!story) {
+      res.status(404).send(renderBrandPage(`<p style="font-size:14px;color:#666;font-family:Helvetica,Arial,sans-serif;">${STORY_SHARE_LABELS.en.notFound}</p>`));
+      return;
+    }
+
+    const lang = story.language === "zh" ? "zh" : "en";
+    const SL = STORY_SHARE_LABELS[lang];
+    const { evaluation } = story;
+    const pageUrl = `${APP_URL}/story/${story.id}`;
+    const imageUrl = evaluation.hasProcessedImage
+      ? `${APP_URL}/evaluations/${evaluation.id}/image`
+      : (evaluation.imageUrl || "");
+    // OG description needs plain text, no HTML — trim for card-preview length.
+    const ogDescription = story.hook.length > 160 ? story.hook.slice(0, 157).trimEnd() + "…" : story.hook;
+
+    res.send(`<!DOCTYPE html>
+<html lang="${lang}">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${escapeHtml(evaluation.itemIdentification)}</title>
+<meta property="og:type" content="article">
+<meta property="og:title" content="${escapeHtml(evaluation.itemIdentification)}">
+<meta property="og:description" content="${escapeHtml(ogDescription)}">
+${imageUrl ? `<meta property="og:image" content="${imageUrl}">` : ""}
+<meta property="og:url" content="${pageUrl}">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="${escapeHtml(evaluation.itemIdentification)}">
+<meta name="twitter:description" content="${escapeHtml(ogDescription)}">
+${imageUrl ? `<meta name="twitter:image" content="${imageUrl}">` : ""}
+</head>
+<body style="margin:0;padding:0;background:#f5f0eb;font-family:Georgia,'Times New Roman',serif;color:#1a1a1a;">
+  <div style="max-width:520px;margin:0 auto;padding:40px 16px;">
+    <p style="margin:0 0 20px;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#888;font-family:Helvetica,Arial,sans-serif;text-align:center;">Vintage Finds</p>
+
+    <!-- Card -->
+    <div style="background:#fff;border:1px solid #e5ded4;border-radius:10px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.06);">
+      ${imageUrl ? `<img src="${imageUrl}" alt="${escapeHtml(evaluation.itemIdentification)}" style="width:100%;height:auto;display:block;aspect-ratio:4/3;object-fit:cover;">` : ""}
+      <div style="padding:24px 24px 28px;">
+        <table cellpadding="0" cellspacing="0" style="margin-bottom:14px;">
+          <tr>
+            <td style="padding:4px 10px;background:#2c2c2c;border-radius:2px;">
+              <span style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#c8a96e;font-family:Helvetica,Arial,sans-serif;">${escapeHtml(evaluation.estimatedEra || "Vintage")}</span>
+            </td>
+          </tr>
+        </table>
+        <p style="margin:0 0 16px;font-size:11px;letter-spacing:1px;color:#999;font-family:Helvetica,Arial,sans-serif;text-transform:uppercase;">${escapeHtml(evaluation.itemIdentification)}</p>
+        <h1 style="margin:0 0 16px;font-size:21px;font-weight:normal;line-height:1.4;font-style:italic;">"${escapeHtml(story.hook)}"</h1>
+        <p style="margin:0 0 24px;font-size:15px;line-height:1.7;color:#333;">${escapeHtml(story.mainStory)}</p>
+        <a href="${escapeHtml(evaluation.url)}" style="display:block;padding:14px 28px;background:#2c2c2c;color:#fff;text-decoration:none;font-size:13px;letter-spacing:1px;font-family:Helvetica,Arial,sans-serif;border-radius:2px;text-align:center;">${SL.viewOnEbay}</a>
+      </div>
+    </div>
+
+    <!-- Share -->
+    <div style="text-align:center;margin-top:20px;">
+      <button id="shareBtn" style="padding:10px 20px;background:#c8a96e;color:#1a1a1a;border:none;border-radius:6px;font-size:13px;font-weight:bold;font-family:Helvetica,Arial,sans-serif;cursor:pointer;">${SL.share}</button>
+      <p id="shareStatus" style="margin:8px 0 0;font-size:12px;color:#888;font-family:Helvetica,Arial,sans-serif;"></p>
+    </div>
+
+    <!-- Convert the viewer, not just the sharer -->
+    <div style="text-align:center;margin-top:32px;padding-top:24px;border-top:1px solid #e5ded4;">
+      <p style="margin:0 0 10px;font-size:13px;color:#666;font-family:Helvetica,Arial,sans-serif;">${SL.getYourOwn}</p>
+      <a href="${APP_URL}/" style="font-size:13px;color:#8a6a30;text-decoration:none;font-weight:bold;font-family:Helvetica,Arial,sans-serif;">${SL.signUp}</a>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('shareBtn').addEventListener('click', async () => {
+      const statusEl = document.getElementById('shareStatus');
+      const shareData = {
+        title: ${JSON.stringify(evaluation.itemIdentification)},
+        text: ${JSON.stringify(story.hook)},
+        url: ${JSON.stringify(pageUrl)},
+      };
+      if (navigator.share) {
+        try { await navigator.share(shareData); } catch (err) { /* user cancelled — no-op */ }
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(${JSON.stringify(pageUrl)});
+        statusEl.textContent = ${JSON.stringify(SL.linkCopied)};
+      } catch (err) {
+        statusEl.textContent = ${JSON.stringify(pageUrl)};
+      }
+    });
+  </script>
+</body>
+</html>`);
+  } catch (err) {
+    console.error("[STORY] Error:", err);
+    res.status(500).send(renderBrandPage(`<p style="font-size:14px;color:#666;font-family:Helvetica,Arial,sans-serif;">Something went wrong.</p>`));
+  }
+});
+
 // --- Photo upload (existing-user reminder flow — new signups set this via /subscribe) ---
 
 app.post("/photo", async (req, res) => {
