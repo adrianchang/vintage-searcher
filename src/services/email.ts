@@ -69,9 +69,8 @@ const LABELS: Record<string, Record<string, string>> = {
     viewOnEbay: "View on eBay →",
     sizeUnverified: "Size unverified — check measurements before buying",
     footer: "You're receiving this because you signed up for daily vintage finds.<br>Prices and availability change — always verify before purchasing.",
-    tryOnTitle: "Today's Pick",
-    tryOnSub: "You get one shot today — choose wisely.",
-    tryOnCta: "Try this on",
+    tryOnTitle: "Try It On",
+    tryOnSub: "Pick one — one try per email.",
   },
   zh: {
     dailyEdit: "每日精選",
@@ -91,9 +90,8 @@ const LABELS: Record<string, Record<string, string>> = {
     viewOnEbay: "前往 eBay 查看 →",
     sizeUnverified: "尺寸未確認 — 購買前請確認實際尺寸",
     footer: "你收到這封信，因為你訂閱了每日古著精選。<br>價格與庫存隨時變動，購買前請自行確認。",
-    tryOnTitle: "今日試穿",
-    tryOnSub: "今天只有一次機會 — 選你最想看到的那件。",
-    tryOnCta: "試穿這件",
+    tryOnTitle: "試穿",
+    tryOnSub: "選一件 — 每封信限一次。",
   },
 };
 
@@ -238,31 +236,30 @@ function buildEmailHtml(items: DigestItem[], recipient: string, lang = "en"): st
 // the whole email first. Deliberately text-only: images here would encourage
 // picture-then-bounce behavior (click try-on, never scroll to the stories,
 // which are the actual product) — see product_design.md's 2026-08-22 entry.
+// Real buttons, not text links — low click-through (13% of recipients as of
+// 2026-08-28) was traced partly to the old row style reading as a quiet list
+// rather than something to click. Gold background (the brand accent, unused
+// elsewhere as a button fill) deliberately differentiates these from the
+// dark eBay CTA buttons below each item — a different, "just for fun" action.
 function buildTryOnPickerHtml(items: DigestItem[], recipient: string, L: Record<string, string>): string {
-  const rows = items.map((item, index) => `
+  const buttons = items.map((item, index) => `
           <tr>
-            <td style="padding:8px 0;border-bottom:${index === items.length - 1 ? "none" : "1px solid #e5ded4"};">
-              <a href="${buildTryOnUrl(recipient, item.storyId)}" style="text-decoration:none;display:block;font-family:Helvetica,Arial,sans-serif;">
-                <span style="font-size:13px;color:#c8a96e;font-weight:bold;">${index + 1}.</span>
-                <span style="font-size:14px;color:#1a1a1a;">${escapeHtml(shortItemName(item.evaluation.itemIdentification))}</span>
-                <span style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#888;float:right;">${L.tryOnCta} →</span>
+            <td style="padding-bottom:${index === items.length - 1 ? "0" : "8px"};">
+              <a href="${buildTryOnUrl(recipient, item.storyId)}" style="display:block;padding:14px 20px;background:#c8a96e;color:#1a1a1a;text-decoration:none;font-size:14px;font-weight:bold;font-family:Helvetica,Arial,sans-serif;border-radius:2px;text-align:center;">
+                ${escapeHtml(shortItemName(item.evaluation.itemIdentification))} →
               </a>
             </td>
           </tr>`).join("");
 
-  // Wrapped in the same "notice me" card treatment as the photo nudge banner
-  // (bordered box, gold accent rail) — the plain section-label styling used
-  // elsewhere (THE STORY, THE STYLE) is deliberately quiet, wrong choice for
-  // something meant to catch the eye before anyone scrolls past it.
   return `
           <tr>
             <td style="padding-bottom:32px;">
-              <table width="100%" cellpadding="0" cellspacing="0" style="background:#faf7f2;border:1px solid #e5ded4;border-left:3px solid #c8a96e;border-radius:4px;">
+              <table width="100%" cellpadding="0" cellspacing="0" style="background:#faf7f2;border:1px solid #e5ded4;border-radius:4px;">
                 <tr>
                   <td style="padding:18px 20px;">
-                    <p style="margin:0 0 4px;font-size:17px;font-weight:bold;color:#1a1a1a;font-family:Helvetica,Arial,sans-serif;">${L.tryOnTitle}</p>
-                    <p style="margin:0 0 14px;font-size:13px;color:#666;line-height:1.6;font-family:Helvetica,Arial,sans-serif;">${L.tryOnSub}</p>
-                    <table width="100%" cellpadding="0" cellspacing="0">${rows}</table>
+                    <p style="margin:0 0 2px;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#888;font-family:Helvetica,Arial,sans-serif;">${L.tryOnTitle}</p>
+                    <p style="margin:0 0 14px;font-size:13px;color:#666;font-family:Helvetica,Arial,sans-serif;">${L.tryOnSub}</p>
+                    <table width="100%" cellpadding="0" cellspacing="0">${buttons}</table>
                   </td>
                 </tr>
               </table>
