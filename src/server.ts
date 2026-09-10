@@ -450,24 +450,36 @@ app.get("/evaluations/:id/image", async (req, res) => {
 
 const STORY_SHARE_LABELS: Record<string, Record<string, string>> = {
   en: {
+    brandName: "Vintage Finds",
+    vintageFallback: "Vintage",
     viewOnEbay: "View on eBay →",
-    getYourOwn: "Get your own daily vintage finds — free.",
-    signUp: "Sign up →",
-    share: "Share",
+    getYourOwn: "Get your own daily vintage finds and try them on — free.",
+    signUp: "Sign Up →",
+    share: "Flex With Friends",
     linkCopied: "Link copied!",
     notFound: "This find is no longer available.",
+    somethingWrong: "Something went wrong.",
   },
   zh: {
+    brandName: "古著精選",
+    vintageFallback: "復古",
     viewOnEbay: "前往 eBay 查看 →",
-    getYourOwn: "免費訂閱，每天收到你的專屬古著精選。",
+    getYourOwn: "免費訂閱，每天收到你的專屬古著精選，還能線上試穿。",
     signUp: "立即訂閱 →",
-    share: "分享",
+    share: "跟朋友炫耀",
     linkCopied: "已複製連結！",
     notFound: "這件單品已不存在。",
+    somethingWrong: "發生錯誤，請稍後再試。",
   },
 };
 
 app.get("/story/:id", async (req, res) => {
+  // Tracked outside the try block so the catch-all error handler below can
+  // still respond in the right language whenever the failure happens after
+  // the story was successfully fetched (the common case) — only a DB error
+  // on the initial lookup itself leaves this at the "en" default, since
+  // there's genuinely no language to know yet at that point.
+  let lang = "en";
   try {
     const story = await prisma.story.findUnique({
       where: { id: req.params.id },
@@ -475,11 +487,13 @@ app.get("/story/:id", async (req, res) => {
     });
 
     if (!story) {
+      // No language to localize into here — a nonexistent id carries no
+      // Story.language to read, and the URL deliberately has no ?lang param.
       res.status(404).send(renderBrandPage(`<p style="font-size:14px;color:#666;font-family:Helvetica,Arial,sans-serif;">${STORY_SHARE_LABELS.en.notFound}</p>`));
       return;
     }
 
-    const lang = story.language === "zh" ? "zh" : "en";
+    lang = story.language === "zh" ? "zh" : "en";
     const SL = STORY_SHARE_LABELS[lang];
     const { evaluation } = story;
     const pageUrl = `${APP_URL}/story/${story.id}`;
@@ -507,7 +521,7 @@ ${imageUrl ? `<meta name="twitter:image" content="${imageUrl}">` : ""}
 </head>
 <body style="margin:0;padding:0;background:#f5f0eb;font-family:Georgia,'Times New Roman',serif;color:#1a1a1a;">
   <div style="max-width:520px;margin:0 auto;padding:40px 16px;">
-    <p style="margin:0 0 20px;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#888;font-family:Helvetica,Arial,sans-serif;text-align:center;">Vintage Finds</p>
+    <p style="margin:0 0 20px;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#888;font-family:Helvetica,Arial,sans-serif;text-align:center;">${SL.brandName}</p>
 
     <!-- Card -->
     <div style="background:#fff;border:1px solid #e5ded4;border-radius:10px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.06);">
@@ -516,7 +530,7 @@ ${imageUrl ? `<meta name="twitter:image" content="${imageUrl}">` : ""}
         <table cellpadding="0" cellspacing="0" style="margin-bottom:14px;">
           <tr>
             <td style="padding:4px 10px;background:#2c2c2c;border-radius:2px;">
-              <span style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#c8a96e;font-family:Helvetica,Arial,sans-serif;">${escapeHtml(evaluation.estimatedEra || "Vintage")}</span>
+              <span style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#c8a96e;font-family:Helvetica,Arial,sans-serif;">${escapeHtml(evaluation.estimatedEra || SL.vintageFallback)}</span>
             </td>
           </tr>
         </table>
@@ -527,16 +541,21 @@ ${imageUrl ? `<meta name="twitter:image" content="${imageUrl}">` : ""}
       </div>
     </div>
 
-    <!-- Share -->
-    <div style="text-align:center;margin-top:20px;">
-      <button id="shareBtn" style="padding:10px 20px;background:#c8a96e;color:#1a1a1a;border:none;border-radius:6px;font-size:13px;font-weight:bold;font-family:Helvetica,Arial,sans-serif;cursor:pointer;">${SL.share}</button>
-      <p id="shareStatus" style="margin:8px 0 0;font-size:12px;color:#888;font-family:Helvetica,Arial,sans-serif;"></p>
+    <!-- Share — a pill, not a full-bleed slab, so it reads as an action
+         button continuing the card's refined tone rather than a banner ad.
+         Centered with real breathing room above/below. -->
+    <div style="text-align:center;margin-top:36px;">
+      <button id="shareBtn" style="display:inline-block;padding:16px 40px;background:#c8a96e;color:#1a1a1a;border:none;border-radius:999px;font-size:16px;font-weight:bold;font-family:Helvetica,Arial,sans-serif;cursor:pointer;box-shadow:0 3px 8px rgba(200,169,110,0.35);">↗ ${SL.share}</button>
+      <p id="shareStatus" style="margin:12px 0 0;font-size:13px;color:#888;font-family:Helvetica,Arial,sans-serif;"></p>
     </div>
 
-    <!-- Convert the viewer, not just the sharer -->
-    <div style="text-align:center;margin-top:32px;padding-top:24px;border-top:1px solid #e5ded4;">
-      <p style="margin:0 0 10px;font-size:13px;color:#666;font-family:Helvetica,Arial,sans-serif;">${SL.getYourOwn}</p>
-      <a href="${APP_URL}/" style="font-size:13px;color:#8a6a30;text-decoration:none;font-weight:bold;font-family:Helvetica,Arial,sans-serif;">${SL.signUp}</a>
+    <!-- Convert the viewer, not just the sharer — a soft warm card (not a
+         stark black block) so it reads as an invitation, not an ad; the CTA
+         button reuses the eBay button's dark tone so the page has one clear
+         "primary action" color instead of two competing golds. -->
+    <div style="text-align:center;margin-top:36px;padding:32px 28px;background:#faf3e8;border:1px solid #e8dcc4;border-radius:12px;">
+      <p style="margin:0 0 18px;font-size:17px;color:#1a1a1a;line-height:1.5;font-family:Georgia,'Times New Roman',serif;">${SL.getYourOwn}</p>
+      <a href="${APP_URL}/" style="display:inline-block;padding:14px 36px;background:#2c2c2c;color:#fff;text-decoration:none;font-size:14px;letter-spacing:0.5px;font-weight:bold;font-family:Helvetica,Arial,sans-serif;border-radius:999px;">${SL.signUp}</a>
     </div>
   </div>
 
@@ -564,7 +583,7 @@ ${imageUrl ? `<meta name="twitter:image" content="${imageUrl}">` : ""}
 </html>`);
   } catch (err) {
     console.error("[STORY] Error:", err);
-    res.status(500).send(renderBrandPage(`<p style="font-size:14px;color:#666;font-family:Helvetica,Arial,sans-serif;">Something went wrong.</p>`));
+    res.status(500).send(renderBrandPage(`<p style="font-size:14px;color:#666;font-family:Helvetica,Arial,sans-serif;">${STORY_SHARE_LABELS[lang].somethingWrong}</p>`));
   }
 });
 

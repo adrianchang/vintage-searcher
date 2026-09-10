@@ -251,29 +251,46 @@ function buildEmailHtml(items: DigestItem[], recipient: string, lang = "en"): st
 </html>`;
 }
 
-// Named-and-numbered picker, not thumbnails — shown up front (before the full
-// digest) so the "which one would you try on" signal doesn't require reading
-// the whole email first. Deliberately text-only: images here would encourage
-// picture-then-bounce behavior (click try-on, never scroll to the stories,
-// which are the actual product) — see product_design.md's 2026-08-22 entry.
-// Real buttons, not text links — low click-through (13% of recipients as of
-// 2026-08-28) was traced partly to the old row style reading as a quiet list
-// rather than something to click. Gold background (the brand accent, unused
-// elsewhere as a button fill) deliberately differentiates these from the
-// dark eBay CTA buttons below each item — a different, "just for fun" action.
+// Image-led picker, shown up front (before the full digest) so the "which one
+// would you try on" signal doesn't require reading the whole email first.
+// Originally text-only (deliberately, to avoid picture-then-bounce), but that
+// bet didn't pay off — click-through stayed low regardless. Reversed
+// 2026-09-06: let the item's own photo sell the try-on instead of hoping the
+// story text earns it — see product_design.md's 2026-09-06 entry. Uses the
+// same hasProcessedImage-aware cutout image as the item cards below, not the
+// raw eBay photo, so the picker matches the clean studio look used everywhere
+// else. Real buttons, not text links — low click-through (13% of recipients
+// as of 2026-08-28) was traced partly to the old row style reading as a quiet
+// list rather than something to click. Gold background (the brand accent,
+// unused elsewhere as a button fill) deliberately differentiates these from
+// the dark eBay CTA buttons below each item — a different, "just for fun" action.
 function buildTryOnPickerHtml(items: DigestItem[], recipient: string, L: Record<string, string>): string {
   // Rounder corners + a soft gold-tinted shadow than the sharp/flat eBay CTA
   // (2px radius, no shadow) — a little more "tap me" tactility for a button
   // that's meant to feel like a fun extra, not a transactional link.
   const ordinals = [L.tryOnFirst, L.tryOnSecond, L.tryOnThird];
-  const buttons = items.map((item, index) => `
+  const buttons = items.map((item, index) => {
+    const imageUrl = item.evaluation.hasProcessedImage
+      ? `${APP_URL}/evaluations/${item.evaluation.id}/image`
+      : (item.listing.imageUrls[0] || "");
+    return `
           <tr>
             <td style="padding-bottom:${index === items.length - 1 ? "0" : "10px"};">
-              <a href="${buildTryOnUrl(recipient, item.storyId)}" style="display:block;padding:16px 22px;background:#c8a96e;color:#1a1a1a;text-decoration:none;font-size:14px;font-weight:bold;letter-spacing:0.2px;font-family:Helvetica,Arial,sans-serif;border-radius:6px;text-align:center;box-shadow:0 2px 5px rgba(200,169,110,0.45);">
-                ${escapeHtml(shortItemName(item.evaluation.itemIdentification))} — ${ordinals[index] ?? ""} <span style="margin-left:4px;">→</span>
+              <a href="${buildTryOnUrl(recipient, item.storyId)}" style="display:block;text-decoration:none;background:#c8a96e;border-radius:6px;box-shadow:0 2px 5px rgba(200,169,110,0.45);">
+                <table width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td width="56" style="padding:8px;">
+                      <img src="${imageUrl}" width="56" height="72" alt="" style="display:block;width:56px;height:72px;object-fit:cover;border-radius:4px;background:#f5f0eb;">
+                    </td>
+                    <td style="padding:8px 20px 8px 4px;color:#1a1a1a;font-size:14px;font-weight:bold;letter-spacing:0.2px;font-family:Helvetica,Arial,sans-serif;">
+                      ${escapeHtml(shortItemName(item.evaluation.itemIdentification))} — ${ordinals[index] ?? ""} <span style="margin-left:4px;">→</span>
+                    </td>
+                  </tr>
+                </table>
               </a>
             </td>
-          </tr>`).join("");
+          </tr>`;
+  }).join("");
 
   // Warm dark taupe (lighter than the era tags' near-black #2c2c2c) instead of
   // the near-invisible off-white card — a real color block at the top of the
@@ -331,7 +348,7 @@ function buildItemHtml(item: DigestItem, index: number, total: number, L: Record
        <span style="font-size:22px;color:#1a1a1a;font-family:Helvetica,Arial,sans-serif;font-weight:600;">$${listing.price.toFixed(0)}</span>
        <span style="color:#bbb;font-size:17px;"> → </span>
        <span style="font-size:22px;color:#8a6a30;font-family:Helvetica,Arial,sans-serif;font-weight:600;">$${evaluation.estimatedValue!.toFixed(0)}</span>
-       <span style="font-size:18px;color:#2f7a52;font-family:Helvetica,Arial,sans-serif;font-weight:700;margin-left:10px;">+$${evaluation.margin!.toFixed(0)} ${L.upside}</span>`
+       <span style="font-size:18px;color:#2f7a52;font-family:Helvetica,Arial,sans-serif;font-weight:700;margin-left:10px;">${evaluation.margin! >= 0 ? "+" : "-"}$${Math.abs(evaluation.margin!).toFixed(0)} ${L.upside}</span>`
     : `<span style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#999;font-family:Helvetica,Arial,sans-serif;">${L.listedPrice}</span>
        <span style="font-size:22px;color:#1a1a1a;font-family:Helvetica,Arial,sans-serif;font-weight:600;">$${listing.price.toFixed(0)}</span>`;
 
