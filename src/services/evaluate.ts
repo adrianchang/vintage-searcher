@@ -588,10 +588,12 @@ export interface BackgroundRemovalResult {
 }
 
 /**
- * Best-effort background swap on a listing's hero image. Runs once per
- * listing at evaluation-creation time (cached forever, like identification).
- * Never throws — a failure here should never block evaluation creation;
- * callers fall back to the original listing image.
+ * Best-effort background swap on a listing's hero image. Deferred to
+ * send-time in scan.ts — only runs for listings that actually make a user's
+ * top-3, not every filtered candidate — but still cached forever per listing
+ * once it runs (hasProcessedImage), like identification. Never throws — a
+ * failure here should never block sending; callers fall back to the
+ * original listing image.
  */
 export async function runBackgroundRemoval(imageUrl: string): Promise<BackgroundRemovalResult | null> {
   const timestamp = () => new Date().toISOString();
@@ -715,7 +717,7 @@ ITEM TO WRITE ABOUT:
 
 Photos of the actual item are attached. Use them to ground what you write — the real color, cut, and condition — especially in the styleGuide. Never contradict what the photos show.
 
-Use Google Search to verify brand history, collector market details, and any facts you're not certain about before writing.
+If you're unsure about a specific fact — a date, a brand detail, whether something is a known variant — verify it with Google Search before including it. Don't search for things you already know.
 
 Your mainStory should feel like it belongs in the same series as those three references — the same length, the same depth, the same tone. A collector talking to someone in the hobby. Knowledgeable, excited, honest. If the story isn't there, be brief and honest rather than padding.
 

@@ -264,10 +264,6 @@ export async function runScan(
           try {
             const identification = await identify(listing);
             const valuation = await valuate(listing, identification);
-            // Best-effort — never blocks evaluation creation on failure.
-            const heroImage = listing.imageUrls[0]
-              ? await removeBackground(listing.imageUrls[0])
-              : null;
 
             evalCount++;
             const hasSoldData = (valuation.soldListings?.length ?? 0) > 0;
@@ -305,9 +301,6 @@ export async function runScan(
                 sizeEvidence: size.resolution,
                 sizeRaw: JSON.stringify(identification.sizing ?? {}),
                 isOpportunity: true,
-                ...(heroImage
-                  ? { heroImageBytes: new Uint8Array(heroImage.bytes), heroImageMimeType: heroImage.mimeType, hasProcessedImage: true }
-                  : {}),
               },
               omit: { heroImageBytes: true },
             });
@@ -324,6 +317,18 @@ export async function runScan(
       }
 
       const { dbEvaluation } = cached;
+
+      // Confirmed reproductions never get a story — same "eliminate obvious
+      // junk" filtering principle as filter.ts, just caught more accurately
+      // here (visual/construction evidence from identification, not just
+      // title keywords). Skips the grounded googleSearch call entirely, and
+      // since story generation happens once per (evaluationId, language,
+      // configId), the saving compounds across every language/archetype
+      // combo this listing would otherwise have triggered a story for.
+      if (dbEvaluation.isAuthentic === false) {
+        console.log(`  Skipping (flagged inauthentic): ${listing.title.slice(0, 60)}`);
+        continue;
+      }
 
       // Stories are keyed by (evaluationId, language, configId) — configId encodes archetype set
       const storyWhere = { evaluationId: dbEvaluation.id, language: user.language, configId: user.configId };
@@ -444,6 +449,33 @@ export async function runScan(
     const TOP_N = 3;
     const toSend = [...scoredFinds].sort((a, b) => b.score - a.score).slice(0, TOP_N);
     console.log(`  Sending top ${toSend.length} of ${qualifiedFinds.length} candidates`);
+
+    // Background removal deferred to send-time: only for listings that actually
+    // made the cut, not every candidate that passed the eBay filter (most never
+    // do). Still cached forever per listing via hasProcessedImage. Mutate the
+    // shared evalCache entry too (not just find.evaluation, a fresh object per
+    // find) — evalCache spans every user in this scan run, so without this a
+    // listing shared by two users' top-3 in the same run would regenerate the
+    // hero image a second time before the DB write from the first ever lands
+    // back in a fresh findUnique.
+    for (const find of toSend) {
+      if (find.evaluation.hasProcessedImage || !find.listing.imageUrls[0]) continue;
+      const heroImage = await removeBackground(find.listing.imageUrls[0]);
+      if (heroImage) {
+        await prisma.evaluation.update({
+          where: { id: find.evaluation.id },
+          data: {
+            heroImageBytes: new Uint8Array(heroImage.bytes),
+            heroImageMimeType: heroImage.mimeType,
+            hasProcessedImage: true,
+          },
+        });
+        find.evaluation.hasProcessedImage = true;
+        const cachedEntry = evalCache.get(find.listing.url);
+        if (cachedEntry) cachedEntry.dbEvaluation.hasProcessedImage = true;
+      }
+    }
+
     await sendDigestEmail(toSend, user.email, user.language);
 
     // Record deliveries so these listings are never resent to this user.

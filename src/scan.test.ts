@@ -215,6 +215,65 @@ describe("runScan", () => {
     ]);
   });
 
+  it("evaluates but never stories a listing flagged not authentic", async () => {
+    const fakeUrl = "https://www.ebay.com/itm/test-fake";
+    const fakeListing: Listing = {
+      url: fakeUrl,
+      platform: "ebay",
+      title: "1970s Style Denim Trucker Jacket Mens Large",
+      price: 40,
+      imageUrls: ["https://example.com/imgfake1.jpg", "https://example.com/imgfake2.jpg"],
+      description: "Trucker jacket, great condition.",
+      rawData: { itemId: "test-fake", condition: "Pre-owned" },
+    };
+
+    await runScan(config, makeDeps({
+      fetchListings: async () => [fakeListing, ...MOCK_LISTINGS],
+      runIdentification: async (listing: Listing) => {
+        if (listing.url === fakeUrl) {
+          return {
+            isAuthentic: false,
+            itemIdentification: "Reproduction trucker jacket, not period-correct construction",
+            itemIdentificationJapanese: "レプリカ トラッカージャケット",
+            identificationConfidence: 0.8,
+            estimatedEra: "1970s",
+            redFlags: ["Modern zipper hardware", "Machine-serged seams"],
+          };
+        }
+        const id = MOCK_IDENTIFICATIONS[listing.url];
+        if (!id) throw new Error(`No mock identification for ${listing.url}`);
+        return id;
+      },
+      runValuation: async (listing: Listing) => {
+        if (listing.url === fakeUrl) {
+          return {
+            soldListings: [],
+            estimatedValue: null,
+            currentPrice: 40,
+            margin: null,
+            priceScore: 0,
+            confidence: 0.2,
+            reasoning: "No comps found.",
+            references: [],
+          };
+        }
+        const val = MOCK_VALUATIONS[listing.url];
+        if (!val) throw new Error(`No mock valuation for ${listing.url}`);
+        return val;
+      },
+    }));
+
+    // Still identified and valued (isAuthentic isn't known until identification runs)...
+    expect(mockPrisma._store.evaluations[fakeUrl]).toBeDefined();
+    expect(mockPrisma._store.evaluations[fakeUrl].isAuthentic).toBe(false);
+
+    // ...but never gets a story, and is never delivered to anyone.
+    const storyEvaluationIds = Object.values(mockPrisma._store.stories).map((s: any) => s.evaluationId);
+    expect(storyEvaluationIds).not.toContain(mockPrisma._store.evaluations[fakeUrl].id);
+    const deliveredUrls = mockPrisma.storyDelivery.create.mock.calls.map(c => c[0].data.url);
+    expect(deliveredUrls).not.toContain(fakeUrl);
+  });
+
   it("should create evaluations once globally and stories per user language", async () => {
     await runScan(config, makeDeps());
 
@@ -291,26 +350,59 @@ describe("runScan", () => {
     expect(JSON.parse(firstEvalData.soldListings)).toBeInstanceOf(Array);
   });
 
-  it("stores the background-removed image when generation succeeds", async () => {
+  it("stores the background-removed image only for delivered listings, deferred to send-time", async () => {
     await runScan(config, makeDeps({
       runBackgroundRemoval: async () => ({ bytes: Buffer.from("fake-jpeg-bytes"), mimeType: "image/jpeg" }),
     }));
 
+    // Never baked into the create() call — it's deferred until a listing
+    // actually makes a user's top-3.
     const firstEvalData = mockPrisma.evaluation.create.mock.calls[0][0].data;
-    expect(firstEvalData.hasProcessedImage).toBe(true);
-    expect(firstEvalData.heroImageMimeType).toBe("image/jpeg");
-    expect(Buffer.from(firstEvalData.heroImageBytes).toString()).toBe("fake-jpeg-bytes");
+    expect(firstEvalData.hasProcessedImage).toBeUndefined();
+    expect(firstEvalData.heroImageBytes).toBeUndefined();
+
+    // Both mock listings score above the quality floor and both users share
+    // the same 2-item pool, so each listing is sent at least once — update()
+    // should have run for each, but only once per listing (the evalCache
+    // mutation prevents a second, redundant generation when the same
+    // listing lands in a second user's top-3 within the same scan run).
+    expect(mockPrisma.evaluation.update).toHaveBeenCalledTimes(2);
+    const updatedData = mockPrisma.evaluation.update.mock.calls.map(c => c[0].data);
+    for (const data of updatedData) {
+      expect(data.hasProcessedImage).toBe(true);
+      expect(data.heroImageMimeType).toBe("image/jpeg");
+      expect(Buffer.from(data.heroImageBytes).toString()).toBe("fake-jpeg-bytes");
+    }
+
+    // Every evaluation record ends up flagged once both users' scans complete.
+    const storedEvaluations = Object.values(mockPrisma._store.evaluations) as any[];
+    expect(storedEvaluations.every(e => e.hasProcessedImage === true)).toBe(true);
   });
 
-  it("does not fail evaluation creation when background removal fails", async () => {
+  it("does not fail sending when background removal fails", async () => {
     await runScan(config, makeDeps({
       runBackgroundRemoval: async () => null, // matches makeDeps' default, explicit here for clarity
     }));
 
     expect(mockPrisma.evaluation.create).toHaveBeenCalledTimes(2);
+    expect(mockPrisma.evaluation.update).not.toHaveBeenCalled();
     const firstEvalData = mockPrisma.evaluation.create.mock.calls[0][0].data;
     expect(firstEvalData.hasProcessedImage).toBeUndefined();
     expect(firstEvalData.heroImageBytes).toBeUndefined();
+  });
+
+  it("does not regenerate the hero image for a listing already marked processed", async () => {
+    let callCount = 0;
+    await runScan(config, makeDeps({
+      runBackgroundRemoval: async () => {
+        callCount++;
+        return { bytes: Buffer.from("fake-jpeg-bytes"), mimeType: "image/jpeg" };
+      },
+    }));
+
+    // 2 listings shared across 2 users in one scan run — without the
+    // evalCache mutation this would be 4 (one per listing per user).
+    expect(callCount).toBe(2);
   });
 });
 
